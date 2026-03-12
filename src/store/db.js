@@ -6,6 +6,13 @@ let pool = null;
 
 function getPool() {
   if (pool) return pool;
+  if (!config.db.url) {
+    throw new Error(
+      'DATABASE_URL is not set. ' +
+      'In GitHub Actions, add it under Settings → Secrets and variables → Actions. ' +
+      'Locally, add it to your .env file.'
+    );
+  }
 
   pool = new Pool({
     connectionString: config.db.url,
