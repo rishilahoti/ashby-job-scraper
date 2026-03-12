@@ -19,11 +19,11 @@ async function detectChanges(normalizedJobs, company) {
       await store.saveSnapshot(job);
       logger.debug(`NEW: ${job.title} at ${company}`);
     } else if (result === 'updated') {
-      const previous = await store.getJobByCompanyAndId(company, job.jobId);
+      // No need to re-fetch — the job object in hand IS the new version.
+      // previousJob is not used in any consumer, so we omit the extra SELECT.
       changes.push({
         type: EVENT_TYPES.JOB_UPDATED,
         job,
-        previousJob: previous,
       });
       await store.saveSnapshot(job);
       logger.debug(`UPDATED: ${job.title} at ${company}`);

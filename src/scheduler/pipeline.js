@@ -66,6 +66,8 @@ async function runPipeline() {
   }
 
   const activeRows = await store.getAllActiveJobs();
+  // description_html is intentionally excluded from getAllActiveJobs to reduce
+  // data transfer \u2014 it's not used for filtering or reporting.
   const allActiveJobs = activeRows.map(row => ({
     jobId: row.job_id,
     company: row.company,

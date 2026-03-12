@@ -15,6 +15,16 @@ jobs:
               with:
                   node-version: 20
             - run: npm ci
-            - run: node index.js run
+
+            - name: Run scrape
+              run: node index.js run
+              env:
+                  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+            - name: Cleanup old snapshots
+              # Runs after every scrape to keep job_snapshots lean.
+              # continue-on-error so a cleanup hiccup never fails the whole run.
+              continue-on-error: true
+              run: node scripts/cleanup-snapshots.js
               env:
                   DATABASE_URL: ${{ secrets.DATABASE_URL }}
