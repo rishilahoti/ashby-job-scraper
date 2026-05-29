@@ -155,6 +155,11 @@ export default async function HomePage() {
         details[open] .chevron { transform: rotate(180deg); }
         .chevron { transition: transform 200ms ease; }
 
+        /* Features grid */
+        .features-grid { grid-template-columns: repeat(3, 1fr); }
+        @media (max-width: 768px) { .features-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 480px) { .features-grid { grid-template-columns: 1fr; } }
+
         /* Gradient line */
         .accent-line {
           height: 1px;
@@ -413,7 +418,7 @@ export default async function HomePage() {
               </p>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            <div className="features-grid" style={{ display: "grid", gap: 16 }}>
               {[
                 {
                   icon: (
