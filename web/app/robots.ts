@@ -11,7 +11,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/api/", "/applied", "/ignored", "/add"],
       },
     ],
-    sitemap: [`${siteUrl}/sitemap.xml`, `${siteUrl}/llms.txt`],
-    host: siteUrl,
+    sitemap: `${siteUrl}/sitemap.xml`,
   };
 }
