@@ -94,8 +94,8 @@ export default async function HomePage() {
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
         .home-page {
-          --accent: #3B82F6;
-          --accent-dim: #1D4ED8;
+          --accent: #6B5FE8;
+          --accent-dim: #473bce;
           --dark: #080E1A;
           --dark-surface: #0D1526;
           --dark-border: #1E2D45;
@@ -210,8 +210,8 @@ export default async function HomePage() {
           <div style={{ maxWidth: 860, margin: "0 auto", textAlign: "center" }}>
             <div style={{
               display: "inline-flex", alignItems: "center", gap: 8,
-              background: "rgba(59,130,246,0.1)",
-              border: "1px solid rgba(59,130,246,0.25)",
+              background: "rgba(71,59,206,0.1)",
+              border: "1px solid rgba(71,59,206,0.25)",
               borderRadius: 20, padding: "5px 14px", marginBottom: 32,
             }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", display: "inline-block" }} />
@@ -386,7 +386,7 @@ export default async function HomePage() {
                 },
               ].map(({ step, title, desc }) => (
                 <div key={step} style={{ background: "var(--dark-surface)", padding: "36px 28px" }}>
-                  <div style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 11, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.12em", marginBottom: 16 }}>
+                  <div style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 14, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.12em", marginBottom: 16 }}>
                     {step}
                   </div>
                   <h3 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 18, fontWeight: 600, color: "var(--text-on-dark)", letterSpacing: "-0.02em", marginBottom: 12 }}>
@@ -413,11 +413,11 @@ export default async function HomePage() {
               </p>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
               {[
                 {
                   icon: (
-                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 111 11a6 6 0 0116 0z" />
                     </svg>
                   ),
@@ -426,7 +426,7 @@ export default async function HomePage() {
                 },
                 {
                   icon: (
-                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064" />
                     </svg>
                   ),
@@ -435,7 +435,7 @@ export default async function HomePage() {
                 },
                 {
                   icon: (
-                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                     </svg>
                   ),
@@ -444,7 +444,7 @@ export default async function HomePage() {
                 },
                 {
                   icon: (
-                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                   ),
@@ -453,7 +453,7 @@ export default async function HomePage() {
                 },
                 {
                   icon: (
-                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
                     </svg>
                   ),
@@ -462,7 +462,7 @@ export default async function HomePage() {
                 },
                 {
                   icon: (
-                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   ),
@@ -479,7 +479,7 @@ export default async function HomePage() {
                     padding: "28px 24px",
                   }}
                 >
-                  <div style={{ color: "var(--accent)", marginBottom: 14 }}>{icon}</div>
+                  <div style={{ color: "var(--accent)", marginBottom: 16, width: 48, height: 48, background: "rgba(71,59,206,0.08)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>{icon}</div>
                   <h3 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--text-on-light)", letterSpacing: "-0.015em", marginBottom: 8 }}>
                     {title}
                   </h3>

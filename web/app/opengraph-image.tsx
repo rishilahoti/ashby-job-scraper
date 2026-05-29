@@ -28,14 +28,14 @@ export default function OgImage() {
             right: 0,
             width: 480,
             height: 630,
-            background: "radial-gradient(circle at 70% 50%, rgba(59,130,246,0.15) 0%, transparent 70%)",
+            background: "radial-gradient(circle at 70% 50%, rgba(71,59,206,0.15) 0%, transparent 70%)",
             display: "flex",
           }}
         />
 
         {/* Logo row */}
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 52 }}>
-          <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#3B82F6", display: "flex" }} />
+          <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#473bce", display: "flex" }} />
           <span style={{ fontSize: 18, fontWeight: 700, color: "#64748B", letterSpacing: "0.1em", textTransform: "uppercase" }}>
             Ashby Tracker
           </span>
@@ -49,7 +49,7 @@ export default function OgImage() {
         </div>
         {/* Headline line 2 */}
         <div style={{ display: "flex", marginBottom: 32 }}>
-          <span style={{ fontSize: 72, fontWeight: 800, color: "#3B82F6", letterSpacing: "-3px", lineHeight: 1.05 }}>
+          <span style={{ fontSize: 72, fontWeight: 800, color: "#473bce", letterSpacing: "-3px", lineHeight: 1.05 }}>
             AshbyHQ
           </span>
           <span style={{ fontSize: 72, fontWeight: 800, color: "#F1F5F9", letterSpacing: "-3px", lineHeight: 1.05, marginLeft: 18 }}>
@@ -72,7 +72,7 @@ export default function OgImage() {
             left: 96,
             width: 320,
             height: 2,
-            background: "#3B82F6",
+            background: "#473bce",
             borderRadius: 2,
             display: "flex",
           }}
