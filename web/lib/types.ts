@@ -9,7 +9,6 @@ export interface Job {
   employmentType: string | null;
   remote: boolean;
   description: string;
-  descriptionHtml: string;
   applyUrl: string;
   jobUrl: string;
   publishedAt: string;
@@ -60,7 +59,6 @@ export type JobRow = {
   employment_type: string | null;
   remote: boolean;
   description: string;
-  description_html: string;
   apply_url: string;
   job_url: string;
   published_at: string;

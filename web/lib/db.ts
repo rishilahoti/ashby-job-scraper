@@ -8,9 +8,8 @@ export function getPool(): Pool {
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
-    max: 5,
-    min: 1,
-    idleTimeoutMillis: 120000,
+    max: 3,
+    idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 20000,
   });
 

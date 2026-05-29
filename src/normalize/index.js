@@ -29,12 +29,18 @@ function normalizeJob(raw, company) {
   }
 
   const description = raw.descriptionPlain || sanitizeDescription(raw.descriptionHtml);
-  const descriptionHtml = raw.descriptionHtml || '';
 
   const compensationSummary =
     raw.compensation?.compensationTierSummary ||
     raw.compensation?.scrapeableCompensationSalarySummary ||
     null;
+
+  let publishedAt = null;
+  if (raw.publishedAt) {
+    const d = new Date(raw.publishedAt);
+    publishedAt = isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  if (!publishedAt) publishedAt = new Date().toISOString();
 
   const normalized = {
     jobId,
@@ -46,10 +52,9 @@ function normalizeJob(raw, company) {
     employmentType: raw.employmentType || null,
     remote: Boolean(raw.isRemote),
     description,
-    descriptionHtml,
     applyUrl: raw.applyUrl || '',
     jobUrl: raw.jobUrl || '',
-    publishedAt: raw.publishedAt || new Date().toISOString(),
+    publishedAt,
     scrapedAt: new Date().toISOString(),
     compensationSummary,
     contentHash: contentHash(

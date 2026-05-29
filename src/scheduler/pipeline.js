@@ -15,87 +15,113 @@ async function runPipeline() {
   await store.initDb();
 
   const pool = store.getPool();
-  const allCompanies = await getEnabledCompaniesWithDb(pool);
-  const lastScraped = await store.getAllCompaniesLastScraped();
-  const companies = getDueCompanies(lastScraped, allCompanies);
 
-  if (companies.length === 0) {
-    logger.info('No companies due for scraping');
+  // Advisory lock: prevent two pipeline processes running concurrently against the same DB.
+  const { rows: lockRows } = await pool.query('SELECT pg_try_advisory_lock(20260420) AS locked');
+  if (!lockRows[0].locked) {
+    logger.warn('Another pipeline run is already in progress — skipping this run');
     return;
   }
 
-  logger.info(`Processing ${companies.length} companies`);
+  try {
+    const allCompanies = await getEnabledCompaniesWithDb(pool);
+    const lastScraped = await store.getAllCompaniesLastScraped();
+    const companies = getDueCompanies(lastScraped, allCompanies);
 
-  const allChanges = [];
-  const allNewJobs = [];
+    if (companies.length === 0) {
+      logger.info('No companies due for scraping');
+      return;
+    }
 
-  for (let i = 0; i < companies.length; i++) {
-    const company = companies[i];
+    logger.info(`Processing ${companies.length} companies`);
 
-    try {
-      await store.upsertCompany(company.company, company.ashbySlug);
+    const allChanges = [];
+    const allNewJobs = [];
 
-      const rawData = await fetchJobBoard(company.ashbySlug);
-      const normalizedJobs = normalizeResponse(rawData, company.company);
+    for (let i = 0; i < companies.length; i++) {
+      const company = companies[i];
+      const runId = await store.startScrapeRun(company.company);
 
-      const changes = await detectChanges(normalizedJobs, company.company);
-      allChanges.push(...changes);
+      try {
+        await store.upsertCompany(company.company, company.ashbySlug);
 
-      const newJobs = changes
-        .filter(c => c.type === 'JOB_NEW')
-        .map(c => c.job);
-      allNewJobs.push(...newJobs);
+        const rawData = await fetchJobBoard(company.ashbySlug);
+        const normalizedJobs = normalizeResponse(rawData, company.company);
 
-      await store.updateLastScraped(company.ashbySlug);
+        const changes = await detectChanges(normalizedJobs, company.company);
+        allChanges.push(...changes);
 
-      logger.info(`Completed ${company.company}: ${normalizedJobs.length} jobs, ${changes.length} changes`);
-    } catch (err) {
-      if (err instanceof FetchError) {
-        logger.error(`Fetch error for ${company.company}: ${err.message}`);
-      } else {
-        logger.error(`Pipeline error for ${company.company}: ${err.message}`);
+        const newJobs = changes.filter(c => c.type === 'JOB_NEW').map(c => c.job);
+        allNewJobs.push(...newJobs);
+
+        const inserted = changes.filter(c => c.type === 'JOB_NEW').length;
+        const updated = changes.filter(c => c.type === 'JOB_UPDATED').length;
+        const removed = changes.filter(c => c.type === 'JOB_REMOVED').length;
+
+        await store.updateLastScraped(company.ashbySlug);
+        await store.completeScrapeRun(runId, {
+          status: 'success',
+          jobsFetched: normalizedJobs.length,
+          jobsInserted: inserted,
+          jobsUpdated: updated,
+          jobsRemoved: removed,
+        });
+
+        logger.info(`Completed ${company.company}: ${normalizedJobs.length} jobs, ${changes.length} changes`);
+      } catch (err) {
+        const message = err instanceof FetchError ? err.message : err.message;
+        await store.completeScrapeRun(runId, { status: 'error', errorMessage: message });
+
+        if (err instanceof FetchError) {
+          logger.error(`Fetch error for ${company.company}: ${message}`);
+        } else {
+          logger.error(`Pipeline error for ${company.company}: ${message}`);
+        }
+      }
+
+      if (i < companies.length - 1) {
+        await jitteredDelay(
+          config.fetch.delayBetweenCompaniesMin,
+          config.fetch.delayBetweenCompaniesMax
+        );
       }
     }
 
-    if (i < companies.length - 1) {
-      await jitteredDelay(
-        config.fetch.delayBetweenCompaniesMin,
-        config.fetch.delayBetweenCompaniesMax
-      );
+    const activeRows = await store.getAllActiveJobs();
+    const allActiveJobs = activeRows.map(row => ({
+      jobId: row.job_id,
+      company: row.company,
+      title: row.title,
+      location: row.location,
+      team: row.team,
+      department: row.department,
+      employmentType: row.employment_type,
+      remote: Boolean(row.remote),
+      description: row.description,
+      applyUrl: row.apply_url,
+      jobUrl: row.job_url,
+      publishedAt: row.published_at,
+      compensationSummary: row.compensation_summary,
+    }));
+
+    const { filtered } = intelligence.filterAndRank(allActiveJobs);
+
+    if (config.notify.cli) {
+      printRunSummary(allChanges, filtered);
     }
+
+    if (config.notify.markdown && allChanges.length > 0) {
+      generateReport(allChanges, filtered);
+    }
+
+    // Remove inactive jobs older than 30 days to keep Neon storage under control.
+    await store.cleanupOldInactiveJobs(30);
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    logger.info(`Pipeline completed in ${elapsed}s — ${allChanges.length} total changes`);
+  } finally {
+    await pool.query('SELECT pg_advisory_unlock(20260420)');
   }
-
-  const activeRows = await store.getAllActiveJobs();
-  // description_html is intentionally excluded from getAllActiveJobs to reduce
-  // data transfer \u2014 it's not used for filtering or reporting.
-  const allActiveJobs = activeRows.map(row => ({
-    jobId: row.job_id,
-    company: row.company,
-    title: row.title,
-    location: row.location,
-    team: row.team,
-    department: row.department,
-    employmentType: row.employment_type,
-    remote: Boolean(row.remote),
-    description: row.description,
-    applyUrl: row.apply_url,
-    jobUrl: row.job_url,
-    publishedAt: row.published_at,
-    compensationSummary: row.compensation_summary,
-  }));
-
-  const { filtered } = intelligence.filterAndRank(allActiveJobs);
-
-  if (config.notify.cli) {
-    printRunSummary(allChanges, filtered);
-  }
-
-  if (config.notify.markdown && allChanges.length > 0) {
-    generateReport(allChanges, filtered);
-  }
-
-  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  logger.info(`Pipeline completed in ${elapsed}s — ${allChanges.length} total changes`);
 }
 
 module.exports = { runPipeline };

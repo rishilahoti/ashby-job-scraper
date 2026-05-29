@@ -10,16 +10,20 @@ const HEADERS = {
   "Accept-Language": "en-US,en;q=0.9",
 };
 
+function checkAuth(request: NextRequest): boolean {
+  const secret = process.env.API_SECRET;
+  if (!secret) return true; // auth disabled when env var is not set
+  const header = request.headers.get("authorization") ?? "";
+  return header === `Bearer ${secret}`;
+}
+
 function extractSlug(input: string): string | null {
   const trimmed = input.trim();
-
   const urlMatch = trimmed.match(
     /(?:https?:\/\/)?jobs\.ashbyhq\.com\/([a-zA-Z0-9_-]+)/
   );
   if (urlMatch) return urlMatch[1].toLowerCase();
-
   if (/^[a-zA-Z0-9_-]+$/.test(trimmed)) return trimmed.toLowerCase();
-
   return null;
 }
 
@@ -53,6 +57,12 @@ function extractJobId(jobUrl: string | null): string | null {
   }
 }
 
+function safeDate(raw: string | null | undefined): string {
+  if (!raw) return new Date().toISOString();
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+}
+
 interface AshbyJob {
   title?: string;
   location?: string;
@@ -73,6 +83,10 @@ interface AshbyJob {
 }
 
 export async function POST(request: NextRequest) {
+  if (!checkAuth(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const rawInput: string = body.url || body.slug || "";
@@ -90,13 +104,12 @@ export async function POST(request: NextRequest) {
 
     const pool = getPool();
 
-    // Case-insensitive: find existing company by slug so we reuse its name and avoid duplicates
     const existingBySlug = await pool.query(
       `SELECT id, name, ashby_slug
-      FROM companies
-      WHERE LOWER(ashby_slug) = LOWER($1)
-      ORDER BY last_scraped_at DESC NULLS LAST, id DESC
-      LIMIT 1`,
+       FROM companies
+       WHERE LOWER(ashby_slug) = LOWER($1)
+       ORDER BY last_scraped_at DESC NULLS LAST, id DESC
+       LIMIT 1`,
       [slug]
     );
     const existingRow = existingBySlug.rows[0];
@@ -132,8 +145,6 @@ export async function POST(request: NextRequest) {
 
     const companyName =
       data.jobBoard?.title || slug.charAt(0).toUpperCase() + slug.slice(1);
-
-    // Use existing company name if we already have this slug (keeps "OpenAI" instead of creating "Openai")
     const canonicalName = existingRow?.name ?? companyName;
 
     if (existingRow) {
@@ -143,17 +154,14 @@ export async function POST(request: NextRequest) {
       );
     } else {
       await pool.query(
-        `INSERT INTO companies (name, ashby_slug, last_scraped_at) 
-        VALUES ($1, $2, NOW()) 
-        ON CONFLICT (ashby_slug) DO UPDATE 
-        SET last_scraped_at = NOW()`,
+        `INSERT INTO companies (name, ashby_slug, last_scraped_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (ashby_slug) DO UPDATE SET last_scraped_at = NOW()`,
         [canonicalName, slug]
       );
     }
 
-    // Use the canonical name for all job operations (existing row's name or the one we just set)
     const companyNameForJobs = existingRow?.name ?? canonicalName;
-
     const listedJobs: AshbyJob[] = data.jobs.filter(
       (j: AshbyJob) => j.isListed !== false
     );
@@ -162,6 +170,7 @@ export async function POST(request: NextRequest) {
     let updated = 0;
     let unchanged = 0;
 
+    // Use single ON CONFLICT upsert (same as backend) — no N+1 SELECT per job.
     for (const raw of listedJobs) {
       const jobId = extractJobId(raw.jobUrl ?? null);
       if (!jobId) continue;
@@ -177,102 +186,67 @@ export async function POST(request: NextRequest) {
         raw.team,
         raw.department
       );
-
       const compensationSummary =
         raw.compensation?.compensationTierSummary ||
         raw.compensation?.scrapeableCompensationSalarySummary ||
         null;
 
-      const existingJob = await pool.query(
-        "SELECT content_hash FROM jobs WHERE company = $1 AND job_id = $2",
-        [companyNameForJobs, jobId]
+      const { rows } = await pool.query(
+        `INSERT INTO jobs (
+           job_id, company, title, location, team, department,
+           employment_type, remote, description,
+           apply_url, job_url, published_at, scraped_at,
+           compensation_summary, content_hash, is_active
+         ) VALUES (
+           $1, $2, $3, $4, $5, $6,
+           $7, $8, $9,
+           $10, $11, $12, NOW(),
+           $13, $14, TRUE
+         )
+         ON CONFLICT (company, job_id) DO UPDATE SET
+           title             = EXCLUDED.title,
+           location          = EXCLUDED.location,
+           team              = EXCLUDED.team,
+           department        = EXCLUDED.department,
+           employment_type   = EXCLUDED.employment_type,
+           remote            = EXCLUDED.remote,
+           description       = EXCLUDED.description,
+           apply_url         = EXCLUDED.apply_url,
+           job_url           = EXCLUDED.job_url,
+           published_at      = EXCLUDED.published_at,
+           scraped_at        = NOW(),
+           compensation_summary = EXCLUDED.compensation_summary,
+           content_hash      = CASE
+                                 WHEN jobs.content_hash = EXCLUDED.content_hash THEN jobs.content_hash
+                                 ELSE EXCLUDED.content_hash
+                               END,
+           is_active         = TRUE,
+           updated_at        = NOW()
+         RETURNING
+           (xmax = 0)                          AS was_inserted,
+           (xmax <> 0 AND content_hash = $14)  AS was_unchanged`,
+        [
+          jobId,
+          companyNameForJobs,
+          raw.title || "Untitled",
+          raw.location || "Unknown",
+          raw.team || null,
+          raw.department || null,
+          raw.employmentType || null,
+          Boolean(raw.isRemote),
+          description,
+          raw.applyUrl || "",
+          raw.jobUrl || "",
+          safeDate(raw.publishedAt),
+          compensationSummary,
+          hash,
+        ]
       );
 
-      if (existingJob.rows.length === 0) {
-        await pool.query(
-          `INSERT INTO jobs (
-            job_id, company, title, location, team, department,
-            employment_type, remote, description, description_html,
-            apply_url, job_url, published_at, scraped_at,
-            compensation_summary, content_hash, is_active
-          ) VALUES (
-            $1, $2, $3, $4, $5, $6,
-            $7, $8, $9, $10,
-            $11, $12, $13, NOW(),
-            $14, $15, TRUE
-          )
-          ON CONFLICT (company, job_id) DO UPDATE SET
-            title = EXCLUDED.title,
-            location = EXCLUDED.location,
-            team = EXCLUDED.team,
-            department = EXCLUDED.department,
-            employment_type = EXCLUDED.employment_type,
-            remote = EXCLUDED.remote,
-            description = EXCLUDED.description,
-            description_html = EXCLUDED.description_html,
-            apply_url = EXCLUDED.apply_url,
-            job_url = EXCLUDED.job_url,
-            published_at = EXCLUDED.published_at,
-            scraped_at = NOW(),
-            compensation_summary = EXCLUDED.compensation_summary,
-            content_hash = EXCLUDED.content_hash,
-            is_active = TRUE,
-            updated_at = NOW()`,
-          [
-            jobId,
-            companyNameForJobs,
-            raw.title || "Untitled",
-            raw.location || "Unknown",
-            raw.team || null,
-            raw.department || null,
-            raw.employmentType || null,
-            Boolean(raw.isRemote),
-            description,
-            raw.descriptionHtml || "",
-            raw.applyUrl || "",
-            raw.jobUrl || "",
-            raw.publishedAt || new Date().toISOString(),
-            compensationSummary,
-            hash,
-          ]
-        );
-        inserted++;
-      } else if (existingJob.rows[0].content_hash !== hash) {
-        await pool.query(
-          `UPDATE jobs SET
-            title = $1, location = $2, team = $3, department = $4,
-            employment_type = $5, remote = $6, description = $7,
-            description_html = $8, apply_url = $9, job_url = $10,
-            published_at = $11, scraped_at = NOW(), compensation_summary = $12,
-            content_hash = $13, is_active = TRUE, updated_at = NOW()
-          WHERE company = $14 AND job_id = $15`,
-          [
-            raw.title || "Untitled",
-            raw.location || "Unknown",
-            raw.team || null,
-            raw.department || null,
-            raw.employmentType || null,
-            Boolean(raw.isRemote),
-            description,
-            raw.descriptionHtml || "",
-            raw.applyUrl || "",
-            raw.jobUrl || "",
-            raw.publishedAt || new Date().toISOString(),
-            compensationSummary,
-            hash,
-            companyNameForJobs,
-            jobId,
-          ]
-        );
-        updated++;
-      } else {
-        await pool.query(
-          `UPDATE jobs SET scraped_at = NOW(), is_active = TRUE, updated_at = NOW()
-           WHERE company = $1 AND job_id = $2`,
-          [companyNameForJobs, jobId]
-        );
-        unchanged++;
-      }
+      const { was_inserted, was_unchanged } = rows[0];
+      if (was_inserted) inserted++;
+      else if (was_unchanged) unchanged++;
+      else updated++;
     }
 
     return NextResponse.json({
@@ -304,17 +278,14 @@ export async function GET() {
        GROUP BY c.id, c.name, c.ashby_slug, c.last_scraped_at
        ORDER BY c.name`
     );
-    // Deduplicate by lowercase slug so "OpenAI" and "openai" show as one company (keep one with highest job_count)
     const bySlug = new Map<string, (typeof rows)[0]>();
     for (const r of rows) {
-      const key = r.ashby_slug?.toLowerCase() ?? '';
-      if (!key) continue; // skip companies without a slug
+      const key = r.ashby_slug?.toLowerCase() ?? "";
+      if (!key) continue;
       if (!bySlug.has(key)) bySlug.set(key, r);
       else {
         const existing = bySlug.get(key)!;
-        const existingJobCount = Number(existing.job_count) || 0;
-        const rJobCount = Number(r.job_count) || 0;
-        if (rJobCount > existingJobCount) bySlug.set(key, r);
+        if (Number(r.job_count) > Number(existing.job_count)) bySlug.set(key, r);
       }
     }
     return NextResponse.json({ companies: Array.from(bySlug.values()) });

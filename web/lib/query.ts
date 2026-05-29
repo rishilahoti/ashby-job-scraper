@@ -15,6 +15,15 @@ const LIST_COLUMNS = `
   is_active, created_at, updated_at
 `;
 
+// Bulk queries truncate description to 500 chars — enough for keyword scoring,
+// 95%+ less Neon egress vs full text. Full description only on detail page.
+const LIST_COLUMNS_BULK = `
+  id, job_id, company, title, location, team, department,
+  employment_type, remote, LEFT(description, 500) AS description, apply_url, job_url,
+  published_at, scraped_at, compensation_summary, content_hash,
+  is_active, created_at, updated_at
+`;
+
 // --- In-memory cache ---
 
 interface CacheEntry<T> {
@@ -48,7 +57,6 @@ function rowToJob(row: JobRow): Job {
     employmentType: row.employment_type,
     remote: Boolean(row.remote),
     description: row.description ?? "",
-    descriptionHtml: row.description_html ?? "",
     applyUrl: row.apply_url,
     jobUrl: row.job_url,
     publishedAt: row.published_at
@@ -58,14 +66,14 @@ function rowToJob(row: JobRow): Job {
     compensationSummary: row.compensation_summary,
     contentHash: row.content_hash,
     isActive: Boolean(row.is_active),
-    status: "new",
+    status: (row.status as Job["status"]) ?? "new",
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : "",
     updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : "",
   };
 }
 
 function stripForList(job: JobWithScore): JobWithScore {
-  return { ...job, description: "", descriptionHtml: "" };
+  return { ...job, description: "" };
 }
 
 function dedupeRowsByJobId(rows: JobRow[], preferredCompany: string): JobRow[] {
@@ -117,7 +125,7 @@ function applyCanonicalCompanyNames(
 async function getAllScoredJobs(): Promise<JobWithScore[]> {
   return cached("all_scored_jobs", 60_000, async () => {
     const { rows } = await query<JobRow>(
-      `SELECT ${LIST_COLUMNS} FROM jobs WHERE is_active = TRUE ORDER BY published_at DESC`
+      `SELECT ${LIST_COLUMNS_BULK} FROM jobs WHERE is_active = TRUE ORDER BY published_at DESC`
     );
     return rows.map((r) => scoreJob(rowToJob(r)));
   });
@@ -186,7 +194,7 @@ export async function getJobs(
         ? `ORDER BY job_id, CASE WHEN TRIM(company) = TRIM($${companyParamIndex}) THEN 0 ELSE 1 END, published_at DESC NULLS LAST`
         : "ORDER BY published_at DESC";
     const { rows: rawRows } = await query<JobRow>(
-      `SELECT ${LIST_COLUMNS} FROM jobs ${where} ${orderBy}`,
+      `SELECT ${LIST_COLUMNS_BULK} FROM jobs ${where} ${orderBy}`,
       params
     );
     const canonicalMap = await getCanonicalCompanyNameMap();
@@ -244,7 +252,7 @@ export async function getJobs(
 
 export async function getJobById(jobId: string): Promise<JobWithScore | null> {
   const { rows } = await query<JobRow>(
-    "SELECT * FROM jobs WHERE job_id = $1",
+    `SELECT ${LIST_COLUMNS} FROM jobs WHERE job_id = $1`,
     [jobId]
   );
   if (rows.length === 0) return null;
@@ -255,7 +263,7 @@ export async function getJobsByIds(jobIds: string[]): Promise<JobWithScore[]> {
   if (jobIds.length === 0) return [];
   const placeholders = jobIds.map((_, i) => `$${i + 1}`).join(", ");
   const { rows } = await query<JobRow>(
-    `SELECT ${LIST_COLUMNS} FROM jobs WHERE job_id IN (${placeholders}) AND is_active = TRUE`,
+    `SELECT ${LIST_COLUMNS_BULK} FROM jobs WHERE job_id IN (${placeholders}) AND is_active = TRUE`,
     jobIds
   );
   return rows.map((r) => scoreJob(rowToJob(r))).map(stripForList);
