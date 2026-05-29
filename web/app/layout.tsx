@@ -6,6 +6,9 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.ver
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
+  verification: {
+    google: "P2_1zWxkE0R-QmgUGw4dGpmHqVlIO0X-SaoFDdH-ciM",
+  },
   title: {
     default: "Ashby Tracker — Browse AshbyHQ Job Listings",
     template: "%s | Ashby Tracker",
