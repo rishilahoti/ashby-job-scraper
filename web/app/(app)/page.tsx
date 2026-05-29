@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { getJobs, getCompanies, getStats, getDepartments, getLocations } from "@/lib/query";
 import { POSITIVE_TAG_OPTIONS } from "@/lib/scoring";
 import type { JobFilters } from "@/lib/types";
@@ -7,6 +8,25 @@ import Filters from "@/components/Filters";
 import Pagination from "@/components/Pagination";
 
 export const revalidate = 300;
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.vercel.app";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const stats = await getStats();
+  const title = `Browse ${stats.total.toLocaleString()} Tech Startup Jobs on AshbyHQ`;
+  const description = `Discover ${stats.total.toLocaleString()} active job listings from ${stats.companies}+ top tech startups on AshbyHQ — OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, and more. Filter by remote, department, and company. Updated twice daily.`;
+  return {
+    title: { absolute: title },
+    description,
+    openGraph: {
+      title,
+      description,
+      url: siteUrl,
+    },
+    twitter: { title, description },
+    alternates: { canonical: siteUrl },
+  };
+}
 
 export default async function FeedPage({
   searchParams,
@@ -43,10 +63,27 @@ export default async function FeedPage({
     getLocations(),
   ]);
 
+  const websiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Ashby Tracker",
+    url: siteUrl,
+    description: `Browse ${stats.total.toLocaleString()} active job listings from ${stats.companies}+ top tech startups on AshbyHQ.`,
+    potentialAction: {
+      "@type": "SearchAction",
+      target: { "@type": "EntryPoint", urlTemplate: `${siteUrl}/?search={search_term_string}` },
+      "query-input": "required name=search_term_string",
+    },
+  };
+
   return (
     <div>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
+      />
       <div className="flex items-baseline gap-6 mb-1">
-        <h1 className="font-display text-xl font-bold tracking-tight">Job Feed</h1>
+        <h1 className="font-display text-xl font-bold tracking-tight">Ashby Tracker</h1>
         <div className="flex gap-4">
           <Stat label="Jobs" value={stats.total} />
           <Stat label="Companies" value={stats.companies} />

@@ -17,7 +17,7 @@ function getPool() {
   pool = new Pool({
     connectionString: config.db.url,
     ssl: { rejectUnauthorized: false },
-    max: 5,
+    max: 15,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
   });

@@ -16,7 +16,7 @@ export default function Header() {
     <header className="border-b border-edge bg-paper/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="container-main flex items-center justify-between h-14">
         <div className="flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-2.5 group">
+          <Link href="/home" className="flex items-center gap-2.5 group">
             <span className="inline-block w-2 h-2 rounded-full bg-signal group-hover:scale-125 transition-transform" />
             <span className="font-display font-semibold text-sm tracking-tight text-ink">
               ASHBY TRACKER

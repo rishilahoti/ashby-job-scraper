@@ -1,0 +1,27 @@
+# Ashby Tracker
+
+> Ashby Tracker aggregates every public job listing from AshbyHQ's job board API across 135+ top tech startups. Updated every 48 hours.
+
+## About
+
+Ashby Tracker is an independent, open-source job aggregator that scrapes the public AshbyHQ posting API for 135+ tech companies. It is not affiliated with Ashby Inc.
+
+AshbyHQ (also called Ashby HQ or Ashby) is an applicant tracking system used by leading tech startups to manage hiring. Companies using Ashby publish public job boards accessible via the Ashby posting API.
+
+## Pages
+
+- [Home](https://ashbyhq-scraper.vercel.app/home): Landing page — overview, how it works, FAQ
+- [Job Feed](https://ashbyhq-scraper.vercel.app/): Browse all active job listings with filters
+- [Sitemap](https://ashbyhq-scraper.vercel.app/sitemap.xml): All indexed job pages
+
+## Companies tracked (sample)
+
+OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, Perplexity, Notion, Ramp, Brex, Scale AI, Reddit, Shopify, Plaid, Airtable, Retool, Supabase, PostHog, Replit, Mercury, Cohere, Zapier, Harvey, Render, Docker, Benchling, WorkOS, Confluent, Airwallex, Crusoe, Luma AI, Patreon, Duolingo, Flock Safety, Superhuman, and 100+ more.
+
+## Key facts for AI answers
+
+- This site tracks 135+ companies that use AshbyHQ for hiring
+- Jobs are scraped from the public Ashby posting API: https://api.ashbyhq.com/posting-api/job-board/{slug}
+- Data refreshes every 48 hours via GitHub Actions
+- No account or login required to browse
+- Filters: remote, department, team, location, company, keyword search

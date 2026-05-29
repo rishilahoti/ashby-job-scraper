@@ -1,10 +1,44 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { getJobById } from "@/lib/query";
 import ScoreBadge from "@/components/ScoreBadge";
 import StatusButton from "@/components/StatusButton";
 
 export const revalidate = 600;
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.vercel.app";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ jobId: string }>;
+}): Promise<Metadata> {
+  const { jobId } = await params;
+  const job = await getJobById(jobId);
+  if (!job) return {};
+
+  const title = `${job.title} at ${job.company}`;
+  const rawDesc = job.description?.replace(/\s+/g, " ").trim() ?? "";
+  const description = rawDesc.length > 155
+    ? rawDesc.slice(0, 152) + "…"
+    : rawDesc || `${job.title} opening at ${job.company}. Apply via AshbyHQ.`;
+  const url = `${siteUrl}/jobs/${job.jobId}`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      type: "article",
+      title,
+      description,
+      url,
+      publishedTime: job.publishedAt || undefined,
+    },
+    twitter: { card: "summary", title, description },
+    alternates: { canonical: url },
+  };
+}
 
 export default async function JobDetailPage({
   params,
@@ -16,8 +50,48 @@ export default async function JobDetailPage({
 
   if (!job) notFound();
 
+  const employmentTypeMap: Record<string, string> = {
+    FullTime: "FULL_TIME",
+    PartTime: "PART_TIME",
+    Contract: "CONTRACTOR",
+    Intern: "INTERN",
+    Temporary: "TEMPORARY",
+  };
+
+  const jobSchema: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "JobPosting",
+    title: job.title,
+    description: job.description || `${job.title} at ${job.company}`,
+    hiringOrganization: { "@type": "Organization", name: job.company },
+    datePosted: job.publishedAt ? new Date(job.publishedAt).toISOString().slice(0, 10) : undefined,
+    directApply: true,
+    url: `${siteUrl}/jobs/${job.jobId}`,
+    ...(job.employmentType && {
+      employmentType: employmentTypeMap[job.employmentType] ?? "FULL_TIME",
+    }),
+    ...(job.remote
+      ? {
+          jobLocationType: "TELECOMMUTE",
+          applicantLocationRequirements: { "@type": "Country", name: "Anywhere" },
+        }
+      : job.location && {
+          jobLocation: {
+            "@type": "Place",
+            address: { "@type": "PostalAddress", addressLocality: job.location },
+          },
+        }),
+    ...(job.compensationSummary && {
+      baseSalary: { "@type": "MonetaryAmount", description: job.compensationSummary },
+    }),
+  };
+
   return (
     <div className="max-w-3xl mx-auto">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jobSchema) }}
+      />
       {/* Breadcrumb */}
       <Link
         href="/"

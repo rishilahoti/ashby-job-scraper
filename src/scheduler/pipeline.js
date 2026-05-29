@@ -1,5 +1,5 @@
 const config = require('../config');
-const { logger, jitteredDelay } = require('../utils');
+const { logger } = require('../utils');
 const { getEnabledCompaniesWithDb, getDueCompanies } = require('../sources');
 const { fetchJobBoard, FetchError } = require('../fetch');
 const { normalizeResponse } = require('../normalize');
@@ -7,6 +7,43 @@ const store = require('../store');
 const { detectChanges } = require('../diff');
 const intelligence = require('../intelligence');
 const { printRunSummary, generateReport } = require('../notify');
+
+const CONCURRENCY = 8;
+
+async function scrapeCompany(company) {
+  const runId = await store.startScrapeRun(company.company);
+  try {
+    await store.upsertCompany(company.company, company.ashbySlug);
+
+    const rawData = await fetchJobBoard(company.ashbySlug);
+    const normalizedJobs = normalizeResponse(rawData, company.company);
+    const changes = await detectChanges(normalizedJobs, company.company);
+
+    const inserted = changes.filter(c => c.type === 'JOB_NEW').length;
+    const updated  = changes.filter(c => c.type === 'JOB_UPDATED').length;
+    const removed  = changes.filter(c => c.type === 'JOB_REMOVED').length;
+
+    await store.updateLastScraped(company.ashbySlug);
+    await store.completeScrapeRun(runId, {
+      status: 'success',
+      jobsFetched: normalizedJobs.length,
+      jobsInserted: inserted,
+      jobsUpdated: updated,
+      jobsRemoved: removed,
+    });
+
+    logger.info(`[${company.company}] ${normalizedJobs.length} jobs, +${inserted} ~${updated} -${removed}`);
+    return changes;
+  } catch (err) {
+    await store.completeScrapeRun(runId, { status: 'error', errorMessage: err.message });
+    if (err instanceof FetchError) {
+      logger.error(`Fetch error for ${company.company}: ${err.message}`);
+    } else {
+      logger.error(`Pipeline error for ${company.company}: ${err.message}`);
+    }
+    return [];
+  }
+}
 
 async function runPipeline() {
   const startTime = Date.now();
@@ -33,57 +70,15 @@ async function runPipeline() {
       return;
     }
 
-    logger.info(`Processing ${companies.length} companies`);
+    logger.info(`Processing ${companies.length} companies (concurrency=${CONCURRENCY})`);
 
     const allChanges = [];
-    const allNewJobs = [];
 
-    for (let i = 0; i < companies.length; i++) {
-      const company = companies[i];
-      const runId = await store.startScrapeRun(company.company);
-
-      try {
-        await store.upsertCompany(company.company, company.ashbySlug);
-
-        const rawData = await fetchJobBoard(company.ashbySlug);
-        const normalizedJobs = normalizeResponse(rawData, company.company);
-
-        const changes = await detectChanges(normalizedJobs, company.company);
-        allChanges.push(...changes);
-
-        const newJobs = changes.filter(c => c.type === 'JOB_NEW').map(c => c.job);
-        allNewJobs.push(...newJobs);
-
-        const inserted = changes.filter(c => c.type === 'JOB_NEW').length;
-        const updated = changes.filter(c => c.type === 'JOB_UPDATED').length;
-        const removed = changes.filter(c => c.type === 'JOB_REMOVED').length;
-
-        await store.updateLastScraped(company.ashbySlug);
-        await store.completeScrapeRun(runId, {
-          status: 'success',
-          jobsFetched: normalizedJobs.length,
-          jobsInserted: inserted,
-          jobsUpdated: updated,
-          jobsRemoved: removed,
-        });
-
-        logger.info(`Completed ${company.company}: ${normalizedJobs.length} jobs, ${changes.length} changes`);
-      } catch (err) {
-        const message = err instanceof FetchError ? err.message : err.message;
-        await store.completeScrapeRun(runId, { status: 'error', errorMessage: message });
-
-        if (err instanceof FetchError) {
-          logger.error(`Fetch error for ${company.company}: ${message}`);
-        } else {
-          logger.error(`Pipeline error for ${company.company}: ${message}`);
-        }
-      }
-
-      if (i < companies.length - 1) {
-        await jitteredDelay(
-          config.fetch.delayBetweenCompaniesMin,
-          config.fetch.delayBetweenCompaniesMax
-        );
+    for (let i = 0; i < companies.length; i += CONCURRENCY) {
+      const batch = companies.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(batch.map(scrapeCompany));
+      for (const r of results) {
+        if (r.status === 'fulfilled') allChanges.push(...r.value);
       }
     }
 
