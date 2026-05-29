@@ -22,8 +22,14 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       url: siteUrl,
+      images: [{ url: `${siteUrl}/opengraph-image`, width: 1200, height: 630, alt: "Ashby Tracker — Every AshbyHQ Job in One Feed" }],
     },
-    twitter: { title, description },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [`${siteUrl}/opengraph-image`],
+    },
     alternates: { canonical: siteUrl },
   };
 }
