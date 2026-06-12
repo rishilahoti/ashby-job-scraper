@@ -8,7 +8,7 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.ver
 
 export async function generateMetadata(): Promise<Metadata> {
   const stats = await getStats();
-  const title = "Ashby Tracker — Every Job from Every AshbyHQ Company";
+  const title = "Ashby Jobs — Every Job from Every AshbyHQ Company";
   const description = `Find ${stats.total.toLocaleString()} active jobs from ${stats.companies}+ tech startups on AshbyHQ. OpenAI, Figma, Anthropic, Linear, Cursor, Vercel and 130+ more — all in one place. Updated twice daily.`;
   return {
     title: { absolute: title },
@@ -17,7 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       url: `${siteUrl}/home`,
-      images: [{ url: `${siteUrl}/opengraph-image`, width: 1200, height: 630, alt: "Ashby Tracker — Every AshbyHQ Job in One Feed" }],
+      images: [{ url: `${siteUrl}/opengraph-image`, width: 1200, height: 630, alt: "Ashby Jobs — Every AshbyHQ Job in One Feed" }],
     },
     twitter: {
       card: "summary_large_image",
@@ -68,7 +68,7 @@ export default async function HomePage() {
   const websiteSchema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    name: "Ashby Tracker",
+    name: "Ashby Jobs",
     url: siteUrl,
     description: `${stats.total.toLocaleString()} jobs from ${stats.companies}+ tech startups on AshbyHQ.`,
     potentialAction: {

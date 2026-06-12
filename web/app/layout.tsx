@@ -10,8 +10,8 @@ export const metadata: Metadata = {
     google: "P2_1zWxkE0R-QmgUGw4dGpmHqVlIO0X-SaoFDdH-ciM",
   },
   title: {
-    default: "Ashby Tracker — Browse AshbyHQ Job Listings",
-    template: "%s | Ashby Tracker",
+    default: "Ashby Jobs — Browse AshbyHQ Job Listings",
+    template: "%s | Ashby Jobs",
   },
   description:
     "Browse and track job listings from 135+ top tech startups on AshbyHQ. Find remote engineering, product, and design roles from companies like OpenAI, Figma, Anthropic, Linear, Cursor, and more. Updated twice daily.",
@@ -25,19 +25,19 @@ export const metadata: Metadata = {
     "ashby hq scraper",
     "ashby hiring",
   ],
-  authors: [{ name: "Ashby Tracker" }],
-  creator: "Ashby Tracker",
+  authors: [{ name: "Ashby Jobs" }],
+  creator: "Ashby Jobs",
   openGraph: {
     type: "website",
     locale: "en_US",
-    siteName: "Ashby Tracker",
-    title: "Ashby Tracker — Browse AshbyHQ Job Listings",
+    siteName: "Ashby Jobs",
+    title: "Ashby Jobs — Browse AshbyHQ Job Listings",
     description:
       "Browse job listings from 135+ top tech startups on AshbyHQ. Find remote engineering, product, and design roles. Updated twice daily.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Ashby Tracker — Browse AshbyHQ Job Listings",
+    title: "Ashby Jobs — Browse AshbyHQ Job Listings",
     description:
       "Browse job listings from 135+ top tech startups on AshbyHQ. Updated twice daily.",
   },

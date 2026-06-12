@@ -22,7 +22,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       url: siteUrl,
-      images: [{ url: `${siteUrl}/opengraph-image`, width: 1200, height: 630, alt: "Ashby Tracker — Every AshbyHQ Job in One Feed" }],
+      images: [{ url: `${siteUrl}/opengraph-image`, width: 1200, height: 630, alt: "Ashby Jobs — Every AshbyHQ Job in One Feed" }],
     },
     twitter: {
       card: "summary_large_image",
@@ -72,7 +72,7 @@ export default async function FeedPage({
   const websiteSchema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    name: "Ashby Tracker",
+    name: "Ashby Jobs",
     url: siteUrl,
     description: `Browse ${stats.total.toLocaleString()} active job listings from ${stats.companies}+ top tech startups on AshbyHQ.`,
     potentialAction: {
@@ -89,7 +89,7 @@ export default async function FeedPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
       />
       <div className="flex items-baseline gap-6 mb-1">
-        <h1 className="font-display text-xl font-bold tracking-tight">Ashby Tracker</h1>
+        <h1 className="font-display text-xl font-bold tracking-tight">Ashby Jobs</h1>
         <div className="flex gap-4">
           <Stat label="Jobs" value={stats.total} />
           <Stat label="Companies" value={stats.companies} />

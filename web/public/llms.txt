@@ -1,10 +1,10 @@
-# Ashby Tracker
+# Ashby Jobs
 
-> Ashby Tracker aggregates every public job listing from AshbyHQ's job board API across 135+ top tech startups. Updated every 48 hours.
+> Ashby Jobs aggregates every public job listing from AshbyHQ's job board API across 135+ top tech startups. Updated every 48 hours.
 
 ## About
 
-Ashby Tracker is an independent, open-source job aggregator that scrapes the public AshbyHQ posting API for 135+ tech companies. It is not affiliated with Ashby Inc.
+Ashby Jobs is an independent, open-source job aggregator that scrapes the public AshbyHQ posting API for 135+ tech companies. It is not affiliated with Ashby Inc.
 
 AshbyHQ (also called Ashby HQ or Ashby) is an applicant tracking system used by leading tech startups to manage hiring. Companies using Ashby publish public job boards accessible via the Ashby posting API.
 

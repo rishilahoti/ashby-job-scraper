@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-export const alt = "Ashby Tracker — Every AshbyHQ job in one feed";
+export const alt = "Ashby Jobs — Every AshbyHQ job in one feed";
 
 export default function OgImage() {
   return new ImageResponse(
@@ -37,7 +37,7 @@ export default function OgImage() {
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 52 }}>
           <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#473bce", display: "flex" }} />
           <span style={{ fontSize: 18, fontWeight: 700, color: "#64748B", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-            Ashby Tracker
+            Ashby Jobs
           </span>
         </div>
 

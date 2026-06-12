@@ -19,7 +19,7 @@ export default function Header() {
           <Link href="/home" className="flex items-center gap-2.5 group">
             <span className="inline-block w-2 h-2 rounded-full bg-signal group-hover:scale-125 transition-transform" />
             <span className="font-display font-semibold text-sm tracking-tight text-ink">
-              ASHBY TRACKER
+              Ashby Jobs
             </span>
           </Link>
           <a
