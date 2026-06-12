@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { query } from "./db";
 import { scoreJob } from "./scoring";
 import type {
@@ -15,33 +16,15 @@ const LIST_COLUMNS = `
   is_active, created_at, updated_at
 `;
 
-// Bulk queries truncate description to 500 chars — enough for keyword scoring,
-// 95%+ less Neon egress vs full text. Full description only on detail page.
+// No description in bulk queries — halves row size (~440 bytes vs ~940).
+// Description is stripped from list output by stripForList anyway.
+// Scoring still uses title/company/employment_type for keyword tags.
 const LIST_COLUMNS_BULK = `
   id, job_id, company, title, location, team, department,
-  employment_type, remote, LEFT(description, 500) AS description, apply_url, job_url,
+  employment_type, remote, ''::text AS description, apply_url, job_url,
   published_at, scraped_at, compensation_summary, content_hash,
   is_active, created_at, updated_at
 `;
-
-// --- In-memory cache ---
-
-interface CacheEntry<T> {
-  data: T;
-  expiresAt: number;
-}
-
-const cache = new Map<string, CacheEntry<unknown>>();
-
-function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
-  const hit = cache.get(key) as CacheEntry<T> | undefined;
-  if (hit && hit.expiresAt > Date.now()) return Promise.resolve(hit.data);
-
-  return fn().then((data) => {
-    cache.set(key, { data, expiresAt: Date.now() + ttlMs });
-    return data;
-  });
-}
 
 // --- Row mapping ---
 
@@ -96,40 +79,35 @@ function dedupeRowsByJobId(rows: JobRow[], preferredCompany: string): JobRow[] {
   );
 }
 
-async function getCanonicalCompanyNameMap(): Promise<Map<string, string>> {
-  return cached("canonical_company_names", 120_000, async () => {
+// --- Shared cache (unstable_cache = shared across all Vercel instances, unlike Map) ---
+
+// Returns plain Record, not Map — unstable_cache requires JSON-serializable return values.
+const getCanonicalCompanyNamesRecord = unstable_cache(
+  async (): Promise<Record<string, string>> => {
     const { rows } = await query<{ name: string }>("SELECT name FROM companies");
-    const map = new Map<string, string>();
+    const record: Record<string, string> = {};
     for (const r of rows) {
       const n = r.name?.trim();
-      if (n) map.set(n.toLowerCase(), n);
+      if (n) record[n.toLowerCase()] = n;
     }
-    return map;
-  });
-}
+    return record;
+  },
+  ["canonical-company-names"],
+  { revalidate: 300 }
+);
 
-function applyCanonicalCompanyNames(
-  jobs: JobWithScore[],
-  map: Map<string, string>
-): void {
-  for (const j of jobs) {
-    const key = j.company?.trim().toLowerCase();
-    if (key && map.has(key)) {
-      j.company = map.get(key)!;
-    }
-  }
-}
-
-// --- All scored jobs (cached) ---
-
-async function getAllScoredJobs(): Promise<JobWithScore[]> {
-  return cached("all_scored_jobs", 60_000, async () => {
+// All scored jobs — ONE DB hit per 30 min shared across every instance.
+// Without description: ~2.2MB per fetch vs ~4.7MB before.
+const getCachedAllScoredJobs = unstable_cache(
+  async (): Promise<JobWithScore[]> => {
     const { rows } = await query<JobRow>(
       `SELECT ${LIST_COLUMNS_BULK} FROM jobs WHERE is_active = TRUE ORDER BY published_at DESC`
     );
     return rows.map((r) => scoreJob(rowToJob(r)));
-  });
-}
+  },
+  ["all-scored-jobs"],
+  { revalidate: 1800 } // 30 minutes
+);
 
 // --- Public API ---
 
@@ -197,10 +175,10 @@ export async function getJobs(
       `SELECT ${LIST_COLUMNS_BULK} FROM jobs ${where} ${orderBy}`,
       params
     );
-    const canonicalMap = await getCanonicalCompanyNameMap();
+    const canonicalRecord = await getCanonicalCompanyNamesRecord();
     const displayName =
       filters.company
-        ? canonicalMap.get(filters.company.trim().toLowerCase()) ?? filters.company.trim()
+        ? canonicalRecord[filters.company.trim().toLowerCase()] ?? filters.company.trim()
         : "";
     const rows =
       filters.company
@@ -208,7 +186,7 @@ export async function getJobs(
         : rawRows;
     scored = rows.map((r) => scoreJob(rowToJob(r)));
   } else {
-    scored = await getAllScoredJobs();
+    scored = await getCachedAllScoredJobs();
   }
 
   if (filters.minScore !== undefined) {
@@ -228,20 +206,27 @@ export async function getJobs(
   switch (sortBy) {
     case "newest":
       scored.sort(
-        (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+        (a, b) =>
+          new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
       );
       break;
     case "oldest":
       scored.sort(
-        (a, b) => new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime()
+        (a, b) =>
+          new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime()
       );
       break;
     default:
       scored.sort((a, b) => b.score - a.score);
   }
 
-  const canonicalMapForDisplay = await getCanonicalCompanyNameMap();
-  applyCanonicalCompanyNames(scored, canonicalMapForDisplay);
+  const canonicalRecord = await getCanonicalCompanyNamesRecord();
+  for (const j of scored) {
+    const key = j.company?.trim().toLowerCase();
+    if (key && canonicalRecord[key]) {
+      j.company = canonicalRecord[key];
+    }
+  }
 
   const total = scored.length;
   const offset = (page - 1) * limit;
@@ -269,8 +254,8 @@ export async function getJobsByIds(jobIds: string[]): Promise<JobWithScore[]> {
   return rows.map((r) => scoreJob(rowToJob(r))).map(stripForList);
 }
 
-export async function getCompanies(): Promise<string[]> {
-  return cached("companies_list", 120_000, async () => {
+export const getCompanies = unstable_cache(
+  async (): Promise<string[]> => {
     const [companiesRes, jobsRes] = await Promise.all([
       query<{ name: string }>("SELECT name FROM companies ORDER BY name"),
       query<{ company: string }>(
@@ -284,45 +269,55 @@ export async function getCompanies(): Promise<string[]> {
       const raw = r.company.trim();
       const k = raw.toLowerCase();
       if (!k) continue;
-      const fromDb = companiesRows.find((c: { name: string }) => c.name.trim().toLowerCase() === k);
+      const fromDb = companiesRows.find(
+        (c: { name: string }) => c.name.trim().toLowerCase() === k
+      );
       const canonical = fromDb ? fromDb.name.trim() : raw;
       if (!canonicalByLower.has(k)) canonicalByLower.set(k, canonical);
     }
     return Array.from(canonicalByLower.values()).sort((a, b) =>
       a.localeCompare(b, undefined, { sensitivity: "base" })
     );
-  });
-}
+  },
+  ["companies-list"],
+  { revalidate: 300 }
+);
 
-export async function getStats(): Promise<{ total: number; companies: number }> {
-  return cached("stats", 120_000, async () => {
+export const getStats = unstable_cache(
+  async (): Promise<{ total: number; companies: number }> => {
     const { rows } = await query(
       `SELECT COUNT(*)::int as total,
               COUNT(DISTINCT LOWER(TRIM(company)))::int as companies
        FROM jobs WHERE is_active = TRUE`
     );
     return rows[0] as { total: number; companies: number };
-  });
-}
+  },
+  ["stats"],
+  { revalidate: 300 }
+);
 
-export async function getDepartments(): Promise<string[]> {
-  return cached("departments_list", 120_000, async () => {
+export const getDepartments = unstable_cache(
+  async (): Promise<string[]> => {
     const { rows } = await query<{ department: string }>(
       `SELECT DISTINCT department FROM jobs
        WHERE is_active = TRUE AND department IS NOT NULL AND department != ''
        ORDER BY department`
     );
     return rows.map((r) => r.department);
-  });
-}
+  },
+  ["departments-list"],
+  { revalidate: 300 }
+);
 
-export async function getLocations(): Promise<string[]> {
-  return cached("locations_list", 120_000, async () => {
+export const getLocations = unstable_cache(
+  async (): Promise<string[]> => {
     const { rows } = await query<{ location: string }>(
       `SELECT DISTINCT location FROM jobs
        WHERE is_active = TRUE AND location IS NOT NULL AND TRIM(location) != ''
        ORDER BY location`
     );
     return rows.map((r) => r.location);
-  });
-}
+  },
+  ["locations-list"],
+  { revalidate: 300 }
+);

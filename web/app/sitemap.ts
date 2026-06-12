@@ -3,7 +3,7 @@ import { query } from "@/lib/db";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.vercel.app";
 
-export const revalidate = 3600;
+export const revalidate = 86400;
 
 const staticUrls: MetadataRoute.Sitemap = [
   { url: `${siteUrl}/home`, lastModified: new Date(), changeFrequency: "weekly", priority: 1.0 },
