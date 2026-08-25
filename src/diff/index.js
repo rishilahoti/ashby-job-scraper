@@ -11,7 +11,16 @@ async function detectChanges(normalizedJobs, company) {
   const changes = [];
   const currentActiveJobIds = normalizedJobs.map(j => j.jobId);
 
+  // Skip re-sending the (large) description over the wire for jobs whose
+  // content hasn't changed — this is what was blowing through Neon's egress cap.
+  const existingHashes = await store.getContentHashesForCompany(company);
+
   for (const job of normalizedJobs) {
+    if (existingHashes.get(job.jobId) === job.contentHash) {
+      await store.touchJob(company, job.jobId, job.scrapedAt);
+      continue;
+    }
+
     const result = await store.upsertJob(job);
 
     if (result === 'inserted') {

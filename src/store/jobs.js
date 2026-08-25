@@ -12,6 +12,26 @@ async function getActiveJobIdsForCompany(company) {
   return rows;
 }
 
+// Cheap lookup used to skip re-sending unchanged descriptions over the wire.
+async function getContentHashesForCompany(company) {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    'SELECT job_id, content_hash FROM jobs WHERE company = $1 AND is_active = TRUE',
+    [company]
+  );
+  return new Map(rows.map(r => [r.job_id, r.content_hash]));
+}
+
+// Bumps scraped_at/is_active without re-sending the (large) description column.
+async function touchJob(company, jobId, scrapedAt) {
+  const pool = getPool();
+  await pool.query(
+    `UPDATE jobs SET scraped_at = $1, is_active = TRUE, updated_at = NOW()
+     WHERE company = $2 AND job_id = $3`,
+    [scrapedAt, company, jobId]
+  );
+}
+
 async function getActiveJobsForCompany(company) {
   const pool = getPool();
   const { rows } = await pool.query(
@@ -228,6 +248,8 @@ async function cleanupOldInactiveJobs(retentionDays = 30) {
 module.exports = {
   getActiveJobsForCompany,
   getActiveJobIdsForCompany,
+  getContentHashesForCompany,
+  touchJob,
   getJobByCompanyAndId,
   upsertJob,
   markRemovedJobs,

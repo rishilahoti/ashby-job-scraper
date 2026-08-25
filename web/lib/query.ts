@@ -79,10 +79,27 @@ function dedupeRowsByJobId(rows: JobRow[], preferredCompany: string): JobRow[] {
   );
 }
 
+// Serves the last successful result when the DB is unreachable (e.g. Neon
+// suspended after hitting its data-transfer cap) instead of throwing and
+// taking the whole page down. Falls through to a real error only if we've
+// never had a successful result yet on this instance.
+function withStaleFallback<T>(fn: () => Promise<T>): () => Promise<T> {
+  let last: T | undefined;
+  return async () => {
+    try {
+      last = await fn();
+      return last;
+    } catch (err) {
+      if (last !== undefined) return last;
+      throw err;
+    }
+  };
+}
+
 // --- Shared cache (unstable_cache = shared across all Vercel instances, unlike Map) ---
 
 // Returns plain Record, not Map — unstable_cache requires JSON-serializable return values.
-const getCanonicalCompanyNamesRecord = unstable_cache(
+const getCanonicalCompanyNamesRecord = withStaleFallback(unstable_cache(
   async (): Promise<Record<string, string>> => {
     const { rows } = await query<{ name: string }>("SELECT name FROM companies");
     const record: Record<string, string> = {};
@@ -94,11 +111,11 @@ const getCanonicalCompanyNamesRecord = unstable_cache(
   },
   ["canonical-company-names"],
   { revalidate: 300 }
-);
+));
 
 // All scored jobs — ONE DB hit per 30 min shared across every instance.
 // Without description: ~2.2MB per fetch vs ~4.7MB before.
-const getCachedAllScoredJobs = unstable_cache(
+const getCachedAllScoredJobs = withStaleFallback(unstable_cache(
   async (): Promise<JobWithScore[]> => {
     const { rows } = await query<JobRow>(
       `SELECT ${LIST_COLUMNS_BULK} FROM jobs WHERE is_active = TRUE ORDER BY published_at DESC`
@@ -107,7 +124,7 @@ const getCachedAllScoredJobs = unstable_cache(
   },
   ["all-scored-jobs"],
   { revalidate: 1800 } // 30 minutes
-);
+));
 
 // --- Public API ---
 
@@ -171,20 +188,27 @@ export async function getJobs(
       filters.company
         ? `ORDER BY job_id, CASE WHEN TRIM(company) = TRIM($${companyParamIndex}) THEN 0 ELSE 1 END, published_at DESC NULLS LAST`
         : "ORDER BY published_at DESC";
-    const { rows: rawRows } = await query<JobRow>(
-      `SELECT ${LIST_COLUMNS_BULK} FROM jobs ${where} ${orderBy}`,
-      params
-    );
-    const canonicalRecord = await getCanonicalCompanyNamesRecord();
-    const displayName =
-      filters.company
-        ? canonicalRecord[filters.company.trim().toLowerCase()] ?? filters.company.trim()
-        : "";
-    const rows =
-      filters.company
-        ? dedupeRowsByJobId(rawRows, displayName)
-        : rawRows;
-    scored = rows.map((r) => scoreJob(rowToJob(r)));
+    try {
+      const { rows: rawRows } = await query<JobRow>(
+        `SELECT ${LIST_COLUMNS_BULK} FROM jobs ${where} ${orderBy}`,
+        params
+      );
+      const canonicalRecord = await getCanonicalCompanyNamesRecord();
+      const displayName =
+        filters.company
+          ? canonicalRecord[filters.company.trim().toLowerCase()] ?? filters.company.trim()
+          : "";
+      const rows =
+        filters.company
+          ? dedupeRowsByJobId(rawRows, displayName)
+          : rawRows;
+      scored = rows.map((r) => scoreJob(rowToJob(r)));
+    } catch {
+      // DB unreachable (e.g. Neon suspended) — fall back to the last cached
+      // full listing rather than taking the page down. SQL-pushed filters
+      // (company/remote/location/etc) are skipped; score/tag/sort filters below still apply.
+      scored = await getCachedAllScoredJobs();
+    }
   } else {
     scored = await getCachedAllScoredJobs();
   }
@@ -236,25 +260,37 @@ export async function getJobs(
 }
 
 export async function getJobById(jobId: string): Promise<JobWithScore | null> {
-  const { rows } = await query<JobRow>(
-    `SELECT ${LIST_COLUMNS} FROM jobs WHERE job_id = $1`,
-    [jobId]
-  );
-  if (rows.length === 0) return null;
-  return scoreJob(rowToJob(rows[0]));
+  try {
+    const { rows } = await query<JobRow>(
+      `SELECT ${LIST_COLUMNS} FROM jobs WHERE job_id = $1`,
+      [jobId]
+    );
+    if (rows.length === 0) return null;
+    return scoreJob(rowToJob(rows[0]));
+  } catch {
+    // DB unreachable — best effort from the cached listing (no full description in that cache).
+    const cached = await getCachedAllScoredJobs();
+    return cached.find((j) => j.jobId === jobId) ?? null;
+  }
 }
 
 export async function getJobsByIds(jobIds: string[]): Promise<JobWithScore[]> {
   if (jobIds.length === 0) return [];
   const placeholders = jobIds.map((_, i) => `$${i + 1}`).join(", ");
-  const { rows } = await query<JobRow>(
-    `SELECT ${LIST_COLUMNS_BULK} FROM jobs WHERE job_id IN (${placeholders}) AND is_active = TRUE`,
-    jobIds
-  );
-  return rows.map((r) => scoreJob(rowToJob(r))).map(stripForList);
+  try {
+    const { rows } = await query<JobRow>(
+      `SELECT ${LIST_COLUMNS_BULK} FROM jobs WHERE job_id IN (${placeholders}) AND is_active = TRUE`,
+      jobIds
+    );
+    return rows.map((r) => scoreJob(rowToJob(r))).map(stripForList);
+  } catch {
+    const cached = await getCachedAllScoredJobs();
+    const idSet = new Set(jobIds);
+    return cached.filter((j) => idSet.has(j.jobId));
+  }
 }
 
-export const getCompanies = unstable_cache(
+export const getCompanies = withStaleFallback(unstable_cache(
   async (): Promise<string[]> => {
     const [companiesRes, jobsRes] = await Promise.all([
       query<{ name: string }>("SELECT name FROM companies ORDER BY name"),
@@ -281,9 +317,9 @@ export const getCompanies = unstable_cache(
   },
   ["companies-list"],
   { revalidate: 300 }
-);
+));
 
-export const getStats = unstable_cache(
+export const getStats = withStaleFallback(unstable_cache(
   async (): Promise<{ total: number; companies: number }> => {
     const { rows } = await query(
       `SELECT COUNT(*)::int as total,
@@ -294,9 +330,9 @@ export const getStats = unstable_cache(
   },
   ["stats"],
   { revalidate: 300 }
-);
+));
 
-export const getDepartments = unstable_cache(
+export const getDepartments = withStaleFallback(unstable_cache(
   async (): Promise<string[]> => {
     const { rows } = await query<{ department: string }>(
       `SELECT DISTINCT department FROM jobs
@@ -307,9 +343,9 @@ export const getDepartments = unstable_cache(
   },
   ["departments-list"],
   { revalidate: 300 }
-);
+));
 
-export const getLocations = unstable_cache(
+export const getLocations = withStaleFallback(unstable_cache(
   async (): Promise<string[]> => {
     const { rows } = await query<{ location: string }>(
       `SELECT DISTINCT location FROM jobs
@@ -320,4 +356,4 @@ export const getLocations = unstable_cache(
   },
   ["locations-list"],
   { revalidate: 300 }
-);
+));
