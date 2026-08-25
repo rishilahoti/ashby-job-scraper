@@ -13,8 +13,8 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.ver
 
 export async function generateMetadata(): Promise<Metadata> {
   const stats = await getStats();
-  const title = `Browse ${stats.total.toLocaleString()} Tech Startup Jobs on AshbyHQ`;
-  const description = `Discover ${stats.total.toLocaleString()} active job listings from ${stats.companies}+ top tech startups on AshbyHQ — OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, and more. Filter by remote, department, and company. Updated twice daily.`;
+  const title = `Browse ${stats.total.toLocaleString()} Tech Startup Jobs on Ashby & Lever`;
+  const description = `Discover ${stats.total.toLocaleString()} active job listings from ${stats.companies}+ top tech startups on AshbyHQ and Lever — OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, and more. Filter by remote, department, and company. Updated twice daily.`;
   return {
     title: { absolute: title },
     description,
@@ -74,7 +74,7 @@ export default async function FeedPage({
     "@type": "WebSite",
     name: "Ashby Jobs",
     url: siteUrl,
-    description: `Browse ${stats.total.toLocaleString()} active job listings from ${stats.companies}+ top tech startups on AshbyHQ.`,
+    description: `Browse ${stats.total.toLocaleString()} active job listings from ${stats.companies}+ top tech startups on AshbyHQ and Lever.`,
     potentialAction: {
       "@type": "SearchAction",
       target: { "@type": "EntryPoint", urlTemplate: `${siteUrl}/?search={search_term_string}` },

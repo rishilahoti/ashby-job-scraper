@@ -22,7 +22,7 @@ export async function generateMetadata({
   const rawDesc = job.description?.replace(/\s+/g, " ").trim() ?? "";
   const description = rawDesc.length > 155
     ? rawDesc.slice(0, 152) + "…"
-    : rawDesc || `${job.title} opening at ${job.company}. Apply via AshbyHQ.`;
+    : rawDesc || `${job.title} opening at ${job.company}. Apply now.`;
   const url = `${siteUrl}/jobs/${job.jobId}`;
 
   return {
@@ -63,8 +63,12 @@ export default async function JobDetailPage({
     "@type": "JobPosting",
     title: job.title,
     description: job.description || `${job.title} at ${job.company}`,
+    identifier: { "@type": "PropertyValue", name: job.company, value: job.jobId },
     hiringOrganization: { "@type": "Organization", name: job.company },
     datePosted: job.publishedAt ? new Date(job.publishedAt).toISOString().slice(0, 10) : undefined,
+    validThrough: job.publishedAt
+      ? new Date(new Date(job.publishedAt).getTime() + 45 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      : undefined,
     directApply: true,
     url: `${siteUrl}/jobs/${job.jobId}`,
     ...(job.employmentType && {
