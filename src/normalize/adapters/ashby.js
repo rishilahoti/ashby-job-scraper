@@ -1,5 +1,5 @@
 const { contentHash } = require('../../utils');
-const { sanitizeDescription } = require('../shared');
+const { sanitizeDescription, normalizeSalaryInterval } = require('../shared');
 
 function extractJobId(jobUrl) {
   if (!jobUrl) return null;
@@ -22,6 +22,16 @@ function normalizeJob(raw, company) {
     raw.compensation?.compensationTierSummary ||
     raw.compensation?.scrapeableCompensationSalarySummary ||
     null;
+
+  // summaryComponents can include equity/bonus entries alongside salary — only
+  // the "Salary" component has the currency+min/max GSC's baseSalary needs.
+  const salaryComponent = raw.compensation?.summaryComponents?.find(
+    c => c.compensationType === 'Salary' && c.currencyCode && (c.minValue != null || c.maxValue != null)
+  );
+  const compensationMin = salaryComponent?.minValue ?? null;
+  const compensationMax = salaryComponent?.maxValue ?? null;
+  const compensationCurrency = salaryComponent?.currencyCode ?? null;
+  const compensationInterval = normalizeSalaryInterval(salaryComponent?.interval);
 
   let publishedAt = null;
   if (raw.publishedAt) {
@@ -46,6 +56,10 @@ function normalizeJob(raw, company) {
     publishedAt,
     scrapedAt: new Date().toISOString(),
     compensationSummary,
+    compensationMin,
+    compensationMax,
+    compensationCurrency,
+    compensationInterval,
     contentHash: contentHash(
       raw.title,
       raw.location,

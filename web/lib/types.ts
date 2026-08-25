@@ -15,6 +15,10 @@ export interface Job {
   publishedAt: string;
   scrapedAt: string;
   compensationSummary: string | null;
+  compensationMin: number | null;
+  compensationMax: number | null;
+  compensationCurrency: string | null;
+  compensationInterval: string | null;
   contentHash: string;
   isActive: boolean;
   status: "new" | "applied" | "ignored";
@@ -66,6 +70,10 @@ export type JobRow = {
   published_at: string;
   scraped_at: string;
   compensation_summary: string | null;
+  compensation_min: string | null; // NUMERIC column — pg returns as string
+  compensation_max: string | null;
+  compensation_currency: string | null;
+  compensation_interval: string | null;
   content_hash: string;
   is_active: boolean;
   status: string | null;

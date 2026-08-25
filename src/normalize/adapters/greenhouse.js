@@ -30,6 +30,10 @@ function normalizeJob(raw, company) {
     publishedAt,
     scrapedAt: new Date().toISOString(),
     compensationSummary: null,
+    compensationMin: null,
+    compensationMax: null,
+    compensationCurrency: null,
+    compensationInterval: null,
     contentHash: contentHash(raw.title, location, description, String(remote)),
   };
 }

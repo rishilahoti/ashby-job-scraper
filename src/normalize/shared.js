@@ -21,4 +21,17 @@ function decodeHtmlEntities(str) {
     .replace(/&amp;/g, '&');
 }
 
-module.exports = { sanitizeDescription, decodeHtmlEntities };
+// Normalizes ATS-specific pay period strings (Ashby: "1 YEAR", Lever:
+// "per-hour-salary") down to schema.org JobPosting baseSalary unitText values.
+function normalizeSalaryInterval(raw) {
+  if (!raw) return null;
+  const s = raw.toUpperCase();
+  if (s.includes('HOUR')) return 'HOUR';
+  if (s.includes('DAY')) return 'DAY';
+  if (s.includes('WEEK')) return 'WEEK';
+  if (s.includes('MONTH')) return 'MONTH';
+  if (s.includes('YEAR')) return 'YEAR';
+  return null;
+}
+
+module.exports = { sanitizeDescription, decodeHtmlEntities, normalizeSalaryInterval };

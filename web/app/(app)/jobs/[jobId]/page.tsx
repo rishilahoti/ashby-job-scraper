@@ -67,9 +67,9 @@ export default async function JobDetailPage({
     identifier: { "@type": "PropertyValue", name: job.company, value: job.jobId },
     hiringOrganization: { "@type": "Organization", name: job.company },
     datePosted: job.publishedAt ? new Date(job.publishedAt).toISOString().slice(0, 10) : undefined,
-    validThrough: job.publishedAt
-      ? new Date(new Date(job.publishedAt).getTime() + 45 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-      : undefined,
+    validThrough: new Date(
+      (job.publishedAt ? new Date(job.publishedAt).getTime() : Date.now()) + 45 * 24 * 60 * 60 * 1000
+    ).toISOString().slice(0, 10),
     directApply: true,
     url: `${siteUrl}/jobs/${job.jobId}`,
     ...(job.employmentType && {
@@ -86,8 +86,21 @@ export default async function JobDetailPage({
             address: { "@type": "PostalAddress", addressLocality: job.location },
           },
         }),
-    ...(job.compensationSummary && {
-      baseSalary: { "@type": "MonetaryAmount", description: job.compensationSummary },
+    // Only emit baseSalary when we have structured currency+value (Ashby/Lever
+    // expose this; Greenhouse's public board API doesn't). A MonetaryAmount
+    // missing those subfields is what GSC was flagging, so we still omit it
+    // for jobs where all we have is the free-text compensationSummary.
+    ...(job.compensationCurrency && (job.compensationMin != null || job.compensationMax != null) && {
+      baseSalary: {
+        "@type": "MonetaryAmount",
+        currency: job.compensationCurrency,
+        value: {
+          "@type": "QuantitativeValue",
+          ...(job.compensationMin != null && { minValue: job.compensationMin }),
+          ...(job.compensationMax != null && { maxValue: job.compensationMax }),
+          unitText: job.compensationInterval || "YEAR",
+        },
+      },
     }),
   };
 

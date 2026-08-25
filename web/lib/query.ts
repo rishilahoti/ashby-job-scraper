@@ -12,7 +12,8 @@ import type {
 const LIST_COLUMNS = `
   id, job_id, company, source, title, location, team, department,
   employment_type, remote, description, apply_url, job_url,
-  published_at, scraped_at, compensation_summary, content_hash,
+  published_at, scraped_at, compensation_summary,
+  compensation_min, compensation_max, compensation_currency, compensation_interval, content_hash,
   is_active, created_at, updated_at
 `;
 
@@ -22,7 +23,8 @@ const LIST_COLUMNS = `
 const LIST_COLUMNS_BULK = `
   id, job_id, company, source, title, location, team, department,
   employment_type, remote, ''::text AS description, apply_url, job_url,
-  published_at, scraped_at, compensation_summary, content_hash,
+  published_at, scraped_at, compensation_summary,
+  compensation_min, compensation_max, compensation_currency, compensation_interval, content_hash,
   is_active, created_at, updated_at
 `;
 
@@ -48,6 +50,10 @@ function rowToJob(row: JobRow): Job {
       : "",
     scrapedAt: row.scraped_at ? new Date(row.scraped_at).toISOString() : "",
     compensationSummary: row.compensation_summary,
+    compensationMin: row.compensation_min != null ? Number(row.compensation_min) : null,
+    compensationMax: row.compensation_max != null ? Number(row.compensation_max) : null,
+    compensationCurrency: row.compensation_currency,
+    compensationInterval: row.compensation_interval,
     contentHash: row.content_hash,
     isActive: Boolean(row.is_active),
     status: (row.status as Job["status"]) ?? "new",

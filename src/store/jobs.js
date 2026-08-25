@@ -37,7 +37,8 @@ async function getActiveJobsForCompany(company) {
   const { rows } = await pool.query(
     `SELECT job_id, company, source, title, location, team, department,
             employment_type, remote, description, apply_url, job_url,
-            published_at, scraped_at, compensation_summary, content_hash,
+            published_at, scraped_at, compensation_summary,
+            compensation_min, compensation_max, compensation_currency, compensation_interval, content_hash,
             is_active, status, created_at, updated_at
      FROM jobs WHERE company = $1 AND is_active = TRUE`,
     [company]
@@ -48,7 +49,7 @@ async function getActiveJobsForCompany(company) {
 async function getJobByCompanyAndId(company, jobId) {
   const pool = getPool();
   const { rows } = await pool.query(
-    'SELECT job_id, company, title, location, team, department, employment_type, remote, apply_url, job_url, published_at, compensation_summary, content_hash FROM jobs WHERE company = $1 AND job_id = $2',
+    'SELECT job_id, company, title, location, team, department, employment_type, remote, apply_url, job_url, published_at, compensation_summary, compensation_min, compensation_max, compensation_currency, compensation_interval, content_hash FROM jobs WHERE company = $1 AND job_id = $2',
     [company, jobId]
   );
   return rows[0] || null;
@@ -62,12 +63,14 @@ async function upsertJob(job) {
         job_id, company, source, title, location, team, department,
         employment_type, remote, description,
         apply_url, job_url, published_at, scraped_at,
-        compensation_summary, content_hash, is_active
+        compensation_summary, compensation_min, compensation_max, compensation_currency, compensation_interval,
+        content_hash, is_active
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10,
         $11, $12, $13, $14,
-        $15, $16, TRUE
+        $15, $16, $17, $18, $19,
+        $20, TRUE
       )
       ON CONFLICT (company, job_id) DO UPDATE SET
         source            = EXCLUDED.source,
@@ -85,7 +88,11 @@ async function upsertJob(job) {
         job_url           = EXCLUDED.job_url,
         published_at      = EXCLUDED.published_at,
         scraped_at        = EXCLUDED.scraped_at,
-        compensation_summary = EXCLUDED.compensation_summary,
+        compensation_summary  = EXCLUDED.compensation_summary,
+        compensation_min      = EXCLUDED.compensation_min,
+        compensation_max      = EXCLUDED.compensation_max,
+        compensation_currency = EXCLUDED.compensation_currency,
+        compensation_interval = EXCLUDED.compensation_interval,
         content_hash      = CASE
                               WHEN jobs.content_hash = EXCLUDED.content_hash THEN jobs.content_hash
                               ELSE EXCLUDED.content_hash
@@ -94,12 +101,13 @@ async function upsertJob(job) {
         updated_at        = NOW()
       RETURNING
         (xmax = 0)                          AS was_inserted,
-        (xmax <> 0 AND content_hash = $16)  AS was_unchanged`,
+        (xmax <> 0 AND content_hash = $20)  AS was_unchanged`,
     [
       job.jobId, job.company, job.source || 'ashby', job.title, job.location, job.team, job.department,
       job.employmentType, !!job.remote, job.description,
       job.applyUrl, job.jobUrl, job.publishedAt, job.scrapedAt,
-      job.compensationSummary, job.contentHash,
+      job.compensationSummary, job.compensationMin ?? null, job.compensationMax ?? null, job.compensationCurrency ?? null,
+      job.compensationInterval ?? null, job.contentHash,
     ]
   );
 
@@ -181,7 +189,8 @@ async function getAllActiveJobs() {
        job_id, company, source, title, location, team, department,
        employment_type, remote,
        LEFT(description, 500) AS description,
-       apply_url, job_url, published_at, compensation_summary
+       apply_url, job_url, published_at, compensation_summary,
+       compensation_min, compensation_max, compensation_currency, compensation_interval
      FROM jobs
      WHERE is_active = TRUE
      ORDER BY company, published_at DESC`
@@ -194,7 +203,8 @@ async function getJobsByCompany(company) {
   const { rows } = await pool.query(
     `SELECT job_id, company, source, title, location, team, department,
             employment_type, remote, description, apply_url, job_url,
-            published_at, scraped_at, compensation_summary, content_hash,
+            published_at, scraped_at, compensation_summary,
+            compensation_min, compensation_max, compensation_currency, compensation_interval, content_hash,
             is_active, status, created_at, updated_at
      FROM jobs WHERE company = $1 ORDER BY published_at DESC`,
     [company]

@@ -37,6 +37,8 @@ function buildPools() {
       max: 15,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
+      statement_timeout: 30000,
+      query_timeout: 30000,
     });
     p.on('error', (err) => {
       logger.error(`Unexpected pool error (DB #${i + 1}): ${err.message}`);
@@ -200,6 +202,13 @@ async function initDb() {
 
   await p.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'ashby'`);
   await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'ashby'`);
+
+  // structured salary data (min/max/currency), where the source exposes it —
+  // compensation_summary stays as the free-text display string
+  await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS compensation_min NUMERIC`);
+  await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS compensation_max NUMERIC`);
+  await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS compensation_currency TEXT`);
+  await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS compensation_interval TEXT`);
 
   // old schema had a single-column UNIQUE(ashby_slug) — replace with UNIQUE(slug, source)
   // now that the same slug string could exist under different ATSes.

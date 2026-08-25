@@ -1,4 +1,5 @@
 const { contentHash } = require('../../utils');
+const { normalizeSalaryInterval } = require('../shared');
 
 function formatSalaryRange(salaryRange) {
   if (!salaryRange || (salaryRange.min == null && salaryRange.max == null)) return null;
@@ -37,6 +38,10 @@ function normalizeJob(raw, company) {
     publishedAt,
     scrapedAt: new Date().toISOString(),
     compensationSummary: formatSalaryRange(raw.salaryRange),
+    compensationMin: raw.salaryRange?.min ?? null,
+    compensationMax: raw.salaryRange?.max ?? null,
+    compensationCurrency: raw.salaryRange?.currency ?? null,
+    compensationInterval: normalizeSalaryInterval(raw.salaryRange?.interval),
     contentHash: contentHash(
       raw.text,
       categories.location,

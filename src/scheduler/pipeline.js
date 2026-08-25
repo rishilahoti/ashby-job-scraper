@@ -8,7 +8,7 @@ const { detectChanges } = require('../diff');
 const intelligence = require('../intelligence');
 const { printRunSummary, generateReport } = require('../notify');
 
-const CONCURRENCY = 8;
+const CONCURRENCY = 16;
 
 async function scrapeCompany(company) {
   const source = company.source || 'ashby';
@@ -99,6 +99,10 @@ async function runPipeline() {
       jobUrl: row.job_url,
       publishedAt: row.published_at,
       compensationSummary: row.compensation_summary,
+      compensationMin: row.compensation_min,
+      compensationMax: row.compensation_max,
+      compensationCurrency: row.compensation_currency,
+      compensationInterval: row.compensation_interval,
     }));
 
     const { filtered } = intelligence.filterAndRank(allActiveJobs);
