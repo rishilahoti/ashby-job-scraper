@@ -21,6 +21,7 @@ jobs:
               run: node index.js run
               env:
                   DATABASE_URL: ${{ vars.DATABASE_URL }}
+                  DATABASE_URLS: ${{ vars.DATABASE_URLS }}
 
             - name: Cleanup old snapshots
               # Runs after every scrape to keep job_snapshots lean.

@@ -1,0 +1,33 @@
+name: Discover Companies
+
+on:
+    schedule:
+        - cron: '0 3 * * 0' # weekly, Sunday 03:00 UTC — Common Crawl snapshots refresh ~monthly,
+          # re-runs after the first pass are cheap since already-tracked slugs are skipped.
+    workflow_dispatch: # manual trigger button
+
+jobs:
+    discover:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        environment: Production
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+            - run: npm ci
+
+            - name: Discover Ashby companies
+              continue-on-error: true # one source failing shouldn't block the other
+              run: node index.js discover --source ashby
+              env:
+                  DATABASE_URL: ${{ vars.DATABASE_URL }}
+                  DATABASE_URLS: ${{ vars.DATABASE_URLS }}
+
+            - name: Discover Greenhouse companies
+              continue-on-error: true
+              run: node index.js discover --source greenhouse
+              env:
+                  DATABASE_URL: ${{ vars.DATABASE_URL }}
+                  DATABASE_URLS: ${{ vars.DATABASE_URLS }}

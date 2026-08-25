@@ -15,8 +15,12 @@ const { Pool } = require('pg');
 const MAX_KEEP = 3; // Keep only the 3 most-recent snapshots per job
 
 async function main() {
+  // DATABASE_URL may be a comma-separated list (shared with the failover-aware
+  // pool elsewhere) — this script only needs one connection, so take the first.
+  const firstUrl = (process.env.DATABASE_URL || '').split(',')[0].trim();
+
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: firstUrl,
     ssl: { rejectUnauthorized: false },
     max: 2,
   });
