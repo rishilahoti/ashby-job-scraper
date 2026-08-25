@@ -2,11 +2,27 @@ const { Pool } = require('pg');
 const config = require('../config');
 const { logger } = require('../utils');
 
-let pool = null;
+let pools = null; // [{ url, pool }], priority order — index 0 is primary
+let activeIndex = 0;
 
-function getPool() {
-  if (pool) return pool;
-  if (!config.db.url) {
+function isConnectionFailure(err) {
+  const msg = err?.message || '';
+  return (
+    err?.code === 'ECONNREFUSED' ||
+    err?.code === 'ETIMEDOUT' ||
+    msg.includes('timeout') ||
+    msg.includes('ECONNREFUSED') ||
+    msg.includes('ECONNRESET') ||
+    msg.includes('Connection terminated') ||
+    msg.includes('too many connections') ||
+    msg.includes('compute time') // Neon free-tier quota exhausted
+  );
+}
+
+function buildPools() {
+  if (pools) return pools;
+  const urls = config.db.urls;
+  if (urls.length === 0) {
     throw new Error(
       'DATABASE_URL is not set. ' +
       'In GitHub Actions, add it under Settings → Secrets and variables → Actions. ' +
@@ -14,19 +30,63 @@ function getPool() {
     );
   }
 
-  pool = new Pool({
-    connectionString: config.db.url,
-    ssl: { rejectUnauthorized: false },
-    max: 15,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
+  pools = urls.map((url, i) => {
+    const p = new Pool({
+      connectionString: url,
+      ssl: { rejectUnauthorized: false },
+      max: 15,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    });
+    p.on('error', (err) => {
+      logger.error(`Unexpected pool error (DB #${i + 1}): ${err.message}`);
+    });
+    return { url, pool: p };
   });
 
-  pool.on('error', (err) => {
-    logger.error(`Unexpected pool error: ${err.message}`);
-  });
+  return pools;
+}
 
-  return pool;
+// Drop-in replacement for a plain pg Pool — same .query() surface, but on a
+// connection-level failure it transparently retries the next DATABASE_URLS
+// entry, in priority order, and remembers the last-good one for subsequent
+// calls in this process (avoids re-hitting a dead primary on every query).
+//
+// ponytail: this is failover, not replication — there's no reconciliation
+// between DBs. Rows written to a backup DB while the primary is down won't
+// exist on the primary once it recovers and traffic moves back. Fine for a
+// side-project job tracker (worst case: a few stale "applied" flags, some
+// jobs get rescraped as "new"); if that gap ever matters, write a one-off
+// script to diff+merge (company, job_id) rows between DBs after an outage.
+function getPool() {
+  const list = buildPools();
+
+  return {
+    query: async (text, params) => {
+      let lastErr;
+      const order = [
+        ...Array.from({ length: list.length - activeIndex }, (_, i) => activeIndex + i),
+        ...Array.from({ length: activeIndex }, (_, i) => i),
+      ];
+
+      for (const i of order) {
+        try {
+          const result = await list[i].pool.query(text, params);
+          if (i !== activeIndex) {
+            logger.warn(`Failed over to DB #${i + 1}`);
+            activeIndex = i;
+          }
+          return result;
+        } catch (err) {
+          lastErr = err;
+          if (!isConnectionFailure(err)) throw err; // real query error (bad SQL etc) — don't fail over
+          logger.warn(`DB #${i + 1} unreachable (${err.message})`);
+        }
+      }
+
+      throw lastErr;
+    },
+  };
 }
 
 async function initDb() {
@@ -165,13 +225,14 @@ async function initDb() {
     END$$
   `);
 
-  logger.info('PostgreSQL database initialized (Neon)');
+  logger.info(`PostgreSQL database initialized (Neon) — ${config.db.urls.length} DB(s) configured`);
 }
 
 async function closeDb() {
-  if (pool) {
-    await pool.end();
-    pool = null;
+  if (pools) {
+    await Promise.all(pools.map(({ pool }) => pool.end()));
+    pools = null;
+    activeIndex = 0;
   }
 }
 

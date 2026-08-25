@@ -11,7 +11,12 @@ const config = {
   },
 
   db: {
-    url: process.env.DATABASE_URL,
+    // DATABASE_URLS: comma-separated, priority order (primary first). Falls back to
+    // single DATABASE_URL when unset — existing single-DB setups need no changes.
+    urls: (process.env.DATABASE_URLS || process.env.DATABASE_URL || '')
+      .split(',')
+      .map(u => u.trim())
+      .filter(Boolean),
   },
 
   logging: {

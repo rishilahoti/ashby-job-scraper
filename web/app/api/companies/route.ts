@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPool } from "@/lib/db";
+import { query } from "@/lib/db";
 import crypto from "crypto";
 
 type Source = "ashby" | "lever" | "greenhouse";
@@ -296,9 +296,7 @@ export async function POST(request: NextRequest) {
     const { slug, source } = parsed;
     const sourceConfig = SOURCE_CONFIG[source];
 
-    const pool = getPool();
-
-    const existingBySlug = await pool.query(
+    const existingBySlug = await query(
       `SELECT id, name, slug
        FROM companies
        WHERE LOWER(slug) = LOWER($1) AND source = $2
@@ -329,9 +327,9 @@ export async function POST(request: NextRequest) {
     const canonicalName = existingRow?.name ?? companyName;
 
     if (existingRow) {
-      await pool.query("UPDATE companies SET last_scraped_at = NOW() WHERE id = $1", [existingRow.id]);
+      await query("UPDATE companies SET last_scraped_at = NOW() WHERE id = $1", [existingRow.id]);
     } else {
-      await pool.query(
+      await query(
         `INSERT INTO companies (name, slug, source, last_scraped_at)
          VALUES ($1, $2, $3, NOW())
          ON CONFLICT (slug, source) DO UPDATE SET last_scraped_at = NOW()`,
@@ -361,7 +359,7 @@ export async function POST(request: NextRequest) {
         job.department
       );
 
-      const { rows } = await pool.query(
+      const { rows } = await query(
         `INSERT INTO jobs (
            job_id, company, source, title, location, team, department,
            employment_type, remote, description,
@@ -437,8 +435,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    const pool = getPool();
-    const { rows } = await pool.query(
+    const { rows } = await query(
       `SELECT c.name, c.slug, c.source, c.last_scraped_at,
               COUNT(j.id)::int as job_count
        FROM companies c

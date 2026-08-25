@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getJobById } from "@/lib/query";
-import { getPool } from "@/lib/db";
+import { query } from "@/lib/db";
 
 const JOB_ID_MAX_LEN = 64;
 const JOB_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
@@ -49,8 +49,7 @@ export async function POST(
       );
     }
 
-    const pool = getPool();
-    const { rowCount } = await pool.query(
+    const { rowCount } = await query(
       "UPDATE jobs SET status = $1, updated_at = NOW() WHERE job_id = $2",
       [status, jobId]
     );

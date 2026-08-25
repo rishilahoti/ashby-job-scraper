@@ -73,4 +73,29 @@ program
     }
   });
 
+program
+  .command('discover')
+  .description('Crawl Common Crawl for new Ashby/Greenhouse company slugs, verify against the live API, and add them')
+  .requiredOption('-s, --source <source>', 'ashby or greenhouse (Lever blocks Common Crawl\'s bot — not supported here)')
+  .option('--cdx-limit <n>', 'max Common Crawl URLs to scan', (v) => parseInt(v, 10), 3000)
+  .option('--verify-limit <n>', 'max new candidates to verify against the live API', (v) => parseInt(v, 10), 300)
+  .option('--dry-run', 'print what would be added without writing to the database')
+  .action(async (options) => {
+    const { discoverCompanies } = require('./src/discovery');
+    try {
+      await discoverCompanies({
+        source: options.source,
+        cdxLimit: options.cdxLimit,
+        verifyLimit: options.verifyLimit,
+        dryRun: !!options.dryRun,
+      });
+    } catch (err) {
+      logger.error(`Discovery failed: ${err.message}`);
+      process.exit(1);
+    } finally {
+      const { closeDb } = require('./src/store');
+      await closeDb();
+    }
+  });
+
 program.parse();
