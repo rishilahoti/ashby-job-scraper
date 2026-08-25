@@ -40,6 +40,22 @@ program
   });
 
 program
+  .command('migrate')
+  .description('Apply pending database schema migrations (no scrape) — safe to run anytime, idempotent')
+  .action(async () => {
+    const store = require('./src/store');
+    try {
+      await store.initDb();
+      logger.info('Migrations applied.');
+    } catch (err) {
+      logger.error(`Migration failed: ${err.message}`);
+      process.exit(1);
+    } finally {
+      await store.closeDb();
+    }
+  });
+
+program
   .command('report')
   .description('Generate a Markdown report from existing data')
   .action(async () => {

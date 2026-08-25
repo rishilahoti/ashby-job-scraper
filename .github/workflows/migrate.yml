@@ -1,0 +1,23 @@
+name: Migrate Database
+
+on:
+    workflow_dispatch: # manual trigger button — run right after a schema-changing deploy,
+        # instead of waiting on the next scheduled scrape to pick up new columns/tables.
+
+jobs:
+    migrate:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        environment: Production
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+            - run: npm ci
+
+            - name: Apply migrations
+              run: node index.js migrate
+              env:
+                  DATABASE_URL: ${{ vars.DATABASE_URL }}
+                  DATABASE_URLS: ${{ vars.DATABASE_URLS }}
