@@ -1,7 +1,7 @@
 {
   "name": "ashby-job-scraper",
   "version": "1.0.0",
-  "description": "Production-grade scraper for public AshbyHQ job listings with change tracking and intelligent filtering",
+  "description": "Production-grade scraper for public Ashby, Lever, and Greenhouse job listings with change tracking, crawl-based company discovery, and intelligent filtering",
   "main": "index.js",
   "scripts": {
     "start": "node index.js start",
@@ -10,6 +10,8 @@
   },
   "keywords": [
     "ashby",
+    "lever",
+    "greenhouse",
     "job-scraper",
     "job-tracker"
   ],
