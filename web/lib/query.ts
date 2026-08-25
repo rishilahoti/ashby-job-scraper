@@ -81,17 +81,16 @@ function dedupeRowsByJobId(rows: JobRow[], preferredCompany: string): JobRow[] {
 
 // Serves the last successful result when the DB is unreachable (e.g. Neon
 // suspended after hitting its data-transfer cap) instead of throwing and
-// taking the whole page down. Falls through to a real error only if we've
-// never had a successful result yet on this instance.
-function withStaleFallback<T>(fn: () => Promise<T>): () => Promise<T> {
-  let last: T | undefined;
+// taking the whole page (or build — static generation has no prior result
+// to fall back on) down. Uses `emptyFallback` until we get a first success.
+function withStaleFallback<T>(fn: () => Promise<T>, emptyFallback: T): () => Promise<T> {
+  let last: T = emptyFallback;
   return async () => {
     try {
       last = await fn();
       return last;
-    } catch (err) {
-      if (last !== undefined) return last;
-      throw err;
+    } catch {
+      return last;
     }
   };
 }
@@ -111,7 +110,7 @@ const getCanonicalCompanyNamesRecord = withStaleFallback(unstable_cache(
   },
   ["canonical-company-names"],
   { revalidate: 300 }
-));
+), {});
 
 // All scored jobs — ONE DB hit per 30 min shared across every instance.
 // Without description: ~2.2MB per fetch vs ~4.7MB before.
@@ -124,7 +123,7 @@ const getCachedAllScoredJobs = withStaleFallback(unstable_cache(
   },
   ["all-scored-jobs"],
   { revalidate: 1800 } // 30 minutes
-));
+), []);
 
 // --- Public API ---
 
@@ -317,7 +316,7 @@ export const getCompanies = withStaleFallback(unstable_cache(
   },
   ["companies-list"],
   { revalidate: 300 }
-));
+), []);
 
 export const getStats = withStaleFallback(unstable_cache(
   async (): Promise<{ total: number; companies: number }> => {
@@ -330,7 +329,7 @@ export const getStats = withStaleFallback(unstable_cache(
   },
   ["stats"],
   { revalidate: 300 }
-));
+), { total: 0, companies: 0 });
 
 export const getDepartments = withStaleFallback(unstable_cache(
   async (): Promise<string[]> => {
@@ -343,7 +342,7 @@ export const getDepartments = withStaleFallback(unstable_cache(
   },
   ["departments-list"],
   { revalidate: 300 }
-));
+), []);
 
 export const getLocations = withStaleFallback(unstable_cache(
   async (): Promise<string[]> => {
@@ -356,4 +355,4 @@ export const getLocations = withStaleFallback(unstable_cache(
   },
   ["locations-list"],
   { revalidate: 300 }
-));
+), []);

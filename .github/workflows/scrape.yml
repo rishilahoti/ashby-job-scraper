@@ -9,6 +9,7 @@ jobs:
     scrape:
         runs-on: ubuntu-latest
         timeout-minutes: 90
+        environment: Production
         steps:
             - uses: actions/checkout@v4
             - uses: actions/setup-node@v4
@@ -19,7 +20,7 @@ jobs:
             - name: Run scrape
               run: node index.js run
               env:
-                  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+                  DATABASE_URL: ${{ vars.DATABASE_URL }}
 
             - name: Cleanup old snapshots
               # Runs after every scrape to keep job_snapshots lean.
@@ -27,4 +28,4 @@ jobs:
               continue-on-error: true
               run: node scripts/cleanup-snapshots.js
               env:
-                  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+                  DATABASE_URL: ${{ vars.DATABASE_URL }}
