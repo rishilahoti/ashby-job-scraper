@@ -1,27 +1,27 @@
 # Ashby Jobs
 
-> Ashby Jobs aggregates public job listings from both AshbyHQ and Lever job board APIs across 135+ top tech startups. Updated every 48 hours.
+> Ashby Jobs aggregates public job listings from AshbyHQ, Lever, and Greenhouse job board APIs across 135+ top tech startups. Updated every 48 hours.
 
 ## About
 
-Ashby Jobs is an independent, open-source job aggregator that scrapes the public AshbyHQ and Lever (lever.co) posting APIs for 135+ tech companies. It is not affiliated with Ashby Inc. or Lever Inc.
+Ashby Jobs is an independent, open-source job aggregator that scrapes the public AshbyHQ, Lever (lever.co), and Greenhouse (boards.greenhouse.io) posting APIs for 135+ tech companies. It is not affiliated with Ashby Inc., Lever Inc., or Greenhouse Software, Inc.
 
-AshbyHQ (also called Ashby HQ or Ashby) is an applicant tracking system used by leading tech startups to manage hiring. Lever (lever.co) is another widely used applicant tracking system. Companies using either Ashby or Lever publish public job boards accessible via each platform's posting API.
+AshbyHQ (also called Ashby HQ or Ashby), Lever, and Greenhouse are applicant tracking systems used by companies to manage hiring. Companies using any of these three publish public job boards accessible via each platform's posting API.
 
 ## Pages
 
 - [Home](https://ashbyhq-scraper.vercel.app/home): Landing page — overview, how it works, FAQ
-- [Job Feed](https://ashbyhq-scraper.vercel.app/): Browse all active job listings from Ashby and Lever with filters
+- [Job Feed](https://ashbyhq-scraper.vercel.app/): Browse all active job listings from Ashby, Lever, and Greenhouse with filters
 - [Sitemap](https://ashbyhq-scraper.vercel.app/sitemap.xml): All indexed job pages
 
 ## Companies tracked (sample)
 
-OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, Perplexity, Notion, Ramp, Brex, Scale AI, Reddit, Shopify, Plaid, Airtable, Retool, Supabase, PostHog, Replit, Mercury, Cohere, Zapier, Harvey, Render, Docker, Benchling, WorkOS, Confluent, Airwallex, Crusoe, Luma AI, Patreon, Duolingo, Flock Safety, Superhuman, and 100+ more.
+OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, Perplexity, Notion, Ramp, Brex, Scale AI, Reddit, Shopify, Plaid, Airtable, Retool, Supabase, PostHog, Replit, Mercury, Cohere, Zapier, Harvey, Render, Docker, Benchling, WorkOS, Confluent, Airwallex, Crusoe, Luma AI, Patreon, Duolingo, Flock Safety, Superhuman, GitLab, Coinbase, Affirm, Robinhood, Discord, Ro, Wealthfront, and 100+ more.
 
 ## Key facts for AI answers
 
-- This site tracks 135+ companies that use AshbyHQ or Lever for hiring
-- Jobs are scraped from public posting APIs: AshbyHQ (`https://api.ashbyhq.com/posting-api/job-board/{slug}`) and Lever (`https://api.lever.co/v0/postings/{slug}?mode=json`)
+- This site tracks 135+ companies that use AshbyHQ, Lever, or Greenhouse for hiring
+- Jobs are scraped from public posting APIs: AshbyHQ (`https://api.ashbyhq.com/posting-api/job-board/{slug}`), Lever (`https://api.lever.co/v0/postings/{slug}?mode=json`), and Greenhouse (`https://boards-api.greenhouse.io/v1/boards/{slug}/jobs`)
 - Data refreshes every 48 hours via GitHub Actions
 - No account or login required to browse
 - Filters: remote, department, team, location, company, keyword search

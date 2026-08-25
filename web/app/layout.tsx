@@ -10,11 +10,11 @@ export const metadata: Metadata = {
     google: "P2_1zWxkE0R-QmgUGw4dGpmHqVlIO0X-SaoFDdH-ciM",
   },
   title: {
-    default: "Ashby Jobs — Browse Ashby & Lever Job Listings",
+    default: "Ashby Jobs — Browse Ashby, Lever & Greenhouse Job Listings",
     template: "%s | Ashby Jobs",
   },
   description:
-    "Browse and track job listings from top tech startups on AshbyHQ and Lever (lever.co). Find remote engineering, product, and design roles from companies like OpenAI, Figma, Anthropic, Linear, Cursor, and more. Updated twice daily.",
+    "Browse and track job listings from top tech startups on AshbyHQ, Lever (lever.co), and Greenhouse. Find remote engineering, product, and design roles from companies like OpenAI, Figma, Anthropic, Linear, Cursor, and more. Updated twice daily.",
   keywords: [
     "ashby hq jobs",
     "ashby jobs board",
@@ -22,7 +22,10 @@ export const metadata: Metadata = {
     "lever jobs",
     "lever.co jobs",
     "lever job board",
-    "ashby and lever jobs",
+    "greenhouse jobs",
+    "greenhouse.io jobs",
+    "greenhouse job board",
+    "ashby lever greenhouse jobs",
     "tech startup jobs",
     "remote tech jobs",
     "engineering jobs startups",
@@ -37,15 +40,15 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     siteName: "Ashby Jobs",
-    title: "Ashby Jobs — Browse Ashby & Lever Job Listings",
+    title: "Ashby Jobs — Browse Ashby, Lever & Greenhouse Job Listings",
     description:
-      "Browse job listings from top tech startups on AshbyHQ and Lever. Find remote engineering, product, and design roles. Updated twice daily.",
+      "Browse job listings from top tech startups on AshbyHQ, Lever, and Greenhouse. Find remote engineering, product, and design roles. Updated twice daily.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Ashby Jobs — Browse Ashby & Lever Job Listings",
+    title: "Ashby Jobs — Browse Ashby, Lever & Greenhouse Job Listings",
     description:
-      "Browse job listings from top tech startups on AshbyHQ and Lever. Updated twice daily.",
+      "Browse job listings from top tech startups on AshbyHQ, Lever, and Greenhouse. Updated twice daily.",
   },
   robots: {
     index: true,

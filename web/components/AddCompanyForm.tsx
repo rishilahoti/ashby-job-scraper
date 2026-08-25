@@ -4,16 +4,31 @@ import { useState, useRef, useCallback, type FormEvent } from "react";
 import Link from "next/link";
 
 type Phase = "idle" | "validating" | "scraping" | "success" | "error";
+type Source = "ashby" | "lever" | "greenhouse";
 
 interface Result {
   company: string;
   slug: string;
+  source: Source;
   alreadyExisted: boolean;
   jobs: { total: number; inserted: number; updated: number; unchanged: number };
 }
 
+const SOURCE_META: Record<Source, { label: string; domain: string; placeholder: string }> = {
+  ashby: { label: "Ashby", domain: "jobs.ashbyhq.com", placeholder: "https://jobs.ashbyhq.com/company  or  company-slug" },
+  lever: { label: "Lever", domain: "jobs.lever.co", placeholder: "https://jobs.lever.co/company  or  company-slug" },
+  greenhouse: { label: "Greenhouse", domain: "job-boards.greenhouse.io", placeholder: "https://job-boards.greenhouse.io/company  or  company-slug" },
+};
+
+const URL_PATTERNS: Record<Source, RegExp> = {
+  ashby: /(?:https?:\/\/)?jobs\.ashbyhq\.com\/([a-zA-Z0-9_-]+)/,
+  lever: /(?:https?:\/\/)?jobs\.lever\.co\/([a-zA-Z0-9_-]+)/,
+  greenhouse: /(?:https?:\/\/)?(?:job-boards|boards)\.greenhouse\.io\/([a-zA-Z0-9_-]+)/,
+};
+
 export default function AddCompanyForm() {
   const [input, setInput] = useState("");
+  const [source, setSource] = useState<Source>("ashby");
   const [phase, setPhase] = useState<Phase>("idle");
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
@@ -21,21 +36,29 @@ export default function AddCompanyForm() {
 
   const extractPreview = useCallback((raw: string): string | null => {
     const trimmed = raw.trim();
-    const urlMatch = trimmed.match(
-      /(?:https?:\/\/)?jobs\.ashbyhq\.com\/([a-zA-Z0-9_-]+)/
-    );
-    if (urlMatch) return urlMatch[1];
+    for (const s of Object.keys(URL_PATTERNS) as Source[]) {
+      const match = trimmed.match(URL_PATTERNS[s]);
+      if (match) return match[1];
+    }
     if (/^[a-zA-Z0-9_-]+$/.test(trimmed)) return trimmed;
     return null;
   }, []);
 
   const slug = extractPreview(input);
   const isValid = slug !== null && slug.length > 0;
+  const detectedSource = (Object.keys(URL_PATTERNS) as Source[]).find((s) =>
+    URL_PATTERNS[s].test(input.trim())
+  );
+  const effectiveSourceForHint = detectedSource || source;
 
   const handleSubmit = useCallback(
     async (e: FormEvent) => {
       e.preventDefault();
       if (!isValid || phase === "validating" || phase === "scraping") return;
+      const detectedSource = (Object.keys(URL_PATTERNS) as Source[]).find((s) =>
+        URL_PATTERNS[s].test(input.trim())
+      );
+      const effectiveSource = detectedSource || source;
 
       abortRef.current?.abort();
       const controller = new AbortController();
@@ -55,7 +78,7 @@ export default function AddCompanyForm() {
         const res = await fetch("/api/companies", {
           method: "POST",
           headers: apiHeaders,
-          body: JSON.stringify({ slug }),
+          body: JSON.stringify({ slug, source: effectiveSource }),
           signal: controller.signal,
         });
 
@@ -75,7 +98,7 @@ export default function AddCompanyForm() {
         setPhase("error");
       }
     },
-    [isValid, phase, slug]
+    [isValid, phase, slug, source, input]
   );
 
   const reset = useCallback(() => {
@@ -94,9 +117,9 @@ export default function AddCompanyForm() {
           Add Company
         </h1>
         <p className="text-sm text-ink-secondary leading-relaxed">
-          Paste an Ashby job board URL or company slug to start tracking their
-          listings. The system will validate the board exists, then scrape and
-          index all open positions.
+          Paste an Ashby, Lever, or Greenhouse job board URL (or company slug)
+          to start tracking their listings. The system will validate the board
+          exists, then scrape and index all open positions.
         </p>
       </div>
 
@@ -153,15 +176,39 @@ export default function AddCompanyForm() {
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
+            <span className="block text-xs font-medium text-ink-secondary mb-1.5 font-mono uppercase tracking-wider">
+              ATS
+            </span>
+            <div className="flex gap-1.5">
+              {(Object.keys(SOURCE_META) as Source[]).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSource(s)}
+                  disabled={busy}
+                  className={`h-8 px-3 rounded-md text-xs font-medium transition-colors cursor-pointer
+                              disabled:opacity-60 disabled:cursor-not-allowed
+                              ${source === s
+                                ? "bg-ink text-paper"
+                                : "border border-edge text-ink-secondary hover:border-edge-strong hover:text-ink"
+                              }`}
+                >
+                  {SOURCE_META[s].label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
             <label
-              htmlFor="ashby-url"
+              htmlFor="ats-url"
               className="block text-xs font-medium text-ink-secondary mb-1.5 font-mono uppercase tracking-wider"
             >
-              Ashby URL or Slug
+              {SOURCE_META[source].label} URL or Slug
             </label>
             <div className="relative">
               <input
-                id="ashby-url"
+                id="ats-url"
                 type="text"
                 value={input}
                 onChange={(e) => {
@@ -171,7 +218,7 @@ export default function AddCompanyForm() {
                     setError("");
                   }
                 }}
-                placeholder="https://jobs.ashbyhq.com/company  or  company-slug"
+                placeholder={SOURCE_META[source].placeholder}
                 disabled={busy}
                 autoComplete="off"
                 spellCheck={false}
@@ -194,7 +241,7 @@ export default function AddCompanyForm() {
               <p className="mt-1.5 text-xs text-ink-muted">
                 Will check{" "}
                 <span className="font-mono text-ink-secondary">
-                  jobs.ashbyhq.com/{slug}
+                  {SOURCE_META[effectiveSourceForHint].domain}/{slug}
                 </span>
               </p>
             )}
@@ -230,7 +277,7 @@ export default function AddCompanyForm() {
         <h2 className="font-display text-sm font-semibold mb-2">How it works</h2>
         <ol className="space-y-1.5 text-xs text-ink-secondary leading-relaxed list-decimal list-inside">
           <li>
-            Paste a URL like{" "}
+            Pick Ashby, Lever, or Greenhouse, then paste a URL like{" "}
             <code className="font-mono text-ink bg-surface px-1 py-0.5 rounded">
               jobs.ashbyhq.com/stripe
             </code>{" "}
@@ -240,7 +287,7 @@ export default function AddCompanyForm() {
             </code>
           </li>
           <li>
-            The system validates the board exists via Ashby&apos;s public API
+            The system validates the board exists via that platform&apos;s public API
           </li>
           <li>
             All open positions are scraped, normalized, and scored in real time

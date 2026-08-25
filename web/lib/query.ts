@@ -10,7 +10,7 @@ import type {
 } from "./types";
 
 const LIST_COLUMNS = `
-  id, job_id, company, title, location, team, department,
+  id, job_id, company, source, title, location, team, department,
   employment_type, remote, description, apply_url, job_url,
   published_at, scraped_at, compensation_summary, content_hash,
   is_active, created_at, updated_at
@@ -20,7 +20,7 @@ const LIST_COLUMNS = `
 // Description is stripped from list output by stripForList anyway.
 // Scoring still uses title/company/employment_type for keyword tags.
 const LIST_COLUMNS_BULK = `
-  id, job_id, company, title, location, team, department,
+  id, job_id, company, source, title, location, team, department,
   employment_type, remote, ''::text AS description, apply_url, job_url,
   published_at, scraped_at, compensation_summary, content_hash,
   is_active, created_at, updated_at
@@ -33,6 +33,7 @@ function rowToJob(row: JobRow): Job {
     id: row.id,
     jobId: row.job_id,
     company: row.company,
+    source: row.source,
     title: row.title,
     location: row.location,
     team: row.team,

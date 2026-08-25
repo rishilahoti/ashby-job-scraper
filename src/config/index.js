@@ -19,7 +19,11 @@ const config = {
   },
 
   fetch: {
-    baseUrl: 'https://api.ashbyhq.com/posting-api/job-board',
+    sources: {
+      ashby: { baseUrl: 'https://api.ashbyhq.com/posting-api/job-board' },
+      lever: { baseUrl: 'https://api.lever.co/v0/postings' },
+      greenhouse: { baseUrl: 'https://boards-api.greenhouse.io/v1/boards' },
+    },
     includeCompensation: true,
     maxRetries: 3,
     retryBaseMs: 1000,

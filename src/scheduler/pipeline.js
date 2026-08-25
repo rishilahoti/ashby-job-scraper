@@ -11,19 +11,20 @@ const { printRunSummary, generateReport } = require('../notify');
 const CONCURRENCY = 8;
 
 async function scrapeCompany(company) {
+  const source = company.source || 'ashby';
   const runId = await store.startScrapeRun(company.company);
   try {
-    await store.upsertCompany(company.company, company.ashbySlug);
+    await store.upsertCompany(company.company, company.slug, source);
 
-    const rawData = await fetchJobBoard(company.ashbySlug);
-    const normalizedJobs = normalizeResponse(rawData, company.company);
+    const rawData = await fetchJobBoard(company.slug, source);
+    const normalizedJobs = normalizeResponse(rawData, company.company, source);
     const changes = await detectChanges(normalizedJobs, company.company);
 
     const inserted = changes.filter(c => c.type === 'JOB_NEW').length;
     const updated  = changes.filter(c => c.type === 'JOB_UPDATED').length;
     const removed  = changes.filter(c => c.type === 'JOB_REMOVED').length;
 
-    await store.updateLastScraped(company.ashbySlug);
+    await store.updateLastScraped(company.slug, source);
     await store.completeScrapeRun(runId, {
       status: 'success',
       jobsFetched: normalizedJobs.length,
@@ -86,6 +87,7 @@ async function runPipeline() {
     const allActiveJobs = activeRows.map(row => ({
       jobId: row.job_id,
       company: row.company,
+      source: row.source,
       title: row.title,
       location: row.location,
       team: row.team,

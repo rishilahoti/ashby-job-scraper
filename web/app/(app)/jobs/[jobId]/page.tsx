@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { getJobById } from "@/lib/query";
 import ScoreBadge from "@/components/ScoreBadge";
 import StatusButton from "@/components/StatusButton";
+import SourceTag from "@/components/SourceTag";
 
 export const revalidate = 600;
 
@@ -115,6 +116,8 @@ export default async function JobDetailPage({
             <span className="text-sm font-medium text-ink-secondary">{job.company}</span>
             <span className="text-edge-strong">&middot;</span>
             <span className="text-sm text-ink-muted">{job.location}</span>
+            <span className="text-edge-strong">&middot;</span>
+            <SourceTag source={job.source} />
             {job.remote && (
               <>
                 <span className="text-edge-strong">&middot;</span>

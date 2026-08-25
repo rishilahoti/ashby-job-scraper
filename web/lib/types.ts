@@ -2,6 +2,7 @@ export interface Job {
   id: number;
   jobId: string;
   company: string;
+  source: string;
   title: string;
   location: string;
   team: string | null;
@@ -52,6 +53,7 @@ export type JobRow = {
   id: number;
   job_id: string;
   company: string;
+  source: string;
   title: string;
   location: string;
   team: string | null;

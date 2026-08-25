@@ -1,43 +1,44 @@
 const { getPool } = require('./db');
 
-async function upsertCompany(name, ashbySlug) {
+async function upsertCompany(name, slug, source = 'ashby') {
   const pool = getPool();
-  const slug = typeof ashbySlug === 'string' ? ashbySlug.trim().toLowerCase() : ashbySlug;
+  const normalizedSlug = typeof slug === 'string' ? slug.trim().toLowerCase() : slug;
   await pool.query(
-    `INSERT INTO companies (name, ashby_slug)
-     VALUES ($1, $2)
-     ON CONFLICT (ashby_slug) DO UPDATE SET name = EXCLUDED.name`,
-    [name, slug]
+    `INSERT INTO companies (name, slug, source)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (slug, source) DO UPDATE SET name = EXCLUDED.name`,
+    [name, normalizedSlug, source]
   );
 }
 
-async function updateLastScraped(ashbySlug) {
+async function updateLastScraped(slug, source = 'ashby') {
   const pool = getPool();
-  const slug = typeof ashbySlug === 'string' ? ashbySlug.trim().toLowerCase() : ashbySlug;
+  const normalizedSlug = typeof slug === 'string' ? slug.trim().toLowerCase() : slug;
   await pool.query(
-    `UPDATE companies SET last_scraped_at = NOW() WHERE LOWER(ashby_slug) = LOWER($1)`,
-    [slug]
+    `UPDATE companies SET last_scraped_at = NOW() WHERE LOWER(slug) = LOWER($1) AND source = $2`,
+    [normalizedSlug, source]
   );
 }
 
-async function getCompany(ashbySlug) {
+async function getCompany(slug, source = 'ashby') {
   const pool = getPool();
-  const slug = typeof ashbySlug === 'string' ? ashbySlug.trim().toLowerCase() : ashbySlug;
+  const normalizedSlug = typeof slug === 'string' ? slug.trim().toLowerCase() : slug;
   const { rows } = await pool.query(
-    'SELECT * FROM companies WHERE LOWER(ashby_slug) = LOWER($1)',
-    [slug]
+    'SELECT * FROM companies WHERE LOWER(slug) = LOWER($1) AND source = $2',
+    [normalizedSlug, source]
   );
   return rows[0] || null;
 }
 
+// Keyed by "source:slug" — same slug string can exist under different ATSes.
 async function getAllCompaniesLastScraped() {
   const pool = getPool();
   const { rows } = await pool.query(
-    'SELECT ashby_slug, last_scraped_at FROM companies ORDER BY last_scraped_at DESC NULLS LAST'
+    'SELECT slug, source, last_scraped_at FROM companies ORDER BY last_scraped_at DESC NULLS LAST'
   );
   const map = {};
   for (const row of rows) {
-    const key = row.ashby_slug.toLowerCase();
+    const key = `${row.source}:${row.slug.toLowerCase()}`;
     const next = row.last_scraped_at ? row.last_scraped_at.toISOString() : null;
     const prev = map[key];
     if (

@@ -8,8 +8,8 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.ver
 
 export async function generateMetadata(): Promise<Metadata> {
   const stats = await getStats();
-  const title = "Ashby Jobs — Every Job from Ashby & Lever Companies";
-  const description = `Find ${stats.total.toLocaleString()} active jobs from ${stats.companies}+ tech startups on AshbyHQ and Lever. OpenAI, Figma, Anthropic, Linear, Cursor, Vercel and 130+ more — all in one place. Updated twice daily.`;
+  const title = "Ashby Jobs — Every Job from Ashby, Lever & Greenhouse Companies";
+  const description = `Find ${stats.total.toLocaleString()} active jobs from ${stats.companies}+ tech startups on AshbyHQ, Lever, and Greenhouse. OpenAI, Figma, Anthropic, Linear, Cursor, Vercel and 130+ more — all in one place. Updated twice daily.`;
   return {
     title: { absolute: title },
     description,
@@ -44,27 +44,31 @@ const FAQS = [
   },
   {
     q: "What is Lever (lever.co)?",
-    a: "Lever is another widely used applicant tracking system that many tech companies use to post public job listings via lever.co job boards. This tracker aggregates jobs from Lever alongside AshbyHQ so you can search both in one feed.",
+    a: "Lever is another widely used applicant tracking system that many tech companies use to post public job listings via lever.co job boards. This tracker aggregates jobs from Lever alongside AshbyHQ and Greenhouse so you can search all three in one feed.",
   },
   {
-    q: "Does this track jobs from both Ashby and Lever?",
-    a: "Yes. This tracker pulls public job postings from both AshbyHQ and Lever job boards and merges them into a single searchable feed, so you don't need to check each ATS separately.",
+    q: "What is Greenhouse?",
+    a: "Greenhouse is a popular applicant tracking system used by companies like GitLab, Coinbase, Affirm, and Robinhood to publish public job boards via boards.greenhouse.io. This tracker indexes Greenhouse postings alongside AshbyHQ and Lever.",
+  },
+  {
+    q: "Does this track jobs from Ashby, Lever, and Greenhouse?",
+    a: "Yes. This tracker pulls public job postings from AshbyHQ, Lever, and Greenhouse job boards and merges them into a single searchable feed, so you don't need to check each ATS separately.",
   },
   {
     q: "Which companies use Ashby for hiring?",
     a: "135+ top tech companies post jobs on AshbyHQ including OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, Perplexity, Notion, Ramp, Brex, Scale AI, Reddit, Shopify, Plaid, Airtable, Retool, Supabase, PostHog, Replit, Mercury, and many more.",
   },
   {
-    q: "How do I find all jobs posted on AshbyHQ and Lever?",
-    a: "This tracker aggregates every public job from companies on AshbyHQ and Lever, scraped twice daily from each platform's public posting API. Browse the full feed, filter by remote, department, company, or keyword.",
+    q: "How do I find all jobs posted on AshbyHQ, Lever, and Greenhouse?",
+    a: "This tracker aggregates every public job from companies on AshbyHQ, Lever, and Greenhouse, scraped twice daily from each platform's public posting API. Browse the full feed, filter by remote, department, company, or keyword.",
   },
   {
-    q: "Is this an official AshbyHQ or Lever product?",
-    a: "No. This is an independent open-source tracker that indexes publicly available job listings from AshbyHQ and Lever's public APIs. It is not affiliated with or endorsed by Ashby or Lever.",
+    q: "Is this an official AshbyHQ, Lever, or Greenhouse product?",
+    a: "No. This is an independent open-source tracker that indexes publicly available job listings from AshbyHQ, Lever, and Greenhouse's public APIs. It is not affiliated with or endorsed by Ashby, Lever, or Greenhouse.",
   },
   {
     q: "How often is the job data updated?",
-    a: "Jobs are scraped every 48 hours via a GitHub Actions workflow. New listings, closed roles, and description changes are all tracked automatically across both AshbyHQ and Lever.",
+    a: "Jobs are scraped every 48 hours via a GitHub Actions workflow. New listings, closed roles, and description changes are all tracked automatically across AshbyHQ, Lever, and Greenhouse.",
   },
 ];
 
@@ -78,7 +82,7 @@ export default async function HomePage() {
     "@type": "WebSite",
     name: "Ashby Jobs",
     url: siteUrl,
-    description: `${stats.total.toLocaleString()} jobs from ${stats.companies}+ tech startups on AshbyHQ and Lever.`,
+    description: `${stats.total.toLocaleString()} jobs from ${stats.companies}+ tech startups on AshbyHQ, Lever, and Greenhouse.`,
     potentialAction: {
       "@type": "SearchAction",
       target: { "@type": "EntryPoint", urlTemplate: `${siteUrl}/?search={search_term_string}` },
@@ -255,7 +259,7 @@ export default async function HomePage() {
               maxWidth: 580,
               margin: "0 auto 48px",
             }}>
-              We scrape the public job board APIs from Ashby and Lever for {stats.companies}+ top tech startups — so you don&apos;t have to check each one manually.
+              We scrape the public job board APIs from Ashby, Lever, and Greenhouse for {stats.companies}+ top tech startups — so you don&apos;t have to check each one manually.
             </p>
 
             {/* Live counter */}
@@ -325,7 +329,7 @@ export default async function HomePage() {
             {[
               { n: stats.total.toLocaleString(), label: "Active jobs" },
               { n: `${stats.companies}+`, label: "Companies tracked" },
-              { n: "135+", label: "Ashby & Lever boards" },
+              { n: "135+", label: "Ashby, Lever & Greenhouse boards" },
               { n: "48h", label: "Refresh cycle" },
             ].map(({ n, label }) => (
               <div key={label} style={{ textAlign: "center" }}>
@@ -384,13 +388,13 @@ export default async function HomePage() {
               {[
                 {
                   step: "01",
-                  title: "Companies post on Ashby or Lever",
-                  desc: "135+ top tech startups use AshbyHQ or Lever as their applicant tracking system and publish public job boards.",
+                  title: "Companies post on Ashby, Lever, or Greenhouse",
+                  desc: "135+ top tech startups use AshbyHQ, Lever, or Greenhouse as their applicant tracking system and publish public job boards.",
                 },
                 {
                   step: "02",
                   title: "We scrape every 48 hours",
-                  desc: "A GitHub Actions workflow hits Ashby's and Lever's public posting APIs for every company and stores all job data in our database.",
+                  desc: "A GitHub Actions workflow hits Ashby's, Lever's, and Greenhouse's public posting APIs for every company and stores all job data in our database.",
                 },
                 {
                   step: "03",
@@ -588,13 +592,17 @@ export default async function HomePage() {
               Ashby<span style={{ color: "var(--accent)" }}>Tracker</span>
             </span>
             <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "var(--text-muted-dark)" }}>
-              Not affiliated with Ashby Inc. or Lever Inc. · Job data from{" "}
+              Not affiliated with Ashby Inc., Lever Inc., or Greenhouse Software, Inc. · Job data from{" "}
               <a href="https://api.ashbyhq.com/posting-api" style={{ color: "var(--text-muted-dark)", textDecoration: "underline" }} target="_blank" rel="noopener noreferrer">
                 AshbyHQ
-              </a>{" "}
-              &amp;{" "}
+              </a>
+              ,{" "}
               <a href="https://www.lever.co" style={{ color: "var(--text-muted-dark)", textDecoration: "underline" }} target="_blank" rel="noopener noreferrer">
                 Lever
+              </a>
+              , &amp;{" "}
+              <a href="https://www.greenhouse.io" style={{ color: "var(--text-muted-dark)", textDecoration: "underline" }} target="_blank" rel="noopener noreferrer">
+                Greenhouse
               </a>{" "}
               public APIs
             </span>

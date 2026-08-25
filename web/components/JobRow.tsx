@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { JobWithScore } from "@/lib/types";
 import ScoreBadge from "./ScoreBadge";
 import StatusButton from "./StatusButton";
+import SourceTag from "./SourceTag";
 
 export default function JobRow({ job, index }: { job: JobWithScore; index: number }) {
   return (
@@ -29,6 +30,8 @@ export default function JobRow({ job, index }: { job: JobWithScore; index: numbe
           <span className="text-xs font-medium text-ink-secondary">{job.company}</span>
           <Separator />
           <span className="text-xs text-ink-muted">{job.location}</span>
+          <Separator />
+          <SourceTag source={job.source} />
           {job.remote && (
             <>
               <Separator />

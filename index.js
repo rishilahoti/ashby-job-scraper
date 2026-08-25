@@ -62,13 +62,14 @@ program
   .command('add <slug>')
   .description('Add a company to the source registry')
   .option('-n, --name <name>', 'Company display name')
+  .option('-s, --source <source>', 'ATS source: ashby, lever, or greenhouse', 'ashby')
   .action((slug, options) => {
     const { addCompany } = require('./src/sources');
-    const success = addCompany(slug, options.name);
+    const success = addCompany(slug, options.name, options.source);
     if (success) {
-      console.log(`Added "${options.name || slug}" (${slug}) to registry.`);
+      console.log(`Added "${options.name || slug}" (${slug}, ${options.source}) to registry.`);
     } else {
-      console.log(`Company with slug "${slug}" already exists.`);
+      console.log(`Company with slug "${slug}" already exists for source "${options.source}", or the input is invalid.`);
     }
   });
 

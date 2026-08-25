@@ -36,7 +36,8 @@ async function initDb() {
     CREATE TABLE IF NOT EXISTS companies (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
-      ashby_slug TEXT NOT NULL UNIQUE,
+      slug TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'ashby',
       last_scraped_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
@@ -47,6 +48,7 @@ async function initDb() {
       id SERIAL PRIMARY KEY,
       job_id TEXT NOT NULL,
       company TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'ashby',
       title TEXT NOT NULL,
       location TEXT,
       team TEXT,
@@ -121,6 +123,30 @@ async function initDb() {
   // drop description_html if it still exists (frees up ~50-80% storage per row)
   await p.query(`
     ALTER TABLE jobs DROP COLUMN IF EXISTS description_html
+  `);
+
+  // rename companies.ashby_slug -> slug + add source column (multi-ATS support)
+  await p.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'companies' AND column_name = 'ashby_slug'
+      ) THEN
+        ALTER TABLE companies RENAME COLUMN ashby_slug TO slug;
+      END IF;
+    END$$
+  `);
+
+  await p.query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'ashby'`);
+  await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'ashby'`);
+
+  // old schema had a single-column UNIQUE(ashby_slug) — replace with UNIQUE(slug, source)
+  // now that the same slug string could exist under different ATSes.
+  await p.query(`ALTER TABLE companies DROP CONSTRAINT IF EXISTS companies_ashby_slug_key`);
+  await p.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_slug_source
+      ON companies (slug, source)
   `);
 
   // migrate snapshot_data column from TEXT to JSONB if needed
