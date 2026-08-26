@@ -19,8 +19,10 @@ jobs:
                 include:
                     - name: scraper
                       context: .
+                      file: ./Dockerfile
                     - name: web
-                      context: ./web
+                      context: .
+                      file: ./web/Dockerfile
         steps:
             - uses: actions/checkout@v4
 
@@ -35,6 +37,7 @@ jobs:
             - uses: docker/build-push-action@v6
               with:
                   context: ${{ matrix.context }}
+                  file: ${{ matrix.file }}
                   push: true
                   platforms: linux/amd64
                   build-args: |

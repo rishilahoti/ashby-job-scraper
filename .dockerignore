@@ -1,5 +1,6 @@
 node_modules
-web
+web/node_modules
+web/.next
 data
 reports
 .env*

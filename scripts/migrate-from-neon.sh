@@ -15,9 +15,10 @@ fi
 : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD not set}"
 : "${POSTGRES_DB:?POSTGRES_DB not set}"
 
-LOCAL_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
+LOCAL_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
+NETWORK="$(basename "$(pwd)")_default"
 
-docker run --rm --network host \
+docker run --rm --network "$NETWORK" \
   -e NEON_URL="$NEON_URL" -e LOCAL_URL="$LOCAL_URL" \
   postgres:16-alpine \
   sh -c 'pg_dump --no-owner --no-privileges "$NEON_URL" | psql "$LOCAL_URL"'
