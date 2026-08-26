@@ -1,18 +1,18 @@
 # Ashby Jobs
 
-A production-grade system that scrapes public job listings across **Ashby, Lever, and Greenhouse** — hundreds of companies and counting — persists them in Neon PostgreSQL, tracks changes over time, and surfaces actionable opportunities through a Next.js frontend with intelligent scoring.
+A production-grade system that scrapes public job listings across **Ashby, Lever, and Greenhouse** — hundreds of companies and counting — persists them in PostgreSQL, tracks changes over time, and surfaces actionable opportunities through a Next.js frontend with intelligent scoring.
 
 ## Features
 
 - **Multi-ATS** — Ashby, Lever, and Greenhouse job boards in one feed, via per-source fetch/normalize adapters
 - **Self-growing registry** — Weekly crawl-based discovery (Common Crawl CDX API) finds new Ashby/Greenhouse company boards, verifies each against the live API, and adds it automatically — no manual JSON editing required
 - **Self-Service Company Addition** — Paste any Ashby, Lever, or Greenhouse job board URL in the frontend to add and scrape a new company in real time
-- **Automated Scraping** — Polls each ATS's public job board API on a configurable cron schedule
-- **Multi-DB failover** — Configure multiple Neon connection strings (`DATABASE_URLS`); automatically fails over if the primary is down or over its data-transfer quota
+- **Automated Scraping** — Runs its own weekly cron inside the scraper container (no external scheduler needed)
+- **Multi-DB failover** — Configure multiple Postgres connection strings (`DATABASE_URLS`); automatically fails over if the primary is unreachable
 - **Change Detection** — Tracks new, updated, and removed postings via content hashing
 - **Intelligent Scoring** — Ranks jobs by keyword relevance, location, remote preference, department, and freshness
-- **Cloud Database** — Neon PostgreSQL with connection pooling (queryable from anywhere)
-- **Web Frontend** — Next.js 16 App Router with filtering, pagination, and per-browser apply/ignore tracking (localStorage)
+- **Self-hosted Database** — Postgres running on a Docker Compose stack (see [Deployment](#deployment)), SSL-enabled, reachable over the public internet for the Vercel frontend
+- **Web Frontend** — Next.js 16 App Router (deployed on Vercel) with filtering, pagination, and per-browser apply/ignore tracking (localStorage)
 - **Stealth-Aware** — Jittered scheduling, randomized delays, browser-like headers
 - **Reports** — CLI summaries and daily Markdown reports with apply links
 
@@ -20,29 +20,37 @@ A production-grade system that scrapes public job listings across **Ashby, Lever
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Backend (Node.js)                                           │
-│                                                             │
-│ Scheduler ─→ Registry + DB ─→ Fetch ─→ Normalize ─→ PgSQL  │
-│              (Ashby/Lever/Greenhouse adapters)               │
-│                                          │                  │
-│                                   Diff Engine               │
-│                                          │                  │
-│                               Intelligence ─→ Notifications │
-│                                                             │
-│ Discovery (Common Crawl CDX) ─→ verify vs live API ─→ DB    │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                   Neon PostgreSQL (multi-DB failover)
-                               │
-┌──────────────────────────────┴──────────────────────────────┐
-│ Frontend (Next.js)                                          │
-│                                                             │
-│ Server Components ─→ PostgreSQL queries ─→ Scored job feed  │
-│ /add page ─→ POST /api/companies ─→ Live scrape + insert   │
-│   (source selector: Ashby / Lever / Greenhouse)              │
-│ Status tracking ─→ localStorage (per-browser, not DB)       │
+│ Docker Compose (self-hosted VM)                              │
+│                                                               │
+│  scraper container ─→ Scheduler ─→ Registry + DB ─→ Fetch ─→ │
+│  Normalize ─→ PgSQL   (Ashby/Lever/Greenhouse adapters)       │
+│                              │                                │
+│                       Diff Engine                             │
+│                              │                                │
+│                   Intelligence ─→ Notifications               │
+│                                                               │
+│  db container ─→ Postgres 17, SSL, exposed on :5432          │
+└──────────────────────────────┬───────────────────────────────┘
+                               │  (public internet, TLS)
+┌──────────────────────────────┴───────────────────────────────┐
+│ Frontend (Next.js on Vercel)                                  │
+│                                                                │
+│ Server Components ─→ PostgreSQL queries ─→ Scored job feed    │
+│ /add page ─→ POST /api/companies ─→ Live scrape + insert      │
+│   (source selector: Ashby / Lever / Greenhouse)                │
+│ Status tracking ─→ localStorage (per-browser, not DB)         │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+## Deployment
+
+Frontend and database are hosted separately:
+
+- **Frontend** — Vercel, auto-deploys on push to `main`. Set `DATABASE_URL` (or `DATABASE_URLS`, which takes priority if both are set) in Vercel's Environment Variables to the self-hosted Postgres connection string, then trigger a redeploy — env var changes don't apply to already-running deployments.
+- **Database + scraper** — `docker-compose.yml` at repo root runs two containers: `db` (Postgres 17, SSL enabled via a self-signed cert in `./certs/`, published on `5432`) and `scraper` (runs `node index.js start`, which scrapes immediately on boot then follows `CRON_SCHEDULE`, default weekly). Both images are built and pushed to GHCR by `.github/workflows/build-images.yml` on every push to `main` — pull the latest and `docker compose up -d` on the host.
+- **Migrating from Neon (or any other Postgres)** — `scripts/migrate-from-neon.sh` runs `pg_dump | psql` from a source URL into the local `db` container. Run it from the deployment host after `docker compose up -d db`.
+
+SSL note: the self-signed cert encrypts the connection but isn't CA-verified — both `src/store/db.js` and `web/lib/db.ts` connect with `rejectUnauthorized: false`, and only enable SSL at all when the connection string includes `sslmode=require`.
 
 ## Quick Start
 
@@ -69,7 +77,7 @@ cd web
 npm install
 
 # Configure environment
-echo "DATABASE_URL=your_neon_connection_string" > .env.local
+echo "DATABASE_URL=your_postgres_connection_string" > .env.local
 
 # Start the dev server
 npx next dev -p 3000
@@ -114,9 +122,9 @@ node index.js run   # scrape immediately
 
 Copy `.env.example` to `.env` and set:
 
-- `DATABASE_URL` — Neon PostgreSQL connection string (single URL)
+- `DATABASE_URL` — PostgreSQL connection string (single URL)
 - `DATABASE_URLS` — comma-separated list, priority order, for automatic failover — optional, takes priority over `DATABASE_URL` when set. Failover only, not replication: if the primary goes down and a backup takes over, rows written during that window don't retroactively appear on the primary once it recovers.
-- `CRON_SCHEDULE` — Cron expression for scrape frequency (default: every 12h)
+- `CRON_SCHEDULE` — Cron expression for scrape frequency (default: weekly, Sunday 00:00 UTC)
 - `MIN_RELEVANCE_SCORE` — Minimum score threshold for surfaced jobs
 - `LOG_LEVEL` — Logging verbosity (debug/info/warn/error)
 
@@ -126,20 +134,24 @@ Intelligence rules (keyword weights, preferred locations, etc.) are in `src/conf
 
 | Layer | Technology |
 |---|---|
-| Backend runtime | Node.js (CommonJS) |
-| Database | Neon PostgreSQL (connection pooling, SSL, multi-URL failover) |
+| Backend runtime | Node.js (CommonJS), Docker Compose |
+| Database | PostgreSQL 17, self-hosted, SSL, multi-URL failover |
 | HTTP client | Axios with exponential backoff |
-| Scheduling | node-cron with jitter |
+| Scheduling | node-cron with jitter, runs in-container |
 | Discovery | Common Crawl CDX API (free, no key) |
-| Frontend | Next.js 16 (App Router), TypeScript, Tailwind CSS |
+| Frontend | Next.js 16 (App Router), TypeScript, Tailwind CSS — deployed on Vercel |
 | CLI | Commander with chalk output |
 
 ## Project Structure
 
 ```
 ├── index.js                CLI entry point (run, start, report, add, discover)
+├── Dockerfile               Scraper image (built by build-images.yml → GHCR)
+├── docker-compose.yml       db (Postgres 17 + SSL) + scraper containers
+├── scripts/
+│   └── migrate-from-neon.sh  One-off pg_dump/psql migration into the db container
 ├── .github/workflows/
-│   ├── scrape.yml          Scheduled scrape (every 2 days)
+│   ├── build-images.yml    Builds + pushes the scraper image to GHCR (on push to main)
 │   └── discover.yml        Scheduled Ashby/Greenhouse discovery (weekly)
 ├── src/
 │   ├── config/             Environment + rules.json + per-source fetch config
