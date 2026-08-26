@@ -10,14 +10,13 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  // Pin to this directory — the Docker build context includes the repo root
-  // (for the sibling ../../src import in lib/scoring.ts), which gives Next
-  // two lockfiles to see and would otherwise make it guess the wrong
-  // monorepo root and mangle the standalone output paths.
-  outputFileTracingRoot: path.join(__dirname),
-  // lib/scoring.ts imports ../../src/* (shared with the scraper, outside
-  // this directory) — Turbopack refuses to resolve modules outside its
-  // detected root unless widened to include the parent.
+  // lib/scoring.ts imports ../../src/* (shared with the scraper, outside this
+  // directory) — Turbopack refuses to resolve modules outside its detected
+  // root, so both root settings must point at the repo root (Next requires
+  // outputFileTracingRoot and turbopack.root to match). Standalone output
+  // then nests under .next/standalone/web/ instead of .next/standalone/ —
+  // see web/Dockerfile's runner stage for the matching copy paths.
+  outputFileTracingRoot: path.join(__dirname, ".."),
   turbopack: {
     root: path.join(__dirname, ".."),
   },
