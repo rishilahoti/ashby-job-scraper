@@ -1,0 +1,6 @@
+:80 {
+	reverse_proxy web:3000
+}
+
+# Once you point a domain at the VM's public IP, replace ":80" above with
+# the domain (e.g. "jobs.example.com") — Caddy auto-issues HTTPS via Let's Encrypt.

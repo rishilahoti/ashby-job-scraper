@@ -1,0 +1,47 @@
+name: Build and Push Images
+
+on:
+    push:
+        branches: [main]
+    workflow_dispatch:
+
+env:
+    REGISTRY: ghcr.io
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: write
+        strategy:
+            matrix:
+                include:
+                    - name: scraper
+                      context: .
+                    - name: web
+                      context: ./web
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: docker/setup-buildx-action@v3
+
+            - uses: docker/login-action@v3
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - uses: docker/build-push-action@v6
+              with:
+                  context: ${{ matrix.context }}
+                  push: true
+                  platforms: linux/amd64
+                  build-args: |
+                      NEXT_PUBLIC_SITE_URL=${{ vars.SITE_URL || 'http://129.225.105.215' }}
+                      NEXT_PUBLIC_API_SECRET=${{ vars.NEXT_PUBLIC_API_SECRET }}
+                  tags: |
+                      ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.name }}:latest
+                      ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.name }}:${{ github.sha }}
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
