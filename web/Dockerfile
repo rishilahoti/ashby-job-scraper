@@ -14,7 +14,6 @@ COPY web/ .
 COPY src/config/rules.json /repo/src/config/rules.json
 COPY src/intelligence/rules-engine.js /repo/src/intelligence/rules-engine.js
 RUN npm run build
-RUN find /repo/web/.next/standalone -maxdepth 4
 
 FROM node:20-alpine AS runner
 WORKDIR /app
