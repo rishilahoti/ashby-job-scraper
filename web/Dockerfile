@@ -13,6 +13,7 @@ COPY --from=deps /repo/web/node_modules ./node_modules
 COPY web/ .
 COPY src/config/rules.json /repo/src/config/rules.json
 COPY src/intelligence/rules-engine.js /repo/src/intelligence/rules-engine.js
+RUN ls -la /repo/src/config/ /repo/src/intelligence/ && cat /repo/web/lib/scoring.ts | head -3 && pwd
 RUN npm run build
 
 FROM node:20-alpine AS runner
