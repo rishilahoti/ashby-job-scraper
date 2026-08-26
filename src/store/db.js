@@ -33,7 +33,7 @@ function buildPools() {
   pools = urls.map((url, i) => {
     const p = new Pool({
       connectionString: url,
-      ssl: { rejectUnauthorized: false },
+      ssl: url.includes('sslmode=require') ? { rejectUnauthorized: false } : false,
       max: 15,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,

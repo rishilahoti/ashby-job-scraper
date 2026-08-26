@@ -17,7 +17,7 @@ function getPools(): Pool[] {
   pools = getDbUrls().map((url) => {
     const p = new Pool({
       connectionString: url,
-      ssl: { rejectUnauthorized: false },
+      ssl: url.includes("sslmode=require") ? { rejectUnauthorized: false } : false,
       max: 3,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 20000,
