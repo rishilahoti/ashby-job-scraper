@@ -15,6 +15,12 @@ const nextConfig: NextConfig = {
   // two lockfiles to see and would otherwise make it guess the wrong
   // monorepo root and mangle the standalone output paths.
   outputFileTracingRoot: path.join(__dirname),
+  // lib/scoring.ts imports ../../src/* (shared with the scraper, outside
+  // this directory) — Turbopack refuses to resolve modules outside its
+  // detected root unless widened to include the parent.
+  turbopack: {
+    root: path.join(__dirname, ".."),
+  },
   serverExternalPackages: ["pg"],
   async headers() {
     return [
