@@ -20,7 +20,7 @@ NETWORK="$(basename "$(pwd)")_default"
 
 docker run --rm --network "$NETWORK" \
   -e NEON_URL="$NEON_URL" -e LOCAL_URL="$LOCAL_URL" \
-  postgres:16-alpine \
+  postgres:17-alpine \
   sh -c 'pg_dump --no-owner --no-privileges "$NEON_URL" | psql "$LOCAL_URL"'
 
 echo "Migration done."
