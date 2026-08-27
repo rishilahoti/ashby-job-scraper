@@ -42,6 +42,7 @@ services:
       WATCHTOWER_LABEL_ENABLE: "true"
       WATCHTOWER_POLL_INTERVAL: "300"
       WATCHTOWER_CLEANUP: "true"
+      DOCKER_API_VERSION: "1.41"
 
 volumes:
   db_data:
