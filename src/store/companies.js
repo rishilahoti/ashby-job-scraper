@@ -20,16 +20,6 @@ async function updateLastScraped(slug, source = 'ashby') {
   );
 }
 
-async function getCompany(slug, source = 'ashby') {
-  const pool = getPool();
-  const normalizedSlug = typeof slug === 'string' ? slug.trim().toLowerCase() : slug;
-  const { rows } = await pool.query(
-    'SELECT * FROM companies WHERE LOWER(slug) = LOWER($1) AND source = $2',
-    [normalizedSlug, source]
-  );
-  return rows[0] || null;
-}
-
 // Keyed by "source:slug" — same slug string can exist under different ATSes.
 async function getAllCompaniesLastScraped() {
   const pool = getPool();
@@ -52,4 +42,4 @@ async function getAllCompaniesLastScraped() {
   return map;
 }
 
-module.exports = { upsertCompany, updateLastScraped, getCompany, getAllCompaniesLastScraped };
+module.exports = { upsertCompany, updateLastScraped, getAllCompaniesLastScraped };

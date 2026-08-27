@@ -56,7 +56,6 @@ function rowToJob(row: JobRow): Job {
     compensationInterval: row.compensation_interval,
     contentHash: row.content_hash,
     isActive: Boolean(row.is_active),
-    status: (row.status as Job["status"]) ?? "new",
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : "",
     updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : "",
   };

@@ -1,4 +1,4 @@
-const chalk = require('chalk');
+const { styleText } = require('node:util');
 
 const LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
 
@@ -14,25 +14,25 @@ function timestamp() {
 
 function debug(...args) {
   if (currentLevel <= LEVELS.debug) {
-    console.log(chalk.gray(`[${timestamp()}] [DEBUG]`), ...args);
+    console.log(styleText('gray', `[${timestamp()}] [DEBUG]`), ...args);
   }
 }
 
 function info(...args) {
   if (currentLevel <= LEVELS.info) {
-    console.log(chalk.blue(`[${timestamp()}] [INFO]`), ...args);
+    console.log(styleText('blue', `[${timestamp()}] [INFO]`), ...args);
   }
 }
 
 function warn(...args) {
   if (currentLevel <= LEVELS.warn) {
-    console.warn(chalk.yellow(`[${timestamp()}] [WARN]`), ...args);
+    console.warn(styleText('yellow', `[${timestamp()}] [WARN]`), ...args);
   }
 }
 
 function error(...args) {
   if (currentLevel <= LEVELS.error) {
-    console.error(chalk.red(`[${timestamp()}] [ERROR]`), ...args);
+    console.error(styleText('red', `[${timestamp()}] [ERROR]`), ...args);
   }
 }
 

@@ -21,7 +21,6 @@ export interface Job {
   compensationInterval: string | null;
   contentHash: string;
   isActive: boolean;
-  status: "new" | "applied" | "ignored";
   createdAt: string;
   updatedAt: string;
 }
@@ -76,7 +75,6 @@ export type JobRow = {
   compensation_interval: string | null;
   content_hash: string;
   is_active: boolean;
-  status: string | null;
   created_at: string;
   updated_at: string;
 };

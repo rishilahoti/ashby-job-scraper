@@ -46,15 +46,6 @@ async function getActiveJobsForCompany(company) {
   return rows;
 }
 
-async function getJobByCompanyAndId(company, jobId) {
-  const pool = getPool();
-  const { rows } = await pool.query(
-    'SELECT job_id, company, title, location, team, department, employment_type, remote, apply_url, job_url, published_at, compensation_summary, compensation_min, compensation_max, compensation_currency, compensation_interval, content_hash FROM jobs WHERE company = $1 AND job_id = $2',
-    [company, jobId]
-  );
-  return rows[0] || null;
-}
-
 async function upsertJob(job) {
   const pool = getPool();
 
@@ -198,20 +189,6 @@ async function getAllActiveJobs() {
   return rows;
 }
 
-async function getJobsByCompany(company) {
-  const pool = getPool();
-  const { rows } = await pool.query(
-    `SELECT job_id, company, source, title, location, team, department,
-            employment_type, remote, description, apply_url, job_url,
-            published_at, scraped_at, compensation_summary,
-            compensation_min, compensation_max, compensation_currency, compensation_interval, content_hash,
-            is_active, status, created_at, updated_at
-     FROM jobs WHERE company = $1 ORDER BY published_at DESC`,
-    [company]
-  );
-  return rows;
-}
-
 // Scrape run tracking
 
 async function startScrapeRun(company) {
@@ -261,12 +238,10 @@ module.exports = {
   getActiveJobIdsForCompany,
   getContentHashesForCompany,
   touchJob,
-  getJobByCompanyAndId,
   upsertJob,
   markRemovedJobs,
   saveSnapshot,
   getAllActiveJobs,
-  getJobsByCompany,
   startScrapeRun,
   completeScrapeRun,
   cleanupOldInactiveJobs,

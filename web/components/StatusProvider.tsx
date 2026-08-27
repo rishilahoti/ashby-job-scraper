@@ -37,14 +37,6 @@ export function useStatuses() {
   return useContext(StatusContext);
 }
 
-function syncStatusToDb(jobId: string, status: JobStatus) {
-  fetch(`/api/jobs/${jobId}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status }),
-  }).catch(() => {}); // fire-and-forget; localStorage is the primary store
-}
-
 export default function StatusProvider({ children }: { children: ReactNode }) {
   const [statuses, setStatuses] = useState<StatusMap>({});
   const [mounted, setMounted] = useState(false);
@@ -63,7 +55,6 @@ export default function StatusProvider({ children }: { children: ReactNode }) {
     (jobId: string, target: JobStatus) => {
       const next = getStatus(statuses, jobId) === target ? "new" : target;
       setStatuses(writeStatus(statuses, jobId, next));
-      syncStatusToDb(jobId, next);
     },
     [statuses]
   );

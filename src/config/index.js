@@ -1,5 +1,9 @@
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+try {
+  process.loadEnvFile(path.resolve(__dirname, '../../.env'));
+} catch (err) {
+  if (err.code !== 'ENOENT') throw err;
+}
 
 const rules = require('./rules.json');
 
@@ -11,12 +15,7 @@ const config = {
   },
 
   db: {
-    // DATABASE_URLS: comma-separated, priority order (primary first). Falls back to
-    // single DATABASE_URL when unset — existing single-DB setups need no changes.
-    urls: (process.env.DATABASE_URLS || process.env.DATABASE_URL || '')
-      .split(',')
-      .map(u => u.trim())
-      .filter(Boolean),
+    url: (process.env.DATABASE_URL || '').trim(),
   },
 
   logging: {

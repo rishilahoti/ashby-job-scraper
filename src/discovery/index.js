@@ -1,4 +1,3 @@
-const axios = require('axios');
 const { logger, delay } = require('../utils');
 const { fetchJobBoard } = require('../fetch');
 const { loadRegistry } = require('../sources');
@@ -26,7 +25,8 @@ const VERIFY_CONCURRENCY = 5;
 const VERIFY_DELAY_MS = 300;
 
 async function getLatestCdxIndexId() {
-  const { data } = await axios.get('https://index.commoncrawl.org/collinfo.json');
+  const res = await fetch('https://index.commoncrawl.org/collinfo.json');
+  const data = await res.json();
   return data[0].id;
 }
 
@@ -35,11 +35,12 @@ async function fetchCandidateSlugs(source, cdxLimit) {
   const domain = CDX_DOMAINS[source];
   const indexId = await getLatestCdxIndexId();
 
-  const { data } = await axios.get(`https://index.commoncrawl.org/${indexId}-index`, {
-    params: { url: `${domain}/*`, output: 'json', limit: cdxLimit },
-    responseType: 'text',
-    transformResponse: [(d) => d],
-  });
+  const url = new URL(`https://index.commoncrawl.org/${indexId}-index`);
+  url.searchParams.set('url', `${domain}/*`);
+  url.searchParams.set('output', 'json');
+  url.searchParams.set('limit', cdxLimit);
+  const res = await fetch(url);
+  const data = await res.text();
 
   const slugs = new Set();
   for (const line of data.split('\n')) {
