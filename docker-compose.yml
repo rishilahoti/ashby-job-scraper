@@ -27,7 +27,22 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      CRON_SCHEDULE: ${CRON_SCHEDULE:-0 0 * * 0}
+      CRON_SCHEDULE: ${CRON_SCHEDULE:-0 0 */3 * *}
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  # Polls GHCR every 5min; pulls + recreates only labeled containers (scraper),
+  # so a new push to main auto-deploys without SSHing into the VM. db untouched.
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ~/.docker/config.json:/config.json:ro
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_POLL_INTERVAL: "300"
+      WATCHTOWER_CLEANUP: "true"
 
 volumes:
   db_data:
