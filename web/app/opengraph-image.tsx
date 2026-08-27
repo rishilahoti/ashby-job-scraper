@@ -60,7 +60,7 @@ export default function OgImage() {
         {/* Sub */}
         <div style={{ display: "flex" }}>
           <span style={{ fontSize: 24, color: "#64748B", lineHeight: 1.5, fontWeight: 400 }}>
-            135+ top tech startups · Updated every 48 hours
+            135+ top tech startups · Updated every 3 days
           </span>
         </div>
 

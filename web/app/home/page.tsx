@@ -9,7 +9,7 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.ver
 export async function generateMetadata(): Promise<Metadata> {
   const stats = await getStats();
   const title = "Ashby Jobs — Every Job from Ashby, Lever & Greenhouse Companies";
-  const description = `Find ${stats.total.toLocaleString()} active jobs from ${stats.companies}+ tech startups on AshbyHQ, Lever, and Greenhouse. OpenAI, Figma, Anthropic, Linear, Cursor, Vercel and 130+ more — all in one place. Updated twice daily.`;
+  const description = `Find ${stats.total.toLocaleString()} active jobs from ${stats.companies}+ tech startups on AshbyHQ, Lever, and Greenhouse. OpenAI, Figma, Anthropic, Linear, Cursor, Vercel and 130+ more — all in one place. Updated every 3 days.`;
   return {
     title: { absolute: title },
     description,
@@ -60,7 +60,7 @@ const FAQS = [
   },
   {
     q: "How do I find all jobs posted on AshbyHQ, Lever, and Greenhouse?",
-    a: "This tracker aggregates every public job from companies on AshbyHQ, Lever, and Greenhouse, scraped twice daily from each platform's public posting API. Browse the full feed, filter by remote, department, company, or keyword.",
+    a: "This tracker aggregates every public job from companies on AshbyHQ, Lever, and Greenhouse, scraped every 3 days from each platform's public posting API. Browse the full feed, filter by remote, department, company, or keyword.",
   },
   {
     q: "Is this an official AshbyHQ, Lever, or Greenhouse product?",
@@ -68,7 +68,7 @@ const FAQS = [
   },
   {
     q: "How often is the job data updated?",
-    a: "Jobs are scraped every 48 hours via a GitHub Actions workflow. New listings, closed roles, and description changes are all tracked automatically across AshbyHQ, Lever, and Greenhouse.",
+    a: "Jobs are scraped every 3 days via an automated cron job. New listings, closed roles, and description changes are all tracked automatically across AshbyHQ, Lever, and Greenhouse.",
   },
 ];
 
@@ -233,7 +233,7 @@ export default async function HomePage() {
             }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", display: "inline-block" }} />
               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "var(--accent)", fontWeight: 500, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                Updated every 48 hours
+                Updated every 3 days
               </span>
             </div>
 
@@ -330,7 +330,7 @@ export default async function HomePage() {
               { n: stats.total.toLocaleString(), label: "Active jobs" },
               { n: `${stats.companies}+`, label: "Companies tracked" },
               { n: "135+", label: "Ashby, Lever & Greenhouse boards" },
-              { n: "48h", label: "Refresh cycle" },
+              { n: "3d", label: "Refresh cycle" },
             ].map(({ n, label }) => (
               <div key={label} style={{ textAlign: "center" }}>
                 <div className="stat-num" style={{ fontSize: 22, fontWeight: 700, color: "var(--text-on-dark)" }}>{n}</div>
@@ -393,8 +393,8 @@ export default async function HomePage() {
                 },
                 {
                   step: "02",
-                  title: "We scrape every 48 hours",
-                  desc: "A GitHub Actions workflow hits Ashby's, Lever's, and Greenhouse's public posting APIs for every company and stores all job data in our database.",
+                  title: "We scrape every 3 days",
+                  desc: "An automated cron job hits Ashby's, Lever's, and Greenhouse's public posting APIs for every company and stores all job data in our database.",
                 },
                 {
                   step: "03",
@@ -466,7 +466,7 @@ export default async function HomePage() {
                     </svg>
                   ),
                   title: "Auto-updated",
-                  desc: "Scraped every 48 hours. New jobs appear fast. Closed roles are removed automatically.",
+                  desc: "Scraped every 3 days. New jobs appear fast. Closed roles are removed automatically.",
                 },
                 {
                   icon: (

@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     template: "%s | Ashby Jobs",
   },
   description:
-    "Browse and track job listings from top tech startups on AshbyHQ, Lever (lever.co), and Greenhouse. Find remote engineering, product, and design roles from companies like OpenAI, Figma, Anthropic, Linear, Cursor, and more. Updated twice daily.",
+    "Browse and track job listings from top tech startups on AshbyHQ, Lever (lever.co), and Greenhouse. Find remote engineering, product, and design roles from companies like OpenAI, Figma, Anthropic, Linear, Cursor, and more. Updated every 3 days.",
   keywords: [
     "ashby hq jobs",
     "ashby jobs board",
@@ -42,13 +42,13 @@ export const metadata: Metadata = {
     siteName: "Ashby Jobs",
     title: "Ashby Jobs — Browse Ashby, Lever & Greenhouse Job Listings",
     description:
-      "Browse job listings from top tech startups on AshbyHQ, Lever, and Greenhouse. Find remote engineering, product, and design roles. Updated twice daily.",
+      "Browse job listings from top tech startups on AshbyHQ, Lever, and Greenhouse. Find remote engineering, product, and design roles. Updated every 3 days.",
   },
   twitter: {
     card: "summary_large_image",
     title: "Ashby Jobs — Browse Ashby, Lever & Greenhouse Job Listings",
     description:
-      "Browse job listings from top tech startups on AshbyHQ, Lever, and Greenhouse. Updated twice daily.",
+      "Browse job listings from top tech startups on AshbyHQ, Lever, and Greenhouse. Updated every 3 days.",
   },
   robots: {
     index: true,
