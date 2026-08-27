@@ -159,6 +159,26 @@ async function initDb() {
       ON companies (slug, source)
   `);
 
+  // precomputed relevance score (minus time-decaying freshness boost, added back
+  // in SQL at query time) + matched keywords — lets the web app push filter/sort/
+  // pagination into Postgres instead of loading + scoring the whole table per request
+  await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS base_score INT NOT NULL DEFAULT 0`);
+  await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS matched_keywords TEXT[] NOT NULL DEFAULT '{}'`);
+
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_published ON jobs (published_at DESC) WHERE is_active = TRUE`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_score ON jobs (base_score DESC) WHERE is_active = TRUE`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_remote ON jobs (remote)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_department ON jobs (department)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_team ON jobs (team)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_location ON jobs (location)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_employment_type ON jobs (employment_type)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_matched_keywords ON jobs USING GIN (matched_keywords)`);
+
+  // trigram index — makes ILIKE '%term%' (leading wildcard, unindexable by btree) fast
+  await p.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_title_trgm ON jobs USING GIN (title gin_trgm_ops)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_company_trgm ON jobs USING GIN (company gin_trgm_ops)`);
+
   // migrate snapshot_data column from TEXT to JSONB if needed
   await p.query(`
     DO $$
@@ -175,7 +195,7 @@ async function initDb() {
     END$$
   `);
 
-  logger.info('PostgreSQL database initialized (Neon)');
+  logger.info('PostgreSQL database initialized');
 }
 
 async function closeDb() {

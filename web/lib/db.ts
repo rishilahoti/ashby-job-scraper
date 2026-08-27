@@ -31,7 +31,7 @@ function isConnectionFailure(err: unknown): boolean {
 // not a query retry, `isConnectionFailure` re-throws real query errors immediately.
 export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,
-  params?: (string | number | boolean | null)[]
+  params?: (string | number | boolean | null | string[])[]
 ): Promise<{ rows: T[]; rowCount: number | null }> {
   const maxRetries = 2;
   let lastErr: unknown;

@@ -1,5 +1,7 @@
 const { getPool } = require('./db');
 const { logger } = require('../utils');
+const config = require('../config');
+const { computeStoredScore } = require('../intelligence/rules-engine');
 
 const MAX_SNAPSHOTS_PER_JOB = 2;
 
@@ -48,6 +50,7 @@ async function getActiveJobsForCompany(company) {
 
 async function upsertJob(job) {
   const pool = getPool();
+  const { baseScore, matchedKeywords } = computeStoredScore(job, config.intelligence.rules);
 
   const { rows } = await pool.query(
     `INSERT INTO jobs (
@@ -55,13 +58,13 @@ async function upsertJob(job) {
         employment_type, remote, description,
         apply_url, job_url, published_at, scraped_at,
         compensation_summary, compensation_min, compensation_max, compensation_currency, compensation_interval,
-        content_hash, is_active
+        content_hash, is_active, base_score, matched_keywords
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10,
         $11, $12, $13, $14,
         $15, $16, $17, $18, $19,
-        $20, TRUE
+        $20, TRUE, $21, $22
       )
       ON CONFLICT (company, job_id) DO UPDATE SET
         source            = EXCLUDED.source,
@@ -89,6 +92,8 @@ async function upsertJob(job) {
                               ELSE EXCLUDED.content_hash
                             END,
         is_active         = TRUE,
+        base_score        = EXCLUDED.base_score,
+        matched_keywords  = EXCLUDED.matched_keywords,
         updated_at        = NOW()
       RETURNING
         (xmax = 0)                          AS was_inserted,
@@ -98,7 +103,7 @@ async function upsertJob(job) {
       job.employmentType, !!job.remote, job.description,
       job.applyUrl, job.jobUrl, job.publishedAt, job.scrapedAt,
       job.compensationSummary, job.compensationMin ?? null, job.compensationMax ?? null, job.compensationCurrency ?? null,
-      job.compensationInterval ?? null, job.contentHash,
+      job.compensationInterval ?? null, job.contentHash, baseScore, matchedKeywords,
     ]
   );
 

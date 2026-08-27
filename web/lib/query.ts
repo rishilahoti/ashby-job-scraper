@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { query } from "./db";
 import { scoreJob } from "./scoring";
+import rulesData from "../../src/config/rules.json";
 import type {
   Job,
   JobWithScore,
@@ -8,6 +9,17 @@ import type {
   JobRow,
   PaginatedResult,
 } from "./types";
+
+// Freshness boost is time-decaying (published_at vs now), so it's computed inline in
+// SQL from an indexed column instead of being baked into the persisted base_score.
+const FRESHNESS_HOURS = Number(rulesData.freshnessBoostHours) || 0;
+const FRESHNESS_BOOST = Number(rulesData.freshnessBoost) || 0;
+const SCORE_EXPR =
+  FRESHNESS_HOURS && FRESHNESS_BOOST
+    ? `(base_score + CASE WHEN published_at >= NOW() - INTERVAL '${FRESHNESS_HOURS} hours' THEN ${FRESHNESS_BOOST} ELSE 0 END)`
+    : "base_score";
+
+type ScoredJobRow = JobRow & { base_score: number; matched_keywords: string[]; computed_score: string | number };
 
 const LIST_COLUMNS = `
   id, job_id, company, source, title, location, team, department,
@@ -65,9 +77,24 @@ function stripForList(job: JobWithScore): JobWithScore {
   return { ...job, description: "" };
 }
 
-function dedupeRowsByJobId(rows: JobRow[], preferredCompany: string): JobRow[] {
+function rowToJobWithScore(row: ScoredJobRow): JobWithScore {
+  return {
+    ...rowToJob(row),
+    score: Number(row.computed_score),
+    matchedKeywords: row.matched_keywords ?? [],
+  };
+}
+
+function applyCanonicalNames(jobs: JobWithScore[], canonicalRecord: Record<string, string>): void {
+  for (const j of jobs) {
+    const key = j.company?.trim().toLowerCase();
+    if (key && canonicalRecord[key]) j.company = canonicalRecord[key];
+  }
+}
+
+function dedupeRowsByJobId<T extends JobRow>(rows: T[], preferredCompany: string): T[] {
   const preferred = preferredCompany.trim().toLowerCase();
-  const byId = new Map<string, JobRow>();
+  const byId = new Map<string, T>();
   for (const r of rows) {
     const id = r.job_id;
     const existing = byId.get(id);
@@ -133,135 +160,166 @@ const getCachedAllScoredJobs = withStaleFallback(unstable_cache(
 
 // --- Public API ---
 
+function sortInMemory(scored: JobWithScore[], sort: JobFilters["sort"]): void {
+  switch (sort) {
+    case "newest":
+      scored.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+      break;
+    case "oldest":
+      scored.sort((a, b) => new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime());
+      break;
+    default:
+      scored.sort((a, b) => b.score - a.score);
+  }
+}
+
+// In-memory fallback path — only used when the DB is unreachable, scoring the
+// last cached full listing. Not performance-critical (rare, resilience-only).
+function filterSortPaginateInMemory(
+  all: JobWithScore[],
+  filters: JobFilters,
+  page: number,
+  limit: number
+): PaginatedResult<JobWithScore> {
+  let scored = all;
+  if (filters.company) {
+    const target = filters.company.trim().toLowerCase();
+    scored = scored.filter((j) => j.company?.trim().toLowerCase() === target);
+  }
+  if (filters.remote !== undefined) scored = scored.filter((j) => j.remote === filters.remote);
+  if (filters.employmentType) scored = scored.filter((j) => j.employmentType === filters.employmentType);
+  if (filters.department) {
+    const term = filters.department.toLowerCase();
+    scored = scored.filter((j) => j.department?.toLowerCase().includes(term));
+  }
+  if (filters.team) {
+    const term = filters.team.toLowerCase();
+    scored = scored.filter((j) => j.team?.toLowerCase().includes(term));
+  }
+  if (filters.location) scored = scored.filter((j) => j.location === filters.location);
+  if (filters.search) {
+    const term = filters.search.toLowerCase();
+    scored = scored.filter(
+      (j) => j.title.toLowerCase().includes(term) || j.company.toLowerCase().includes(term)
+    );
+  }
+  if (filters.minScore !== undefined) scored = scored.filter((j) => j.score >= filters.minScore!);
+  if (filters.tags && filters.tags.length > 0) {
+    const tagsLower = filters.tags.map((t) => t.toLowerCase());
+    scored = scored.filter((j) => tagsLower.every((tag) => j.matchedKeywords.some((k) => k.toLowerCase() === tag)));
+  }
+  scored = [...scored];
+  sortInMemory(scored, filters.sort);
+
+  const total = scored.length;
+  const offset = (page - 1) * limit;
+  const paginated = scored.slice(offset, offset + limit).map(stripForList);
+  return { data: paginated, total, page, totalPages: Math.ceil(total / limit) };
+}
+
 export async function getJobs(
   filters: JobFilters = {}
 ): Promise<PaginatedResult<JobWithScore>> {
   const page = filters.page || 1;
   const limit = Math.min(filters.limit || 40, 100);
+  const offset = (page - 1) * limit;
 
-  let scored: JobWithScore[];
+  const wheres: string[] = ["is_active = TRUE"];
+  const params: (string | number | boolean | string[])[] = [];
+  let idx = 1;
 
-  const hasDbFilters =
-    filters.company ||
-    filters.remote !== undefined ||
-    filters.employmentType ||
-    filters.search ||
-    filters.department ||
-    filters.team ||
-    filters.location;
+  if (filters.company) {
+    wheres.push(`LOWER(TRIM(company)) = LOWER(TRIM($${idx++}))`);
+    params.push(filters.company);
+  }
+  if (filters.remote !== undefined) {
+    wheres.push(`remote = $${idx++}`);
+    params.push(filters.remote);
+  }
+  if (filters.employmentType) {
+    wheres.push(`employment_type = $${idx++}`);
+    params.push(filters.employmentType);
+  }
+  if (filters.department) {
+    wheres.push(`department ILIKE $${idx++}`);
+    params.push(`%${filters.department}%`);
+  }
+  if (filters.team) {
+    wheres.push(`team ILIKE $${idx++}`);
+    params.push(`%${filters.team}%`);
+  }
+  if (filters.location) {
+    wheres.push(`location = $${idx++}`);
+    params.push(filters.location);
+  }
+  if (filters.search) {
+    wheres.push(`(title ILIKE $${idx} OR company ILIKE $${idx + 1})`);
+    const term = `%${filters.search}%`;
+    params.push(term, term);
+    idx += 2;
+  }
+  if (filters.tags && filters.tags.length > 0) {
+    wheres.push(`matched_keywords @> $${idx++}::text[]`);
+    params.push(filters.tags.map((t) => t.toLowerCase()));
+  }
+  if (filters.minScore !== undefined) {
+    wheres.push(`${SCORE_EXPR} >= $${idx++}`);
+    params.push(filters.minScore);
+  }
 
-  if (hasDbFilters) {
-    const wheres: string[] = ["is_active = TRUE"];
-    const params: (string | number | boolean)[] = [];
-    let idx = 1;
+  const where = `WHERE ${wheres.join(" AND ")}`;
+  const selectCols = `${LIST_COLUMNS_BULK}, base_score, matched_keywords, ${SCORE_EXPR} AS computed_score`;
 
+  try {
     if (filters.company) {
-      wheres.push(`LOWER(TRIM(company)) = LOWER(TRIM($${idx}))`);
-      params.push(filters.company);
-      idx++;
-    }
-    if (filters.remote !== undefined) {
-      wheres.push(`remote = $${idx++}`);
-      params.push(filters.remote);
-    }
-    if (filters.employmentType) {
-      wheres.push(`employment_type = $${idx++}`);
-      params.push(filters.employmentType);
-    }
-    if (filters.department) {
-      wheres.push(`department ILIKE $${idx++}`);
-      params.push(`%${filters.department}%`);
-    }
-    if (filters.team) {
-      wheres.push(`team ILIKE $${idx++}`);
-      params.push(`%${filters.team}%`);
-    }
-    if (filters.location) {
-      wheres.push(`location = $${idx++}`);
-      params.push(filters.location);
-    }
-    if (filters.search) {
-      wheres.push(`(title ILIKE $${idx} OR company ILIKE $${idx + 1})`);
-      const term = `%${filters.search}%`;
-      params.push(term, term);
-      idx += 2;
-    }
-
-    const where = `WHERE ${wheres.join(" AND ")}`;
-    const companyParamIndex = filters.company ? 1 : 0;
-    const orderBy =
-      filters.company
-        ? `ORDER BY job_id, CASE WHEN TRIM(company) = TRIM($${companyParamIndex}) THEN 0 ELSE 1 END, published_at DESC NULLS LAST`
-        : "ORDER BY published_at DESC";
-    try {
-      const { rows: rawRows } = await query<JobRow>(
-        `SELECT ${LIST_COLUMNS_BULK} FROM jobs ${where} ${orderBy}`,
+      // Single-company result set is small and needs job_id dedup across name
+      // variants before pagination — fetch it whole (bounded, cheap) rather
+      // than pushing LIMIT/OFFSET.
+      const orderBy = `ORDER BY job_id, CASE WHEN TRIM(company) = TRIM($1) THEN 0 ELSE 1 END, published_at DESC NULLS LAST`;
+      const { rows: rawRows } = await query<ScoredJobRow>(
+        `SELECT ${selectCols} FROM jobs ${where} ${orderBy}`,
         params
       );
       const canonicalRecord = await getCanonicalCompanyNamesRecord();
-      const displayName =
-        filters.company
-          ? canonicalRecord[filters.company.trim().toLowerCase()] ?? filters.company.trim()
-          : "";
-      const rows =
-        filters.company
-          ? dedupeRowsByJobId(rawRows, displayName)
-          : rawRows;
-      scored = rows.map((r) => scoreJob(rowToJob(r)));
-    } catch {
-      // DB unreachable (e.g. Neon suspended) — fall back to the last cached
-      // full listing rather than taking the page down. SQL-pushed filters
-      // (company/remote/location/etc) are skipped; score/tag/sort filters below still apply.
-      scored = await getCachedAllScoredJobs();
+      const displayName = canonicalRecord[filters.company.trim().toLowerCase()] ?? filters.company.trim();
+      const rows = dedupeRowsByJobId(rawRows, displayName);
+      const scored = rows.map(rowToJobWithScore);
+      applyCanonicalNames(scored, canonicalRecord);
+      sortInMemory(scored, filters.sort);
+
+      const total = scored.length;
+      const paginated = scored.slice(offset, offset + limit).map(stripForList);
+      return { data: paginated, total, page, totalPages: Math.ceil(total / limit) };
     }
-  } else {
-    scored = await getCachedAllScoredJobs();
+
+    const orderBy =
+      filters.sort === "newest"
+        ? "ORDER BY published_at DESC NULLS LAST, id DESC"
+        : filters.sort === "oldest"
+        ? "ORDER BY published_at ASC NULLS LAST, id DESC"
+        : `ORDER BY ${SCORE_EXPR} DESC, published_at DESC, id DESC`;
+
+    const [dataResult, countResult] = await Promise.all([
+      query<ScoredJobRow>(
+        `SELECT ${selectCols} FROM jobs ${where} ${orderBy} LIMIT $${idx} OFFSET $${idx + 1}`,
+        [...params, limit, offset]
+      ),
+      query<{ count: string }>(`SELECT COUNT(*) FROM jobs ${where}`, params),
+    ]);
+
+    const total = Number(countResult.rows[0]?.count ?? 0);
+    const scored = dataResult.rows.map(rowToJobWithScore);
+    const canonicalRecord = await getCanonicalCompanyNamesRecord();
+    applyCanonicalNames(scored, canonicalRecord);
+    const paginated = scored.map(stripForList);
+
+    return { data: paginated, total, page, totalPages: Math.ceil(total / limit) };
+  } catch {
+    // DB unreachable (e.g. self-hosted Postgres down) — fall back to the last
+    // cached full listing, filtered/sorted/paginated in memory.
+    const all = await getCachedAllScoredJobs();
+    return filterSortPaginateInMemory(all, filters, page, limit);
   }
-
-  if (filters.minScore !== undefined) {
-    scored = scored.filter((j) => j.score >= filters.minScore!);
-  }
-
-  if (filters.tags && filters.tags.length > 0) {
-    const tagsLower = filters.tags.map((t) => t.toLowerCase());
-    scored = scored.filter((j) =>
-      tagsLower.every((tag) =>
-        j.matchedKeywords.some((k) => k.toLowerCase() === tag)
-      )
-    );
-  }
-
-  const sortBy = filters.sort || "score";
-  switch (sortBy) {
-    case "newest":
-      scored.sort(
-        (a, b) =>
-          new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
-      );
-      break;
-    case "oldest":
-      scored.sort(
-        (a, b) =>
-          new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime()
-      );
-      break;
-    default:
-      scored.sort((a, b) => b.score - a.score);
-  }
-
-  const canonicalRecord = await getCanonicalCompanyNamesRecord();
-  for (const j of scored) {
-    const key = j.company?.trim().toLowerCase();
-    if (key && canonicalRecord[key]) {
-      j.company = canonicalRecord[key];
-    }
-  }
-
-  const total = scored.length;
-  const offset = (page - 1) * limit;
-  const paginated = scored.slice(offset, offset + limit).map(stripForList);
-
-  return { data: paginated, total, page, totalPages: Math.ceil(total / limit) };
 }
 
 export async function getJobById(jobId: string): Promise<JobWithScore | null> {

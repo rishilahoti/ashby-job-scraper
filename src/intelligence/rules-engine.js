@@ -80,4 +80,16 @@ function computeScore(job, rules) {
   return { score, keywords, location, remote, department, freshness };
 }
 
-module.exports = { matchesWord, escapeRegex, computeScore };
+// Score minus the time-decaying freshness boost — safe to persist, since the
+// freshness part is cheap to recompute inline from published_at at query time.
+function computeStoredScore(job, rules) {
+  const keywords = scoreKeywords(job, rules);
+  const location = scoreLocation(job, rules);
+  const remote = scoreRemote(job, rules);
+  const department = scoreDepartment(job, rules);
+  const baseScore = keywords.total + location.boost + remote + department.boost;
+  const matchedKeywords = keywords.matched.filter((m) => m.weight > 0).map((m) => m.keyword);
+  return { baseScore, matchedKeywords };
+}
+
+module.exports = { matchesWord, escapeRegex, computeScore, computeStoredScore };
