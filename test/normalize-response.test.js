@@ -3,9 +3,8 @@ const assert = require('node:assert/strict');
 
 const { normalizeResponse } = require('../src/normalize');
 
-// The web app's "add company" route (web/app/api/companies/route.ts) feeds
-// this same function raw ATS responses shaped exactly like these fixtures —
-// this is the contract that keeps the scraper and the web route in sync.
+// The scraper pipeline (src/scheduler/pipeline.js) feeds this function raw ATS
+// responses shaped exactly like these fixtures before diffing/storing jobs.
 const REQUIRED_FIELDS = [
   'jobId', 'title', 'location', 'team', 'department', 'employmentType',
   'remote', 'description', 'applyUrl', 'jobUrl', 'publishedAt',

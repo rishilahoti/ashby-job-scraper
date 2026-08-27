@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { normalizeResponse } from "../../../../src/normalize";
+import crypto from "crypto";
 
 type Source = "ashby" | "lever" | "greenhouse";
 const SOURCES: Source[] = ["ashby", "lever", "greenhouse"];
@@ -46,9 +46,55 @@ function extractSlugAndSource(
   return null;
 }
 
-// Shape normalizeResponse() (src/normalize) returns — same normalizer the
-// scraper pipeline uses, so a job added here matches one the scraper would
-// have produced for the same board.
+function contentHash(...fields: (string | null | undefined)[]): string {
+  const payload = fields.map((f) => f ?? "").join("|");
+  return crypto.createHash("md5").update(payload).digest("hex");
+}
+
+// Handles both plain HTML (Ashby) and HTML-entity-double-encoded content (Greenhouse's
+// `content` field comes back as literal "&lt;div&gt;" text) by decoding twice around
+// the tag strip — a no-op for sources that were never encoded in the first place.
+function htmlToPlainText(html: string | null | undefined): string {
+  if (!html) return "";
+  const decode = (s: string) =>
+    s
+      .replace(/&nbsp;/g, " ")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&");
+  const stripped = decode(html).replace(/<[^>]*>/g, " ");
+  return decode(stripped).replace(/\s+/g, " ").trim();
+}
+
+function extractAshbyJobId(jobUrl: string | null): string | null {
+  if (!jobUrl) return null;
+  try {
+    const url = new URL(jobUrl);
+    const parts = url.pathname.split("/").filter(Boolean);
+    return parts[parts.length - 1] || null;
+  } catch {
+    return jobUrl;
+  }
+}
+
+function safeDate(raw: string | number | null | undefined): string {
+  if (!raw) return new Date().toISOString();
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+}
+
+function formatSalaryRange(
+  salaryRange: { currency?: string; min?: number; max?: number } | null | undefined
+): string | null {
+  if (!salaryRange || (salaryRange.min == null && salaryRange.max == null)) return null;
+  const currency = salaryRange.currency || "";
+  const min = salaryRange.min != null ? salaryRange.min.toLocaleString() : null;
+  const max = salaryRange.max != null ? salaryRange.max.toLocaleString() : null;
+  return min && max ? `${currency} ${min}–${max}`.trim() : `${currency} ${min || max}`.trim();
+}
+
 interface NormalizedJob {
   jobId: string;
   title: string;
@@ -62,11 +108,114 @@ interface NormalizedJob {
   jobUrl: string;
   publishedAt: string;
   compensationSummary: string | null;
-  contentHash: string;
+}
+
+interface AshbyJob {
+  title?: string;
+  location?: string;
+  team?: string;
+  department?: string;
+  employmentType?: string;
+  isRemote?: boolean;
+  isListed?: boolean;
+  descriptionPlain?: string;
+  descriptionHtml?: string;
+  applyUrl?: string;
+  jobUrl?: string;
+  publishedAt?: string;
+  compensation?: {
+    compensationTierSummary?: string;
+    scrapeableCompensationSalarySummary?: string;
+  };
+}
+
+interface LeverJob {
+  id?: string;
+  text?: string;
+  country?: string;
+  workplaceType?: string;
+  descriptionPlain?: string;
+  hostedUrl?: string;
+  applyUrl?: string;
+  createdAt?: number;
+  salaryRange?: { currency?: string; min?: number; max?: number };
+  categories?: { location?: string; team?: string; department?: string; commitment?: string };
+}
+
+interface GreenhouseJob {
+  id?: number;
+  title?: string;
+  location?: { name?: string };
+  content?: string;
+  absolute_url?: string;
+  first_published?: string;
+  updated_at?: string;
+  company_name?: string;
+}
+
+function normalizeAshbyJob(raw: AshbyJob): NormalizedJob | null {
+  const jobId = extractAshbyJobId(raw.jobUrl ?? null);
+  if (!jobId) return null;
+  const description = raw.descriptionPlain || htmlToPlainText(raw.descriptionHtml);
+  return {
+    jobId,
+    title: raw.title || "Untitled",
+    location: raw.location || "Unknown",
+    team: raw.team || null,
+    department: raw.department || null,
+    employmentType: raw.employmentType || null,
+    remote: Boolean(raw.isRemote),
+    description,
+    applyUrl: raw.applyUrl || "",
+    jobUrl: raw.jobUrl || "",
+    publishedAt: safeDate(raw.publishedAt),
+    compensationSummary:
+      raw.compensation?.compensationTierSummary ||
+      raw.compensation?.scrapeableCompensationSalarySummary ||
+      null,
+  };
+}
+
+function normalizeLeverJob(raw: LeverJob): NormalizedJob | null {
+  if (!raw.id) return null;
+  const categories = raw.categories || {};
+  return {
+    jobId: raw.id,
+    title: raw.text || "Untitled",
+    location: categories.location || raw.country || "Unknown",
+    team: categories.team || null,
+    department: categories.department || null,
+    employmentType: categories.commitment || null,
+    remote: raw.workplaceType === "remote",
+    description: raw.descriptionPlain || "",
+    applyUrl: raw.applyUrl || raw.hostedUrl || "",
+    jobUrl: raw.hostedUrl || raw.applyUrl || "",
+    publishedAt: safeDate(raw.createdAt),
+    compensationSummary: formatSalaryRange(raw.salaryRange),
+  };
+}
+
+function normalizeGreenhouseJob(raw: GreenhouseJob): NormalizedJob | null {
+  if (raw.id == null) return null;
+  const location = raw.location?.name || "Unknown";
+  return {
+    jobId: String(raw.id),
+    title: raw.title || "Untitled",
+    location,
+    team: null,
+    department: null,
+    employmentType: null,
+    remote: /remote/i.test(location),
+    description: htmlToPlainText(raw.content),
+    applyUrl: raw.absolute_url || "",
+    jobUrl: raw.absolute_url || "",
+    publishedAt: safeDate(raw.first_published || raw.updated_at),
+    compensationSummary: null,
+  };
 }
 
 type FetchResult =
-  | { ok: true; apiResponse: Record<string, unknown>; companyName: string | null }
+  | { ok: true; jobs: unknown[]; companyName: string | null }
   | { ok: false; status: number };
 
 async function fetchAshby(slug: string): Promise<FetchResult> {
@@ -77,7 +226,8 @@ async function fetchAshby(slug: string): Promise<FetchResult> {
   if (!res.ok) return { ok: false, status: res.status };
   const data = await res.json();
   if (!data || !Array.isArray(data.jobs)) return { ok: false, status: 502 };
-  return { ok: true, apiResponse: data, companyName: data.jobBoard?.title || null };
+  const jobs = (data.jobs as AshbyJob[]).filter((j) => j.isListed !== false);
+  return { ok: true, jobs, companyName: data.jobBoard?.title || null };
 }
 
 async function fetchLever(slug: string): Promise<FetchResult> {
@@ -88,7 +238,7 @@ async function fetchLever(slug: string): Promise<FetchResult> {
   if (!res.ok) return { ok: false, status: res.status };
   const data = await res.json();
   if (!Array.isArray(data)) return { ok: false, status: 502 };
-  return { ok: true, apiResponse: { jobs: data }, companyName: null };
+  return { ok: true, jobs: data, companyName: null };
 }
 
 async function fetchGreenhouse(slug: string): Promise<FetchResult> {
@@ -99,23 +249,27 @@ async function fetchGreenhouse(slug: string): Promise<FetchResult> {
   if (!res.ok) return { ok: false, status: res.status };
   const data = await res.json();
   if (!data || !Array.isArray(data.jobs)) return { ok: false, status: 502 };
-  return { ok: true, apiResponse: data, companyName: data.jobs[0]?.company_name || null };
+  const jobs = data.jobs as GreenhouseJob[];
+  return { ok: true, jobs, companyName: jobs[0]?.company_name || null };
 }
 
 const SOURCE_CONFIG: Record<
   Source,
-  { fetch: (slug: string) => Promise<FetchResult>; boardUrl: (slug: string) => string }
+  { fetch: (slug: string) => Promise<FetchResult>; normalize: (raw: unknown) => NormalizedJob | null; boardUrl: (slug: string) => string }
 > = {
   ashby: {
     fetch: fetchAshby,
+    normalize: (raw) => normalizeAshbyJob(raw as AshbyJob),
     boardUrl: (slug) => `https://jobs.ashbyhq.com/${slug}`,
   },
   lever: {
     fetch: fetchLever,
+    normalize: (raw) => normalizeLeverJob(raw as LeverJob),
     boardUrl: (slug) => `https://jobs.lever.co/${slug}`,
   },
   greenhouse: {
     fetch: fetchGreenhouse,
+    normalize: (raw) => normalizeGreenhouseJob(raw as GreenhouseJob),
     boardUrl: (slug) => `https://job-boards.greenhouse.io/${slug}`,
   },
 };
@@ -185,17 +339,26 @@ export async function POST(request: NextRequest) {
 
     const companyNameForJobs = existingRow?.name ?? canonicalName;
 
-    const normalizedJobs = normalizeResponse(
-      result.apiResponse,
-      companyNameForJobs,
-      source
-    ) as NormalizedJob[];
-
     let inserted = 0;
     let updated = 0;
     let unchanged = 0;
+    let total = 0;
 
-    for (const job of normalizedJobs) {
+    for (const raw of result.jobs) {
+      const job = sourceConfig.normalize(raw);
+      if (!job) continue;
+      total++;
+
+      const hash = contentHash(
+        job.title,
+        job.location,
+        job.description,
+        job.employmentType,
+        String(job.remote),
+        job.team,
+        job.department
+      );
+
       const { rows } = await query(
         `INSERT INTO jobs (
            job_id, company, source, title, location, team, department,
@@ -246,7 +409,7 @@ export async function POST(request: NextRequest) {
           job.jobUrl,
           job.publishedAt,
           job.compensationSummary,
-          job.contentHash,
+          hash,
         ]
       );
 
@@ -262,7 +425,7 @@ export async function POST(request: NextRequest) {
       slug,
       source,
       alreadyExisted: alreadyExists,
-      jobs: { total: normalizedJobs.length, inserted, updated, unchanged },
+      jobs: { total, inserted, updated, unchanged },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
