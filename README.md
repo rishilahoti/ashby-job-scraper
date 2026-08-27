@@ -8,7 +8,6 @@ A production-grade system that scrapes public job listings across **Ashby, Lever
 - **Self-growing registry** — Weekly crawl-based discovery (Common Crawl CDX API) finds new Ashby/Greenhouse company boards, verifies each against the live API, and adds it automatically — no manual JSON editing required
 - **Self-Service Company Addition** — Paste any Ashby, Lever, or Greenhouse job board URL in the frontend to add and scrape a new company in real time
 - **Automated Scraping** — Runs its own weekly cron inside the scraper container (no external scheduler needed)
-- **Multi-DB failover** — Configure multiple Postgres connection strings (`DATABASE_URLS`); automatically fails over if the primary is unreachable
 - **Change Detection** — Tracks new, updated, and removed postings via content hashing
 - **Intelligent Scoring** — Ranks jobs by keyword relevance, location, remote preference, department, and freshness
 - **Self-hosted Database** — Postgres running on a Docker Compose stack (see [Deployment](#deployment)), SSL-enabled, reachable over the public internet for the Vercel frontend
@@ -46,7 +45,7 @@ A production-grade system that scrapes public job listings across **Ashby, Lever
 
 Frontend and database are hosted separately:
 
-- **Frontend** — Vercel, auto-deploys on push to `main`. Set `DATABASE_URL` (or `DATABASE_URLS`, which takes priority if both are set) in Vercel's Environment Variables to the self-hosted Postgres connection string, then trigger a redeploy — env var changes don't apply to already-running deployments.
+- **Frontend** — Vercel, auto-deploys on push to `main`. Set `DATABASE_URL` in Vercel's Environment Variables to the self-hosted Postgres connection string, then trigger a redeploy — env var changes don't apply to already-running deployments.
 - **Database + scraper** — `docker-compose.yml` at repo root runs two containers: `db` (Postgres 17, SSL enabled via a self-signed cert in `./certs/`, published on `5432`) and `scraper` (runs `node index.js start`, which scrapes immediately on boot then follows `CRON_SCHEDULE`, default weekly). Both images are built and pushed to GHCR by `.github/workflows/build-images.yml` on every push to `main` — pull the latest and `docker compose up -d` on the host.
 - **Migrating from Neon (or any other Postgres)** — `scripts/migrate-from-neon.sh` runs `pg_dump | psql` from a source URL into the local `db` container. Run it from the deployment host after `docker compose up -d db`.
 
@@ -60,7 +59,7 @@ SSL note: the self-signed cert encrypts the connection but isn't CA-verified —
 # Install dependencies
 npm install
 
-# Configure environment (set DATABASE_URL, or DATABASE_URLS for failover)
+# Configure environment (set DATABASE_URL)
 cp .env.example .env
 
 # Run a single scrape cycle
@@ -122,8 +121,7 @@ node index.js run   # scrape immediately
 
 Copy `.env.example` to `.env` and set:
 
-- `DATABASE_URL` — PostgreSQL connection string (single URL)
-- `DATABASE_URLS` — comma-separated list, priority order, for automatic failover — optional, takes priority over `DATABASE_URL` when set. Failover only, not replication: if the primary goes down and a backup takes over, rows written during that window don't retroactively appear on the primary once it recovers.
+- `DATABASE_URL` — PostgreSQL connection string
 - `CRON_SCHEDULE` — Cron expression for scrape frequency (default: weekly, Sunday 00:00 UTC)
 - `MIN_RELEVANCE_SCORE` — Minimum score threshold for surfaced jobs
 - `LOG_LEVEL` — Logging verbosity (debug/info/warn/error)

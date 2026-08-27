@@ -23,11 +23,9 @@ jobs:
               run: node index.js discover --source ashby
               env:
                   DATABASE_URL: ${{ vars.DATABASE_URL }}
-                  DATABASE_URLS: ${{ vars.DATABASE_URLS }}
 
             - name: Discover Greenhouse companies
               continue-on-error: true
               run: node index.js discover --source greenhouse
               env:
                   DATABASE_URL: ${{ vars.DATABASE_URL }}
-                  DATABASE_URLS: ${{ vars.DATABASE_URLS }}
