@@ -9,7 +9,7 @@ const rules = require('./rules.json');
 
 const config = {
   schedule: {
-    cron: process.env.CRON_SCHEDULE || '0 0 */3 * *',
+    cron: process.env.CRON_SCHEDULE || '0 0 * * *',
     defaultFrequencyHours: parseInt(process.env.DEFAULT_FREQUENCY_HOURS, 10) || 12,
     jitterMaxMinutes: parseInt(process.env.JITTER_MAX_MINUTES, 10) || 5,
   },

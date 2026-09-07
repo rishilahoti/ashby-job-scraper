@@ -14,7 +14,7 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.ver
 export async function generateMetadata(): Promise<Metadata> {
   const stats = await getStats();
   const title = `Browse ${stats.total.toLocaleString()} Tech Startup Jobs on Ashby, Lever & Greenhouse`;
-  const description = `Discover ${stats.total.toLocaleString()} active job listings from ${stats.companies}+ top tech startups on AshbyHQ, Lever, and Greenhouse — OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, and more. Filter by remote, department, and company. Updated every 3 days.`;
+  const description = `Discover ${stats.total.toLocaleString()} active job listings from ${stats.companies}+ top tech startups on AshbyHQ, Lever, and Greenhouse — OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, and more. Filter by remote, department, and company. Updated daily.`;
   return {
     title: { absolute: title },
     description,
