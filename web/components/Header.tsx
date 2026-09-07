@@ -9,12 +9,12 @@ import { useTheme } from "./ThemeProvider";
 const GITHUB_REPO = "https://github.com/rishilahoti/ashbyhq-scraper";
 const GITHUB_API_REPO = "https://api.github.com/repos/rishilahoti/ashbyhq-scraper";
 
-const MOBILE_LINKS = [
+const MOBILE_LINKS: { href: string; label: string; icon: string; accent?: boolean }[] = [
   { href: "/", label: "Feed", icon: "feed" },
   { href: "/applied", label: "Applied", icon: "applied" },
   { href: "/ignored", label: "Ignored", icon: "ignored" },
   { href: "/add", label: "+ Add", icon: "add", accent: true },
-] as const;
+];
 
 export default function Header() {
   const { appliedCount, ignoredCount } = useStatuses();
