@@ -14,7 +14,7 @@ const HEADERS = {
 
 function checkAuth(request: NextRequest): boolean {
   const secret = process.env.API_SECRET;
-  if (!secret) return true; // auth disabled when env var is not set
+  if (!secret) return false; // fail closed if the secret isn't configured
   const header = request.headers.get("authorization") ?? "";
   return header === `Bearer ${secret}`;
 }

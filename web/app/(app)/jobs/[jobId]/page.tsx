@@ -108,7 +108,9 @@ export default async function JobDetailPage({
     <div className="max-w-3xl mx-auto">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jobSchema) }}
+        // job.title/description/company come from externally-scraped, employer-controlled
+        // job boards — escape "<" so a "</script>" in that data can't break out of this tag.
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jobSchema).replace(/</g, "\\u003c") }}
       />
       {/* Breadcrumb */}
       <Link

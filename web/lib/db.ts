@@ -10,7 +10,7 @@ function getDbPool(): Pool {
     ssl: url.includes("sslmode=require") ? { rejectUnauthorized: false } : false,
     max: 3,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 20000,
+    connectionTimeoutMillis: 10000,
   });
   pool.on("error", () => {});
   return pool;

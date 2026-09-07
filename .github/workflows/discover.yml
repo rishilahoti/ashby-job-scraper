@@ -22,10 +22,10 @@ jobs:
               continue-on-error: true # one source failing shouldn't block the other
               run: node index.js discover --source ashby
               env:
-                  DATABASE_URL: ${{ vars.DATABASE_URL }}
+                  DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
             - name: Discover Greenhouse companies
               continue-on-error: true
               run: node index.js discover --source greenhouse
               env:
-                  DATABASE_URL: ${{ vars.DATABASE_URL }}
+                  DATABASE_URL: ${{ secrets.DATABASE_URL }}

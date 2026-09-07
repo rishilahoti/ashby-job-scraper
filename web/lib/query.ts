@@ -145,18 +145,19 @@ const getCanonicalCompanyNamesRecord = withStaleFallback(unstable_cache(
   { revalidate: 300 }
 ), {});
 
-// All scored jobs — ONE DB hit per 30 min shared across every instance.
-// Without description: ~2.2MB per fetch vs ~4.7MB before.
-const getCachedAllScoredJobs = withStaleFallback(unstable_cache(
+// All scored jobs, used only as the in-memory (`last`, via withStaleFallback)
+// fallback when the DB is unreachable. Not wrapped in unstable_cache: the
+// serialized payload (25MB+) is far past Next's 2MB data-cache entry limit,
+// so every cache write failed anyway and just spammed unhandled-rejection logs.
+const getCachedAllScoredJobs = withStaleFallback(
   async (): Promise<JobWithScore[]> => {
     const { rows } = await query<JobRow>(
       `SELECT ${LIST_COLUMNS_BULK} FROM jobs WHERE is_active = TRUE ORDER BY published_at DESC`
     );
     return rows.map((r) => scoreJob(rowToJob(r)));
   },
-  ["all-scored-jobs"],
-  { revalidate: 1800 } // 30 minutes
-), []);
+  []
+);
 
 // --- Public API ---
 
@@ -217,11 +218,17 @@ function filterSortPaginateInMemory(
   return { data: paginated, total, page, totalPages: Math.ceil(total / limit) };
 }
 
-export async function getJobs(
-  filters: JobFilters = {}
-): Promise<PaginatedResult<JobWithScore>> {
-  const page = filters.page || 1;
-  const limit = Math.min(filters.limit || 40, 100);
+// Paginated/filtered result sets are small (<=100 stripped rows, well under
+// the 2MB data-cache limit that rules out caching the full unpaginated table
+// in getCachedAllScoredJobs above) — shared across all Vercel instances like
+// the other lookups in this file, cutting DB round trips for repeat filter
+// combos against the fixed-capacity self-hosted Postgres box.
+const getCachedJobsPage = unstable_cache(
+  async (
+    filters: JobFilters,
+    page: number,
+    limit: number
+  ): Promise<PaginatedResult<JobWithScore>> => {
   const offset = (page - 1) * limit;
 
   const wheres: string[] = ["is_active = TRUE"];
@@ -270,7 +277,6 @@ export async function getJobs(
   const where = `WHERE ${wheres.join(" AND ")}`;
   const selectCols = `${LIST_COLUMNS_BULK}, base_score, matched_keywords, ${SCORE_EXPR} AS computed_score`;
 
-  try {
     if (filters.company) {
       // Single-company result set is small and needs job_id dedup across name
       // variants before pagination — fetch it whole (bounded, cheap) rather
@@ -314,6 +320,18 @@ export async function getJobs(
     const paginated = scored.map(stripForList);
 
     return { data: paginated, total, page, totalPages: Math.ceil(total / limit) };
+  },
+  ["jobs-page"],
+  { revalidate: 60 }
+);
+
+export async function getJobs(
+  filters: JobFilters = {}
+): Promise<PaginatedResult<JobWithScore>> {
+  const page = filters.page || 1;
+  const limit = Math.min(filters.limit || 40, 100);
+  try {
+    return await getCachedJobsPage(filters, page, limit);
   } catch {
     // DB unreachable (e.g. self-hosted Postgres down) — fall back to the last
     // cached full listing, filtered/sorted/paginated in memory.
