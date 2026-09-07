@@ -121,7 +121,7 @@ export default async function HomePage() {
 
         {/* ── Nav ── */}
         <nav className="bg-[#080E1A] border-b border-[#1E2D45]">
-          <div className="max-w-[1200px] mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-3">
+          <div className="max-w-[1200px] mx-auto px-3! sm:px-6! h-14 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className={`${spaceGrotesk.className} font-bold text-[17px] text-[#F1F5F9] tracking-[-0.02em]`}>
                 Ashby<span className="text-[#6B5FE8]">Tracker</span>
@@ -134,7 +134,7 @@ export default async function HomePage() {
               </span>
               <Link
                 href="/"
-                className="bg-[#6B5FE8] text-white text-[12.5px] sm:text-[13px] font-semibold py-1.75 px-2.5 sm:px-4 rounded-md no-underline tracking-[-0.01em] whitespace-nowrap shrink-0"
+                className="bg-[#6B5FE8] text-white text-[12.5px] sm:text-[13px] font-semibold py-1.75! px-2.5! sm:px-4! rounded-md no-underline tracking-[-0.01em] whitespace-nowrap shrink-0"
               >
                 Browse Jobs →
               </Link>
@@ -143,16 +143,16 @@ export default async function HomePage() {
         </nav>
 
         {/* ── Hero ── */}
-        <section className="bg-[#080E1A] px-6 pt-24 pb-20">
-          <div className="max-w-[860px] mx-auto text-center">
-            <div className="inline-flex items-center gap-2 bg-[rgba(71,59,206,0.1)] border border-[rgba(71,59,206,0.25)] rounded-full py-1.25 px-3.5 mb-8">
+        <section className="bg-[#080E1A] px-6! pt-6! pb-6!">
+          <div className="max-w-215 mx-auto text-center">
+            <div className="inline-flex items-center gap-2 bg-[rgba(71,59,206,0.1)] border border-[rgba(71,59,206,0.25)] rounded-full py-1.25! px-3.5! mb-2">
               <span className="w-1.5 h-1.5 rounded-full bg-[#6B5FE8] inline-block" />
               <span className="text-xs text-[#6B5FE8] font-medium tracking-[0.04em] uppercase">
                 Updated daily
               </span>
             </div>
 
-            <h1 className={`${spaceGrotesk.className} text-[clamp(36px,6vw,72px)] font-bold text-[#F1F5F9] leading-[1.08] tracking-[-0.03em] mb-6`}>
+            <h1 className={`${spaceGrotesk.className} sm:text-6xl text-5xl font-bold text-[#F1F5F9] leading-[1.08] tracking-[-0.03em] mb-2`}>
               Every job on{" "}
               <span className="text-[#6B5FE8]">AshbyHQ</span>
               <br />in one feed
@@ -163,7 +163,7 @@ export default async function HomePage() {
             </p>
 
             {/* Live counter */}
-            <div className="inline-flex flex-col items-center bg-[#0D1526] border border-[#1E2D45] rounded-xl py-5 px-10 mb-10">
+            <div className="inline-flex flex-col items-center bg-[#0D1526] border border-[#1E2D45] rounded-xl py-5! px-10! mb-10">
               <span className={`${spaceGrotesk.className} text-[clamp(48px,8vw,80px)] font-bold text-[#F1F5F9] tracking-[-0.04em] leading-none`}>
                 {stats.total.toLocaleString()}
                 <span className={`${styles.cursor} inline-block w-0.5 h-[1em] bg-[#6B5FE8] ml-0.75 align-middle`} />
@@ -176,13 +176,13 @@ export default async function HomePage() {
             <div className="flex gap-3 justify-center flex-wrap">
               <Link
                 href="/"
-                className="bg-[#6B5FE8] text-white text-[15px] font-semibold py-3.5 px-8 rounded-lg no-underline tracking-[-0.01em] inline-flex items-center gap-1.5"
+                className="bg-[#6B5FE8] text-white text-[15px] font-semibold py-3.5! px-8! rounded-lg no-underline tracking-[-0.01em] inline-flex items-center gap-1.5"
               >
                 Browse all jobs →
               </Link>
               <a
                 href="#how-it-works"
-                className="bg-transparent text-[#64748B] border border-[#1E2D45] text-[15px] font-medium py-3.5 px-8 rounded-lg no-underline tracking-[-0.01em]"
+                className="bg-transparent text-[#64748B] border border-[#1E2D45] text-[15px] font-medium py-3.5! px-8! rounded-lg no-underline tracking-[-0.01em]"
               >
                 How it works
               </a>
@@ -193,8 +193,8 @@ export default async function HomePage() {
         <div className="h-px bg-[linear-gradient(90deg,transparent,#6B5FE8,transparent)]" />
 
         {/* ── Stats bar ── */}
-        <section className="bg-[#0D1526] border-b border-[#1E2D45] py-5 px-6">
-          <div className="max-w-[1200px] mx-auto flex gap-12 flex-wrap justify-center">
+        <section className="bg-[#0D1526] border-b border-[#1E2D45] py-5! px-6!">
+          <div className="sm:max-w-300 mx-auto flex sm:gap-12 gap-2 justify-center">
             {[
               { n: stats.total.toLocaleString(), label: "Active jobs" },
               { n: `${stats.companies}+`, label: "Companies tracked" },
@@ -210,9 +210,9 @@ export default async function HomePage() {
         </section>
 
         {/* ── Companies marquee ── */}
-        <section className="bg-[#F8FAFC] pt-16 pb-14 overflow-hidden">
-          <div className="text-center mb-8 px-6">
-            <p className="text-[13px] text-[#475569] tracking-[0.08em] uppercase font-medium">
+        <section className="bg-[#F8FAFC] pt-16! pb-14! overflow-hidden">
+          <div className="text-center mb-8 px-6!">
+            <p className="sm:text-lg text-[13px] text-[#475569] tracking-[0.08em] uppercase font-medium">
               Tracking jobs at {companies.length}+ companies
             </p>
           </div>
@@ -221,7 +221,7 @@ export default async function HomePage() {
               {marqueeCompanies.map((name, i) => (
                 <span
                   key={i}
-                  className={`${spaceGrotesk.className} text-sm font-medium text-[#475569] whitespace-nowrap px-8 border-r border-[#E2E8F0] leading-10 cursor-default`}
+                  className={`${spaceGrotesk.className} text-sm sm:text-xl font-medium text-[#475569] whitespace-nowrap px-8! border-r border-[#E2E8F0] leading-10 cursor-default`}
                 >
                   {name}
                 </span>
@@ -231,7 +231,7 @@ export default async function HomePage() {
         </section>
 
         {/* ── How it works ── */}
-        <section id="how-it-works" className="bg-[#080E1A] px-6 py-20">
+        <section id="how-it-works" className="bg-[#080E1A] px-6! py-20!">
           <div className="max-w-[860px] mx-auto">
             <div className="text-center mb-14">
               <h2 className={`${spaceGrotesk.className} text-[clamp(28px,4vw,40px)] font-bold text-[#F1F5F9] tracking-[-0.025em] mb-4`}>
@@ -260,7 +260,7 @@ export default async function HomePage() {
                   desc: "Browse, filter by remote, department, company, or search keywords. All jobs. One feed. No accounts needed.",
                 },
               ].map(({ step, title, desc }) => (
-                <div key={step} className="bg-[#0D1526] py-9 px-7">
+                <div key={step} className="bg-[#0D1526] py-9! px-7!">
                   <div className={`${spaceGrotesk.className} text-sm font-bold text-[#6B5FE8] tracking-[0.12em] mb-4`}>
                     {step}
                   </div>
@@ -277,7 +277,7 @@ export default async function HomePage() {
         </section>
 
         {/* ── Features ── */}
-        <section className="bg-[#F8FAFC] px-6 py-20">
+        <section className="bg-[#F8FAFC] px-6! py-20!">
           <div className="max-w-[1100px] mx-auto">
             <div className="text-center mb-14">
               <h2 className={`${spaceGrotesk.className} text-[clamp(28px,4vw,40px)] font-bold text-[#0F172A] tracking-[-0.025em] mb-4`}>
@@ -347,7 +347,7 @@ export default async function HomePage() {
               ].map(({ icon, title, desc }) => (
                 <div
                   key={title}
-                  className="bg-white border border-[#E2E8F0] rounded-[10px] py-7 px-6"
+                  className="bg-white border border-[#E2E8F0] rounded-[10px] py-7! px-6!"
                 >
                   <div className="text-[#6B5FE8] mb-4 w-12 h-12 bg-[rgba(71,59,206,0.08)] rounded-[10px] flex items-center justify-center">{icon}</div>
                   <h3 className={`${spaceGrotesk.className} text-base font-semibold text-[#0F172A] tracking-[-0.015em] mb-2`}>
@@ -363,7 +363,7 @@ export default async function HomePage() {
         </section>
 
         {/* ── FAQ / AEO ── */}
-        <section className="bg-[#F8FAFC] border-t border-[#E2E8F0] px-6 py-20">
+        <section className="bg-[#F8FAFC] border-t border-[#E2E8F0] px-6! py-20!">
           <div className="max-w-[720px] mx-auto">
             <div className="text-center mb-12">
               <h2 className={`${spaceGrotesk.className} text-[clamp(26px,4vw,36px)] font-bold text-[#0F172A] tracking-[-0.025em] mb-3`}>
@@ -377,7 +377,7 @@ export default async function HomePage() {
                   key={i}
                   className={`group bg-white ${i < FAQS.length - 1 ? "border-b border-[#E2E8F0]" : ""}`}
                 >
-                  <summary className="flex items-center justify-between py-5 px-6 cursor-pointer select-none gap-4 list-none [&::-webkit-details-marker]:hidden">
+                  <summary className="flex items-center justify-between py-5! px-6! cursor-pointer select-none gap-4 list-none [&::-webkit-details-marker]:hidden">
                     <span className={`${spaceGrotesk.className} text-[15px] font-semibold text-[#0F172A] tracking-[-0.01em]`}>
                       {faq.q}
                     </span>
@@ -385,7 +385,7 @@ export default async function HomePage() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                     </svg>
                   </summary>
-                  <p className="text-sm text-[#475569] leading-[1.75] px-6 pb-5 m-0">
+                  <p className="text-sm text-[#475569] leading-[1.75] px-6! pb-5! m-0">
                     {faq.a}
                   </p>
                 </details>
@@ -395,7 +395,7 @@ export default async function HomePage() {
         </section>
 
         {/* ── Final CTA ── */}
-        <section className="bg-[#080E1A] border-t border-[#1E2D45] px-6 py-20">
+        <section className="bg-[#080E1A] border-t border-[#1E2D45] px-6! py-20!">
           <div className="max-w-[640px] mx-auto text-center">
             <h2 className={`${spaceGrotesk.className} text-[clamp(28px,5vw,48px)] font-bold text-[#F1F5F9] tracking-[-0.03em] mb-4`}>
               Start browsing now
@@ -405,7 +405,7 @@ export default async function HomePage() {
             </p>
             <Link
               href="/"
-              className={`${spaceGrotesk.className} inline-flex items-center gap-2 bg-[#6B5FE8] text-white text-base font-semibold py-4 px-10 rounded-lg no-underline tracking-[-0.01em]`}
+              className={`${spaceGrotesk.className} inline-flex items-center gap-2 bg-[#6B5FE8] text-white text-base font-semibold py-4! px-10! rounded-lg no-underline tracking-[-0.01em]`}
             >
               Browse {stats.total.toLocaleString()} jobs →
             </Link>
@@ -413,7 +413,7 @@ export default async function HomePage() {
         </section>
 
         {/* ── Footer ── */}
-        <footer className="bg-[#080E1A] border-t border-[#1E2D45] py-6 px-6">
+        <footer className="bg-[#080E1A] border-t border-[#1E2D45] py-6! px-6!">
           <div className="max-w-[1200px] mx-auto flex justify-between items-center flex-wrap gap-3">
             <span className={`${spaceGrotesk.className} font-bold text-sm text-[#F1F5F9]`}>
               Ashby<span className="text-[#6B5FE8]">Tracker</span>
