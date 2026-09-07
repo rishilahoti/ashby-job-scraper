@@ -94,7 +94,7 @@ export default function Filters({
       <select
         value={current.company}
         onChange={(e) => setParam("company", e.target.value)}
-        className="h-8 max-w-[130px] px-2 text-sm bg-surface border border-edge rounded-md text-ink-secondary focus:outline-none focus:border-edge-strong cursor-pointer"
+        className="h-8 max-w-32.5 px-2 text-sm bg-surface border border-edge rounded-md text-ink-secondary focus:outline-none focus:border-edge-strong cursor-pointer"
       >
         <option value="">All companies</option>
         {companies.map((c) => (
@@ -106,7 +106,7 @@ export default function Filters({
       <select
         value={current.department}
         onChange={(e) => setParam("department", e.target.value)}
-        className="h-8 max-w-[130px] px-2 text-sm bg-surface border border-edge rounded-md text-ink-secondary focus:outline-none focus:border-edge-strong cursor-pointer"
+        className="h-8 max-w-32.5 px-2 text-sm bg-surface border border-edge rounded-md text-ink-secondary focus:outline-none focus:border-edge-strong cursor-pointer"
       >
         <option value="">All departments</option>
         {departments.map((d) => (
@@ -118,7 +118,7 @@ export default function Filters({
       <select
         value={current.location}
         onChange={(e) => setParam("location", e.target.value)}
-        className="h-8 max-w-[130px] px-2 text-sm bg-surface border border-edge rounded-md
+        className="h-8 max-w-32.5 px-2 text-sm bg-surface border border-edge rounded-md
                    text-ink-secondary focus:outline-none focus:border-edge-strong cursor-pointer"
       >
         <option value="">All locations</option>
@@ -131,7 +131,7 @@ export default function Filters({
       <select
         value={current.tags[0]?.toLowerCase() ?? ""}
         onChange={(e) => setTagFromDropdown(e.target.value)}
-        className="h-8 max-w-[130px] px-2 text-sm bg-surface border border-edge rounded-md text-ink-secondary focus:outline-none focus:border-edge-strong cursor-pointer"
+        className="h-8 max-w-32.5 px-2 text-sm bg-surface border border-edge rounded-md text-ink-secondary focus:outline-none focus:border-edge-strong cursor-pointer"
       >
         <option value="">All tags</option>
         {tagOptions.map((tag) => (
@@ -142,7 +142,7 @@ export default function Filters({
       {/* Remote Toggle */}
       <button
         onClick={() => setParam("remote", current.remote === "true" ? "" : "true")}
-        className={`h-8 max-w-[130px] px-3 text-xs font-mono rounded-md border transition-colors cursor-pointer
+        className={`h-8 max-w-32.5 px-3 text-xs font-mono rounded-md border transition-colors cursor-pointer
           ${current.remote === "true"
             ? "bg-ink text-paper border-ink"
             : "bg-surface border-edge text-ink-secondary hover:border-edge-strong"
@@ -155,7 +155,7 @@ export default function Filters({
       <select
         value={current.employmentType}
         onChange={(e) => setParam("employmentType", e.target.value)}
-        className="h-8 max-w-[130px] px-2 text-sm bg-surface border border-edge rounded-md
+        className="h-8 max-w-32.5 px-2 text-sm bg-surface border border-edge rounded-md
                    text-ink-secondary focus:outline-none focus:border-edge-strong cursor-pointer"
       >
         <option value="">All types</option>
@@ -169,7 +169,7 @@ export default function Filters({
       <select
         value={current.sort}
         onChange={(e) => setParam("sort", e.target.value)}
-        className="h-8 max-w-[130px] px-2 text-sm bg-surface border border-edge rounded-md
+        className="h-8 max-w-32.5 px-2 text-sm bg-surface border border-edge rounded-md
                    text-ink-secondary focus:outline-none focus:border-edge-strong cursor-pointer"
       >
         <option value="score">Score</option>

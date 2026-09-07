@@ -56,7 +56,7 @@ export default async function FeedPage({
       .split(",")
       .map((t) => t.trim().toLowerCase())
       .filter((t) => t && allowed.has(t));
-      if (filters.tags.length === 0) delete filters.tags;
+    if (filters.tags.length === 0) delete filters.tags;
   }
   if (sp.sort) filters.sort = sp.sort as JobFilters["sort"];
   if (sp.page) filters.page = parseInt(sp.page, 10);
@@ -88,8 +88,8 @@ export default async function FeedPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
       />
-      <div className="flex items-baseline gap-6 mb-1">
-        <h1 className="font-display text-xl font-bold tracking-tight">Ashby Jobs</h1>
+      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-1">
+        <h1 className="font-display text-xl font-bold tracking-tight whitespace-nowrap">Ashby Jobs</h1>
         <div className="flex gap-4">
           <Stat label="Jobs" value={stats.total} />
           <Stat label="Companies" value={stats.companies} />

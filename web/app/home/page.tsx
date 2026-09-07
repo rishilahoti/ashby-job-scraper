@@ -1,10 +1,16 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { DM_Sans, Space_Grotesk } from "next/font/google";
 import { getStats, getCompanies } from "@/lib/query";
+import { GitHubStarBadge } from "@/components/GitHubBadge";
+import styles from "./home.module.css";
 
 export const revalidate = 300;
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.vercel.app";
+
+const dmSans = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 
 export async function generateMetadata(): Promise<Metadata> {
   const stats = await getStats();
@@ -102,83 +108,6 @@ export default async function HomePage() {
 
   return (
     <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
-
-        .home-page {
-          --accent: #6B5FE8;
-          --accent-dim: #473bce;
-          --dark: #080E1A;
-          --dark-surface: #0D1526;
-          --dark-border: #1E2D45;
-          --light: #F8FAFC;
-          --light-surface: #FFFFFF;
-          --light-border: #E2E8F0;
-          --text-on-dark: #F1F5F9;
-          --text-muted-dark: #64748B;
-          --text-on-light: #0F172A;
-          --text-muted-light: #475569;
-          font-family: 'DM Sans', system-ui, sans-serif;
-        }
-        .home-page h1, .home-page h2, .home-page h3 {
-          font-family: 'Space Grotesk', system-ui, sans-serif;
-        }
-
-        /* Marquee */
-        .marquee-track {
-          display: flex;
-          width: max-content;
-          animation: marquee 40s linear infinite;
-        }
-        .marquee-track:hover { animation-play-state: paused; }
-        @keyframes marquee {
-          from { transform: translateX(0); }
-          to { transform: translateX(-50%); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .marquee-track { animation: none; }
-        }
-
-        /* Cursor blink */
-        .cursor {
-          display: inline-block;
-          width: 2px;
-          height: 1em;
-          background: var(--accent);
-          margin-left: 3px;
-          vertical-align: middle;
-          animation: blink 1s step-end infinite;
-        }
-        @keyframes blink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0; }
-        }
-
-        /* Number grid */
-        .stat-num {
-          font-family: 'Space Grotesk', monospace;
-          font-variant-numeric: tabular-nums;
-          letter-spacing: -0.03em;
-        }
-
-        /* FAQ accordion */
-        details summary { list-style: none; }
-        details summary::-webkit-details-marker { display: none; }
-        details[open] .chevron { transform: rotate(180deg); }
-        .chevron { transition: transform 200ms ease; }
-
-        /* Features grid */
-        .features-grid { grid-template-columns: repeat(3, 1fr); }
-        @media (max-width: 768px) { .features-grid { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 480px) { .features-grid { grid-template-columns: 1fr; } }
-
-        /* Gradient line */
-        .accent-line {
-          height: 1px;
-          background: linear-gradient(90deg, transparent, var(--accent), transparent);
-        }
-      `}</style>
-
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
@@ -188,33 +117,24 @@ export default async function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
       />
 
-      <div className="home-page">
+      <div className={dmSans.className}>
 
         {/* ── Nav ── */}
-        <nav style={{ background: "var(--dark)", borderBottom: "1px solid var(--dark-border)" }}>
-          <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 17, color: "var(--text-on-dark)", letterSpacing: "-0.02em" }}>
-                Ashby<span style={{ color: "var(--accent)" }}>Tracker</span>
+        <nav className="bg-[#080E1A] border-b border-[#1E2D45]">
+          <div className="max-w-[1200px] mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className={`${spaceGrotesk.className} font-bold text-[17px] text-[#F1F5F9] tracking-[-0.02em]`}>
+                Ashby<span className="text-[#6B5FE8]">Tracker</span>
               </span>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: "var(--text-muted-dark)" }}>
+            <div className="flex items-center gap-2 sm:gap-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <GitHubStarBadge className="flex items-center gap-1.5 text-[#64748B] hover:text-[#F1F5F9] transition-colors shrink-0" />
+              <span className="hidden sm:inline-block whitespace-nowrap text-[13px] text-[#64748B]">
                 {stats.total.toLocaleString()} jobs · {stats.companies}+ companies
               </span>
               <Link
                 href="/"
-                style={{
-                  background: "var(--accent)",
-                  color: "#fff",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  padding: "7px 16px",
-                  borderRadius: 6,
-                  textDecoration: "none",
-                  letterSpacing: "-0.01em",
-                  transition: "background 150ms",
-                }}
+                className="bg-[#6B5FE8] text-white text-[12.5px] sm:text-[13px] font-semibold py-1.75 px-2.5 sm:px-4 rounded-md no-underline tracking-[-0.01em] whitespace-nowrap shrink-0"
               >
                 Browse Jobs →
               </Link>
@@ -223,97 +143,46 @@ export default async function HomePage() {
         </nav>
 
         {/* ── Hero ── */}
-        <section style={{ background: "var(--dark)", padding: "96px 24px 80px" }}>
-          <div style={{ maxWidth: 860, margin: "0 auto", textAlign: "center" }}>
-            <div style={{
-              display: "inline-flex", alignItems: "center", gap: 8,
-              background: "rgba(71,59,206,0.1)",
-              border: "1px solid rgba(71,59,206,0.25)",
-              borderRadius: 20, padding: "5px 14px", marginBottom: 32,
-            }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", display: "inline-block" }} />
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "var(--accent)", fontWeight: 500, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+        <section className="bg-[#080E1A] px-6 pt-24 pb-20">
+          <div className="max-w-[860px] mx-auto text-center">
+            <div className="inline-flex items-center gap-2 bg-[rgba(71,59,206,0.1)] border border-[rgba(71,59,206,0.25)] rounded-full py-1.25 px-3.5 mb-8">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#6B5FE8] inline-block" />
+              <span className="text-xs text-[#6B5FE8] font-medium tracking-[0.04em] uppercase">
                 Updated daily
               </span>
             </div>
 
-            <h1 style={{
-              fontFamily: "'Space Grotesk', sans-serif",
-              fontSize: "clamp(36px, 6vw, 72px)",
-              fontWeight: 700,
-              color: "var(--text-on-dark)",
-              lineHeight: 1.08,
-              letterSpacing: "-0.03em",
-              marginBottom: 24,
-            }}>
+            <h1 className={`${spaceGrotesk.className} text-[clamp(36px,6vw,72px)] font-bold text-[#F1F5F9] leading-[1.08] tracking-[-0.03em] mb-6`}>
               Every job on{" "}
-              <span style={{ color: "var(--accent)" }}>AshbyHQ</span>
+              <span className="text-[#6B5FE8]">AshbyHQ</span>
               <br />in one feed
             </h1>
 
-            <p style={{
-              fontFamily: "'DM Sans', sans-serif",
-              fontSize: "clamp(16px, 2.2vw, 20px)",
-              color: "var(--text-muted-dark)",
-              lineHeight: 1.65,
-              maxWidth: 580,
-              margin: "0 auto 48px",
-            }}>
+            <p className="text-[clamp(16px,2.2vw,20px)] text-[#64748B] leading-[1.65] max-w-[580px] mx-auto mb-12">
               We scrape the public job board APIs from Ashby, Lever, and Greenhouse for {stats.companies}+ top tech startups — so you don&apos;t have to check each one manually.
             </p>
 
             {/* Live counter */}
-            <div style={{
-              display: "inline-flex", flexDirection: "column", alignItems: "center",
-              background: "var(--dark-surface)",
-              border: "1px solid var(--dark-border)",
-              borderRadius: 12, padding: "20px 40px", marginBottom: 40,
-            }}>
-              <span style={{
-                fontFamily: "'Space Grotesk', monospace",
-                fontSize: "clamp(48px, 8vw, 80px)",
-                fontWeight: 700,
-                color: "var(--text-on-dark)",
-                letterSpacing: "-0.04em",
-                lineHeight: 1,
-              }}>
-                {stats.total.toLocaleString()}<span className="cursor" />
+            <div className="inline-flex flex-col items-center bg-[#0D1526] border border-[#1E2D45] rounded-xl py-5 px-10 mb-10">
+              <span className={`${spaceGrotesk.className} text-[clamp(48px,8vw,80px)] font-bold text-[#F1F5F9] tracking-[-0.04em] leading-none`}>
+                {stats.total.toLocaleString()}
+                <span className={`${styles.cursor} inline-block w-0.5 h-[1em] bg-[#6B5FE8] ml-0.75 align-middle`} />
               </span>
-              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: "var(--text-muted-dark)", marginTop: 8, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              <span className="text-[13px] text-[#64748B] mt-2 tracking-[0.06em] uppercase">
                 active job listings
               </span>
             </div>
 
-            <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+            <div className="flex gap-3 justify-center flex-wrap">
               <Link
                 href="/"
-                style={{
-                  background: "var(--accent)",
-                  color: "#fff",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  padding: "14px 32px",
-                  borderRadius: 8,
-                  textDecoration: "none",
-                  letterSpacing: "-0.01em",
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                }}
+                className="bg-[#6B5FE8] text-white text-[15px] font-semibold py-3.5 px-8 rounded-lg no-underline tracking-[-0.01em] inline-flex items-center gap-1.5"
               >
                 Browse all jobs →
               </Link>
               <a
                 href="#how-it-works"
-                style={{
-                  background: "transparent",
-                  color: "var(--text-muted-dark)",
-                  border: "1px solid var(--dark-border)",
-                  fontSize: 15,
-                  fontWeight: 500,
-                  padding: "14px 32px",
-                  borderRadius: 8,
-                  textDecoration: "none",
-                  letterSpacing: "-0.01em",
-                }}
+                className="bg-transparent text-[#64748B] border border-[#1E2D45] text-[15px] font-medium py-3.5 px-8 rounded-lg no-underline tracking-[-0.01em]"
               >
                 How it works
               </a>
@@ -321,49 +190,38 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <div className="accent-line" />
+        <div className="h-px bg-[linear-gradient(90deg,transparent,#6B5FE8,transparent)]" />
 
         {/* ── Stats bar ── */}
-        <section style={{ background: "var(--dark-surface)", borderBottom: "1px solid var(--dark-border)", padding: "20px 24px" }}>
-          <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", gap: 48, flexWrap: "wrap", justifyContent: "center" }}>
+        <section className="bg-[#0D1526] border-b border-[#1E2D45] py-5 px-6">
+          <div className="max-w-[1200px] mx-auto flex gap-12 flex-wrap justify-center">
             {[
               { n: stats.total.toLocaleString(), label: "Active jobs" },
               { n: `${stats.companies}+`, label: "Companies tracked" },
               { n: "135+", label: "Ashby, Lever & Greenhouse boards" },
               { n: "3d", label: "Refresh cycle" },
             ].map(({ n, label }) => (
-              <div key={label} style={{ textAlign: "center" }}>
-                <div className="stat-num" style={{ fontSize: 22, fontWeight: 700, color: "var(--text-on-dark)" }}>{n}</div>
-                <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "var(--text-muted-dark)", marginTop: 2, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</div>
+              <div key={label} className="text-center">
+                <div className={`${spaceGrotesk.className} tabular-nums tracking-[-0.03em] text-[22px] font-bold text-[#F1F5F9]`}>{n}</div>
+                <div className="text-xs text-[#64748B] mt-0.5 tracking-[0.04em] uppercase">{label}</div>
               </div>
             ))}
           </div>
         </section>
 
         {/* ── Companies marquee ── */}
-        <section style={{ background: "var(--light)", padding: "64px 0 56px", overflow: "hidden" }}>
-          <div style={{ textAlign: "center", marginBottom: 32, padding: "0 24px" }}>
-            <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, color: "var(--text-muted-light)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 500 }}>
+        <section className="bg-[#F8FAFC] pt-16 pb-14 overflow-hidden">
+          <div className="text-center mb-8 px-6">
+            <p className="text-[13px] text-[#475569] tracking-[0.08em] uppercase font-medium">
               Tracking jobs at {companies.length}+ companies
             </p>
           </div>
-          <div style={{ overflow: "hidden" }}>
-            <div className="marquee-track">
+          <div className="overflow-hidden">
+            <div className={`${styles.marqueeTrack} flex w-max`}>
               {marqueeCompanies.map((name, i) => (
                 <span
                   key={i}
-                  style={{
-                    fontFamily: "'Space Grotesk', sans-serif",
-                    fontSize: 14,
-                    fontWeight: 500,
-                    color: "var(--text-muted-light)",
-                    whiteSpace: "nowrap",
-                    padding: "0 32px",
-                    borderRight: "1px solid var(--light-border)",
-                    lineHeight: "40px",
-                    cursor: "default",
-                    transition: "color 150ms",
-                  }}
+                  className={`${spaceGrotesk.className} text-sm font-medium text-[#475569] whitespace-nowrap px-8 border-r border-[#E2E8F0] leading-10 cursor-default`}
                 >
                   {name}
                 </span>
@@ -373,18 +231,18 @@ export default async function HomePage() {
         </section>
 
         {/* ── How it works ── */}
-        <section id="how-it-works" style={{ background: "var(--dark)", padding: "80px 24px" }}>
-          <div style={{ maxWidth: 860, margin: "0 auto" }}>
-            <div style={{ textAlign: "center", marginBottom: 56 }}>
-              <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: "clamp(28px, 4vw, 40px)", fontWeight: 700, color: "var(--text-on-dark)", letterSpacing: "-0.025em", marginBottom: 16 }}>
+        <section id="how-it-works" className="bg-[#080E1A] px-6 py-20">
+          <div className="max-w-[860px] mx-auto">
+            <div className="text-center mb-14">
+              <h2 className={`${spaceGrotesk.className} text-[clamp(28px,4vw,40px)] font-bold text-[#F1F5F9] tracking-[-0.025em] mb-4`}>
                 How it works
               </h2>
-              <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 17, color: "var(--text-muted-dark)" }}>
+              <p className="text-[17px] text-[#64748B]">
                 Three steps. No manual checking.
               </p>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 1, background: "var(--dark-border)", border: "1px solid var(--dark-border)", borderRadius: 12, overflow: "hidden" }}>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-px bg-[#1E2D45] border border-[#1E2D45] rounded-xl overflow-hidden">
               {[
                 {
                   step: "01",
@@ -402,14 +260,14 @@ export default async function HomePage() {
                   desc: "Browse, filter by remote, department, company, or search keywords. All jobs. One feed. No accounts needed.",
                 },
               ].map(({ step, title, desc }) => (
-                <div key={step} style={{ background: "var(--dark-surface)", padding: "36px 28px" }}>
-                  <div style={{ fontFamily: "'Space Grotesk', monospace", fontSize: 14, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.12em", marginBottom: 16 }}>
+                <div key={step} className="bg-[#0D1526] py-9 px-7">
+                  <div className={`${spaceGrotesk.className} text-sm font-bold text-[#6B5FE8] tracking-[0.12em] mb-4`}>
                     {step}
                   </div>
-                  <h3 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 18, fontWeight: 600, color: "var(--text-on-dark)", letterSpacing: "-0.02em", marginBottom: 12 }}>
+                  <h3 className={`${spaceGrotesk.className} text-lg font-semibold text-[#F1F5F9] tracking-[-0.02em] mb-3`}>
                     {title}
                   </h3>
-                  <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: "var(--text-muted-dark)", lineHeight: 1.7 }}>
+                  <p className="text-sm text-[#64748B] leading-[1.7]">
                     {desc}
                   </p>
                 </div>
@@ -419,18 +277,18 @@ export default async function HomePage() {
         </section>
 
         {/* ── Features ── */}
-        <section style={{ background: "var(--light)", padding: "80px 24px" }}>
-          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-            <div style={{ textAlign: "center", marginBottom: 56 }}>
-              <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: "clamp(28px, 4vw, 40px)", fontWeight: 700, color: "var(--text-on-light)", letterSpacing: "-0.025em", marginBottom: 16 }}>
+        <section className="bg-[#F8FAFC] px-6 py-20">
+          <div className="max-w-[1100px] mx-auto">
+            <div className="text-center mb-14">
+              <h2 className={`${spaceGrotesk.className} text-[clamp(28px,4vw,40px)] font-bold text-[#0F172A] tracking-[-0.025em] mb-4`}>
                 Built for job seekers
               </h2>
-              <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 17, color: "var(--text-muted-light)" }}>
+              <p className="text-[17px] text-[#475569]">
                 Everything you need to track AshbyHQ postings in one place.
               </p>
             </div>
 
-            <div className="features-grid" style={{ display: "grid", gap: 16 }}>
+            <div className="grid grid-cols-1 min-[481px]:grid-cols-2 min-[769px]:grid-cols-3 gap-4">
               {[
                 {
                   icon: (
@@ -489,18 +347,13 @@ export default async function HomePage() {
               ].map(({ icon, title, desc }) => (
                 <div
                   key={title}
-                  style={{
-                    background: "var(--light-surface)",
-                    border: "1px solid var(--light-border)",
-                    borderRadius: 10,
-                    padding: "28px 24px",
-                  }}
+                  className="bg-white border border-[#E2E8F0] rounded-[10px] py-7 px-6"
                 >
-                  <div style={{ color: "var(--accent)", marginBottom: 16, width: 48, height: 48, background: "rgba(71,59,206,0.08)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>{icon}</div>
-                  <h3 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 16, fontWeight: 600, color: "var(--text-on-light)", letterSpacing: "-0.015em", marginBottom: 8 }}>
+                  <div className="text-[#6B5FE8] mb-4 w-12 h-12 bg-[rgba(71,59,206,0.08)] rounded-[10px] flex items-center justify-center">{icon}</div>
+                  <h3 className={`${spaceGrotesk.className} text-base font-semibold text-[#0F172A] tracking-[-0.015em] mb-2`}>
                     {title}
                   </h3>
-                  <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: "var(--text-muted-light)", lineHeight: 1.65 }}>
+                  <p className="text-sm text-[#475569] leading-[1.65]">
                     {desc}
                   </p>
                 </div>
@@ -510,42 +363,29 @@ export default async function HomePage() {
         </section>
 
         {/* ── FAQ / AEO ── */}
-        <section style={{ background: "var(--light)", borderTop: "1px solid var(--light-border)", padding: "80px 24px" }}>
-          <div style={{ maxWidth: 720, margin: "0 auto" }}>
-            <div style={{ textAlign: "center", marginBottom: 48 }}>
-              <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: "clamp(26px, 4vw, 36px)", fontWeight: 700, color: "var(--text-on-light)", letterSpacing: "-0.025em", marginBottom: 12 }}>
+        <section className="bg-[#F8FAFC] border-t border-[#E2E8F0] px-6 py-20">
+          <div className="max-w-[720px] mx-auto">
+            <div className="text-center mb-12">
+              <h2 className={`${spaceGrotesk.className} text-[clamp(26px,4vw,36px)] font-bold text-[#0F172A] tracking-[-0.025em] mb-3`}>
                 Frequently asked questions
               </h2>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 0, borderRadius: 10, border: "1px solid var(--light-border)", overflow: "hidden" }}>
+            <div className="flex flex-col rounded-[10px] border border-[#E2E8F0] overflow-hidden">
               {FAQS.map((faq, i) => (
                 <details
                   key={i}
-                  style={{
-                    borderBottom: i < FAQS.length - 1 ? "1px solid var(--light-border)" : "none",
-                    background: "var(--light-surface)",
-                  }}
+                  className={`group bg-white ${i < FAQS.length - 1 ? "border-b border-[#E2E8F0]" : ""}`}
                 >
-                  <summary
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "20px 24px",
-                      cursor: "pointer",
-                      userSelect: "none",
-                      gap: 16,
-                    }}
-                  >
-                    <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 15, fontWeight: 600, color: "var(--text-on-light)", letterSpacing: "-0.01em" }}>
+                  <summary className="flex items-center justify-between py-5 px-6 cursor-pointer select-none gap-4 list-none [&::-webkit-details-marker]:hidden">
+                    <span className={`${spaceGrotesk.className} text-[15px] font-semibold text-[#0F172A] tracking-[-0.01em]`}>
                       {faq.q}
                     </span>
-                    <svg className="chevron" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ flexShrink: 0, color: "var(--text-muted-light)" }}>
+                    <svg className="w-4 h-4 shrink-0 text-[#475569] transition-transform duration-200 group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                     </svg>
                   </summary>
-                  <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 14, color: "var(--text-muted-light)", lineHeight: 1.75, padding: "0 24px 20px", margin: 0 }}>
+                  <p className="text-sm text-[#475569] leading-[1.75] px-6 pb-5 m-0">
                     {faq.a}
                   </p>
                 </details>
@@ -555,30 +395,17 @@ export default async function HomePage() {
         </section>
 
         {/* ── Final CTA ── */}
-        <section style={{ background: "var(--dark)", borderTop: "1px solid var(--dark-border)", padding: "80px 24px" }}>
-          <div style={{ maxWidth: 640, margin: "0 auto", textAlign: "center" }}>
-            <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: "clamp(28px, 5vw, 48px)", fontWeight: 700, color: "var(--text-on-dark)", letterSpacing: "-0.03em", marginBottom: 16 }}>
+        <section className="bg-[#080E1A] border-t border-[#1E2D45] px-6 py-20">
+          <div className="max-w-[640px] mx-auto text-center">
+            <h2 className={`${spaceGrotesk.className} text-[clamp(28px,5vw,48px)] font-bold text-[#F1F5F9] tracking-[-0.03em] mb-4`}>
               Start browsing now
             </h2>
-            <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 17, color: "var(--text-muted-dark)", marginBottom: 36, lineHeight: 1.65 }}>
+            <p className="text-[17px] text-[#64748B] mb-9 leading-[1.65]">
               {stats.total.toLocaleString()} jobs from {stats.companies}+ companies. No sign-up. No noise.
             </p>
             <Link
               href="/"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                background: "var(--accent)",
-                color: "#fff",
-                fontFamily: "'Space Grotesk', sans-serif",
-                fontSize: 16,
-                fontWeight: 600,
-                padding: "16px 40px",
-                borderRadius: 8,
-                textDecoration: "none",
-                letterSpacing: "-0.01em",
-              }}
+              className={`${spaceGrotesk.className} inline-flex items-center gap-2 bg-[#6B5FE8] text-white text-base font-semibold py-4 px-10 rounded-lg no-underline tracking-[-0.01em]`}
             >
               Browse {stats.total.toLocaleString()} jobs →
             </Link>
@@ -586,22 +413,22 @@ export default async function HomePage() {
         </section>
 
         {/* ── Footer ── */}
-        <footer style={{ background: "var(--dark)", borderTop: "1px solid var(--dark-border)", padding: "24px 24px" }}>
-          <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-            <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 14, color: "var(--text-on-dark)" }}>
-              Ashby<span style={{ color: "var(--accent)" }}>Tracker</span>
+        <footer className="bg-[#080E1A] border-t border-[#1E2D45] py-6 px-6">
+          <div className="max-w-[1200px] mx-auto flex justify-between items-center flex-wrap gap-3">
+            <span className={`${spaceGrotesk.className} font-bold text-sm text-[#F1F5F9]`}>
+              Ashby<span className="text-[#6B5FE8]">Tracker</span>
             </span>
-            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, color: "var(--text-muted-dark)" }}>
+            <span className="text-xs text-[#64748B]">
               Not affiliated with Ashby Inc., Lever Inc., or Greenhouse Software, Inc. · Job data from{" "}
-              <a href="https://api.ashbyhq.com/posting-api" style={{ color: "var(--text-muted-dark)", textDecoration: "underline" }} target="_blank" rel="noopener noreferrer">
+              <a href="https://api.ashbyhq.com/posting-api" className="text-[#64748B] underline" target="_blank" rel="noopener noreferrer">
                 AshbyHQ
               </a>
               ,{" "}
-              <a href="https://www.lever.co" style={{ color: "var(--text-muted-dark)", textDecoration: "underline" }} target="_blank" rel="noopener noreferrer">
+              <a href="https://www.lever.co" className="text-[#64748B] underline" target="_blank" rel="noopener noreferrer">
                 Lever
               </a>
               , &amp;{" "}
-              <a href="https://www.greenhouse.io" style={{ color: "var(--text-muted-dark)", textDecoration: "underline" }} target="_blank" rel="noopener noreferrer">
+              <a href="https://www.greenhouse.io" className="text-[#64748B] underline" target="_blank" rel="noopener noreferrer">
                 Greenhouse
               </a>{" "}
               public APIs

@@ -189,9 +189,9 @@ export default function AddCompanyForm() {
                   className={`h-8 px-3 rounded-md text-xs font-medium transition-colors cursor-pointer
                               disabled:opacity-60 disabled:cursor-not-allowed
                               ${source === s
-                                ? "bg-ink text-paper"
-                                : "border border-edge text-ink-secondary hover:border-edge-strong hover:text-ink"
-                              }`}
+                      ? "bg-ink text-paper"
+                      : "border border-edge text-ink-secondary hover:border-edge-strong hover:text-ink"
+                    }`}
                 >
                   {SOURCE_META[s].label}
                 </button>
@@ -229,9 +229,8 @@ export default function AddCompanyForm() {
               />
               {input.length > 0 && (
                 <span
-                  className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono ${
-                    isValid ? "text-positive" : "text-signal"
-                  }`}
+                  className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono ${isValid ? "text-positive" : "text-signal"
+                    }`}
                 >
                   {isValid ? slug : "invalid"}
                 </span>

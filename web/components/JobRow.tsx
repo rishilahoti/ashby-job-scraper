@@ -46,7 +46,7 @@ export default function JobRow({ job, index }: { job: JobWithScore; index: numbe
           )}
         </div>
         {job.matchedKeywords.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex flex-wrap gap-1 mt-1.5">
             {job.matchedKeywords.slice(0, 6).map((kw) => (
               <span
                 key={kw}

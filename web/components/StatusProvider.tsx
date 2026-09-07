@@ -28,7 +28,7 @@ interface StatusContextValue {
 const StatusContext = createContext<StatusContextValue>({
   statuses: {},
   getJobStatus: () => "new",
-  toggleStatus: () => {},
+  toggleStatus: () => { },
   appliedCount: 0,
   ignoredCount: 0,
 });

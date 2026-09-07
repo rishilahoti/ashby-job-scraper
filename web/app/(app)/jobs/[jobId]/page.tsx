@@ -77,15 +77,15 @@ export default async function JobDetailPage({
     }),
     ...(job.remote
       ? {
-          jobLocationType: "TELECOMMUTE",
-          applicantLocationRequirements: { "@type": "Country", name: "Anywhere" },
-        }
+        jobLocationType: "TELECOMMUTE",
+        applicantLocationRequirements: { "@type": "Country", name: "Anywhere" },
+      }
       : job.location && {
-          jobLocation: {
-            "@type": "Place",
-            address: { "@type": "PostalAddress", addressLocality: job.location },
-          },
-        }),
+        jobLocation: {
+          "@type": "Place",
+          address: { "@type": "PostalAddress", addressLocality: job.location },
+        },
+      }),
     // Only emit baseSalary when we have structured currency+value (Ashby/Lever
     // expose this; Greenhouse's public board API doesn't). A MonetaryAmount
     // missing those subfields is what GSC was flagging, so we still omit it
