@@ -44,6 +44,12 @@ export default async function FeedPage({
   const filters: JobFilters = {};
   if (sp.search) filters.search = sp.search;
   if (sp.company) filters.company = sp.company;
+  if (sp.source) {
+    filters.source = sp.source
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+  }
   if (sp.remote === "true") filters.remote = true;
   if (sp.minScore) filters.minScore = parseInt(sp.minScore, 10);
   if (sp.employmentType) filters.employmentType = sp.employmentType;

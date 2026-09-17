@@ -187,6 +187,10 @@ function filterSortPaginateInMemory(
     const target = filters.company.trim().toLowerCase();
     scored = scored.filter((j) => j.company?.trim().toLowerCase() === target);
   }
+  if (filters.source && filters.source.length > 0) {
+    const set = new Set(filters.source);
+    scored = scored.filter((j) => set.has(j.source));
+  }
   if (filters.remote !== undefined) scored = scored.filter((j) => j.remote === filters.remote);
   if (filters.employmentType) scored = scored.filter((j) => j.employmentType === filters.employmentType);
   if (filters.department) {
@@ -238,6 +242,10 @@ const getCachedJobsPage = unstable_cache(
   if (filters.company) {
     wheres.push(`LOWER(TRIM(company)) = LOWER(TRIM($${idx++}))`);
     params.push(filters.company);
+  }
+  if (filters.source && filters.source.length > 0) {
+    wheres.push(`source = ANY($${idx++}::text[])`);
+    params.push(filters.source);
   }
   if (filters.remote !== undefined) {
     wheres.push(`remote = $${idx++}`);

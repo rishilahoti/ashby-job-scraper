@@ -33,6 +33,7 @@ export interface JobWithScore extends Job {
 export interface JobFilters {
   search?: string;
   company?: string;
+  source?: string[];
   remote?: boolean;
   minScore?: number;
   employmentType?: string;

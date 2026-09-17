@@ -34,6 +34,10 @@ export default function Filters({
   const current = {
     search: searchParams.get("search") || "",
     company: searchParams.get("company") || "",
+    source: (searchParams.get("source") || "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
     remote: searchParams.get("remote") || "",
     employmentType: searchParams.get("employmentType") || "",
     department: searchParams.get("department") || "",
@@ -48,6 +52,7 @@ export default function Filters({
   const hasAnyFilter =
     current.search ||
     current.company ||
+    current.source.length > 0 ||
     current.remote ||
     current.employmentType ||
     current.department ||
@@ -73,6 +78,23 @@ export default function Filters({
     if (!tag) setTags([]);
     else setTags([tag.toLowerCase()]);
   };
+
+  const toggleSource = useCallback(
+    (source: string) => {
+      const next = current.source.includes(source)
+        ? current.source.filter((s) => s !== source)
+        : [...current.source, source];
+      const params = new URLSearchParams(searchParams.toString());
+      if (next.length > 0) {
+        params.set("source", next.join(","));
+      } else {
+        params.delete("source");
+      }
+      params.delete("page");
+      router.push(`?${params.toString()}`);
+    },
+    [router, searchParams, current.source],
+  );
 
   return (
     <div
@@ -101,6 +123,28 @@ export default function Filters({
           <option key={c} value={c}>{c}</option>
         ))}
       </select>
+
+      {/* Source — multi-select toggle buttons */}
+      <div className="flex items-center gap-1">
+        {[
+          { value: "ashby", label: "Ashby" },
+          { value: "greenhouse", label: "Greenhouse" },
+          { value: "lever", label: "Lever" },
+        ].map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => toggleSource(value)}
+            aria-pressed={current.source.includes(value)}
+            className={`h-8 px-3 text-xs font-mono rounded-md border transition-colors cursor-pointer
+              ${current.source.includes(value)
+                ? "bg-ink text-paper border-ink"
+                : "bg-surface border-edge text-ink-secondary hover:border-edge-strong"
+              }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       {/* Department */}
       <select

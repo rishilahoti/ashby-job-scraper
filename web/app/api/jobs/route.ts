@@ -9,6 +9,7 @@ import {
 import { POSITIVE_TAG_OPTIONS } from '@/lib/scoring';
 import type { JobFilters } from '@/lib/types';
 
+const SOURCES = new Set(['ashby', 'greenhouse', 'lever']);
 const EMPLOYMENT_TYPES = new Set([
 	'FullTime',
 	'Intern',
@@ -102,6 +103,19 @@ export async function GET(request: NextRequest) {
 				);
 			}
 			filters.company = canonicalCompany;
+		}
+
+		const sourceParam = sp.get('source');
+		if (sourceParam) {
+			const sources = [
+				...new Set(
+					sourceParam
+						.split(',')
+						.map((s) => s.trim().toLowerCase())
+						.filter((s) => SOURCES.has(s))
+				),
+			];
+			if (sources.length > 0) filters.source = sources;
 		}
 
 		if (sp.get('remote') === 'true') filters.remote = true;
