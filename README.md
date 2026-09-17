@@ -5,7 +5,7 @@ A production-grade system that scrapes public job listings across **Ashby, Lever
 ## Features
 
 - **Multi-ATS** — Ashby, Lever, and Greenhouse job boards in one feed, via per-source fetch/normalize adapters
-- **Self-growing registry** — Weekly crawl-based discovery (Common Crawl CDX API) finds new Ashby/Greenhouse company boards, verifies each against the live API, and adds it automatically — no manual JSON editing required
+- **Self-growing registry** — Daily crawl-based discovery (Common Crawl CDX API) finds new Ashby/Greenhouse company boards, verifies each against the live API, and adds it automatically — no manual JSON editing required
 - **Self-Service Company Addition** — Paste any Ashby, Lever, or Greenhouse job board URL in the frontend to add and scrape a new company in real time
 - **Automated Scraping** — Runs its own cron (default daily) inside the scraper container (no external scheduler needed)
 - **Change Detection** — Tracks new, updated, and removed postings via content hashing
@@ -94,7 +94,7 @@ node index.js discover --source greenhouse
 node index.js discover --source ashby --dry-run   # preview without writing
 ```
 
-Runs weekly via `.github/workflows/discover.yml`. Lever isn't included here — it blocks Common Crawl's bot in its own `robots.txt`, so there's no free crawl index to query for it; new Lever companies currently need a manual `site:jobs.lever.co` search-engine query and a CLI `add`.
+Runs daily via `.github/workflows/discover.yml`. Lever isn't included here — it blocks Common Crawl's bot in its own `robots.txt`, so there's no free crawl index to query for it; new Lever companies currently need a manual `site:jobs.lever.co` search-engine query and a CLI `add`.
 
 ### Via the Web UI
 
@@ -150,7 +150,7 @@ Intelligence rules (keyword weights, preferred locations, etc.) are in `src/conf
 │   └── migrate-from-neon.sh  One-off pg_dump/psql migration into the db container
 ├── .github/workflows/
 │   ├── build-images.yml    Builds + pushes the scraper image to GHCR (on push to main)
-│   └── discover.yml        Scheduled Ashby/Greenhouse discovery (weekly)
+│   └── discover.yml        Scheduled Ashby/Greenhouse discovery (daily)
 ├── src/
 │   ├── config/             Environment + rules.json + per-source fetch config
 │   ├── scheduler/          Cron + pipeline orchestration

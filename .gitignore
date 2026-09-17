@@ -7,3 +7,4 @@ reports/
 *.db-journal
 md
 .cursor
+graphify-out/

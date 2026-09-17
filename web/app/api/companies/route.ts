@@ -255,21 +255,38 @@ async function fetchGreenhouse(slug: string): Promise<FetchResult> {
 
 const SOURCE_CONFIG: Record<
   Source,
-  { fetch: (slug: string) => Promise<FetchResult>; normalize: (raw: unknown) => NormalizedJob | null; boardUrl: (slug: string) => string }
+  {
+    fetch: (slug: string) => Promise<FetchResult>;
+    normalize: (raw: unknown) => NormalizedJob | null;
+    // Field list must mirror the matching src/normalize/adapters/*.js hash exactly —
+    // scheduler-scraped rows and web-added rows must hash the same job the same way,
+    // or the next scheduled re-scrape reports every job as falsely "updated".
+    hash: (raw: unknown, job: NormalizedJob) => string;
+    boardUrl: (slug: string) => string;
+  }
 > = {
   ashby: {
     fetch: fetchAshby,
     normalize: (raw) => normalizeAshbyJob(raw as AshbyJob),
+    hash: (raw, job) => {
+      const r = raw as AshbyJob;
+      return contentHash(r.title, r.location, job.description, r.employmentType, String(Boolean(r.isRemote)), r.team, r.department);
+    },
     boardUrl: (slug) => `https://jobs.ashbyhq.com/${slug}`,
   },
   lever: {
     fetch: fetchLever,
     normalize: (raw) => normalizeLeverJob(raw as LeverJob),
+    hash: (raw, job) => {
+      const categories = (raw as LeverJob).categories || {};
+      return contentHash((raw as LeverJob).text, categories.location, job.description, categories.commitment, String(job.remote), categories.team, categories.department);
+    },
     boardUrl: (slug) => `https://jobs.lever.co/${slug}`,
   },
   greenhouse: {
     fetch: fetchGreenhouse,
     normalize: (raw) => normalizeGreenhouseJob(raw as GreenhouseJob),
+    hash: (raw, job) => contentHash((raw as GreenhouseJob).title, job.location, job.description, String(job.remote)),
     boardUrl: (slug) => `https://job-boards.greenhouse.io/${slug}`,
   },
 };
@@ -343,21 +360,15 @@ export async function POST(request: NextRequest) {
     let updated = 0;
     let unchanged = 0;
     let total = 0;
+    const seenJobIds: string[] = [];
 
     for (const raw of result.jobs) {
       const job = sourceConfig.normalize(raw);
       if (!job) continue;
       total++;
+      seenJobIds.push(job.jobId);
 
-      const hash = contentHash(
-        job.title,
-        job.location,
-        job.description,
-        job.employmentType,
-        String(job.remote),
-        job.team,
-        job.department
-      );
+      const hash = sourceConfig.hash(raw, job);
 
       const { rows } = await query(
         `INSERT INTO jobs (
@@ -419,13 +430,28 @@ export async function POST(request: NextRequest) {
       else updated++;
     }
 
+    // Mirrors src/store/jobs.js markRemovedJobs — without this, a job pulled from a
+    // company here and never revisited manually stays is_active=TRUE until the
+    // scheduler happens to re-scrape it (last_scraped_at was just bumped above, so
+    // that can be delayed indefinitely by repeat manual adds).
+    let removed = 0;
+    if (seenJobIds.length > 0) {
+      const { rowCount } = await query(
+        `UPDATE jobs SET is_active = FALSE, updated_at = NOW()
+         WHERE company = $1 AND source = $2 AND is_active = TRUE
+           AND job_id != ALL($3::text[])`,
+        [companyNameForJobs, source, seenJobIds]
+      );
+      removed = rowCount ?? 0;
+    }
+
     return NextResponse.json({
       success: true,
       company: companyNameForJobs,
       slug,
       source,
       alreadyExisted: alreadyExists,
-      jobs: { total, inserted, updated, unchanged },
+      jobs: { total, inserted, updated, unchanged, removed },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

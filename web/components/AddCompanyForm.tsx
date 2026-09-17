@@ -11,7 +11,7 @@ interface Result {
   slug: string;
   source: Source;
   alreadyExisted: boolean;
-  jobs: { total: number; inserted: number; updated: number; unchanged: number };
+  jobs: { total: number; inserted: number; updated: number; unchanged: number; removed: number };
 }
 
 const SOURCE_META: Record<Source, { label: string; domain: string; placeholder: string }> = {
@@ -151,6 +151,9 @@ export default function AddCompanyForm() {
                 )}
                 {result.jobs.unchanged > 0 && (
                   <span>{result.jobs.unchanged} unchanged</span>
+                )}
+                {result.jobs.removed > 0 && (
+                  <span>{result.jobs.removed} removed</span>
                 )}
               </div>
               <div className="mt-4 flex items-center gap-3">
