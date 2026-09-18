@@ -44,12 +44,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const stored = loadStoredTheme();
-    setThemeState(stored);
-    const res = getResolvedTheme(stored);
-    setResolved(res);
-    document.documentElement.classList.remove("light", "dark");
-    document.documentElement.classList.add(res);
+    Promise.resolve().then(() => {
+      const stored = loadStoredTheme();
+      setThemeState(stored);
+      const res = getResolvedTheme(stored);
+      setResolved(res);
+      document.documentElement.classList.remove("light", "dark");
+      document.documentElement.classList.add(res);
+    });
   }, []);
 
   useEffect(() => {

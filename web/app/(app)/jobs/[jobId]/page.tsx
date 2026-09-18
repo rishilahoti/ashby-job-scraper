@@ -70,6 +70,11 @@ export default async function JobDetailPage({
     Temporary: "TEMPORARY",
   };
 
+  // Server Component, renders once per request (no client re-render/memoization to
+  // break); Date.now() here is just the "no publishedAt" fallback for validThrough.
+  // eslint-disable-next-line react-hooks/purity
+  const publishedAtMs = job.publishedAt ? new Date(job.publishedAt).getTime() : Date.now();
+
   const jobSchema: Record<string, unknown> = {
     "@context": "https://schema.org",
     "@type": "JobPosting",
@@ -78,9 +83,9 @@ export default async function JobDetailPage({
     identifier: { "@type": "PropertyValue", name: job.company, value: job.jobId },
     hiringOrganization: { "@type": "Organization", name: job.company },
     datePosted: job.publishedAt ? new Date(job.publishedAt).toISOString().slice(0, 10) : undefined,
-    validThrough: new Date(
-      (job.publishedAt ? new Date(job.publishedAt).getTime() : Date.now()) + 45 * 24 * 60 * 60 * 1000
-    ).toISOString().slice(0, 10),
+    validThrough: new Date(publishedAtMs + 45 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10),
     directApply: true,
     url: `${siteUrl}/jobs/${job.jobId}`,
     ...(job.employmentType && {

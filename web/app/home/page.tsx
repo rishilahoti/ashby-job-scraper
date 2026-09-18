@@ -13,9 +13,10 @@ const dmSans = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const stats = await getStats();
+  const [stats, companies] = await Promise.all([getStats(), getCompanies()]);
+  const examples = activeFeaturedCompanies(companies).slice(0, 6).join(", ");
   const title = "Ashby Jobs — Every Job from Ashby, Lever & Greenhouse Companies";
-  const description = `Find ${stats.total.toLocaleString()} active jobs from ${stats.companies}+ tech startups on AshbyHQ, Lever, and Greenhouse. OpenAI, Figma, Anthropic, Linear, Cursor, Vercel and 130+ more — all in one place. Updated daily.`;
+  const description = `Find ${stats.total.toLocaleString()} active jobs from ${stats.companies}+ tech startups on AshbyHQ, Lever, and Greenhouse. ${examples} and more — all in one place. Updated daily.`;
   return {
     title: { absolute: title },
     description,
@@ -35,6 +36,8 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+// Recognizable-brand shortlist for marketing copy — filtered against real
+// active companies below so we never name-drop one with zero live postings.
 const FEATURED_COMPANIES = [
   "OpenAI", "Figma", "Anthropic", "Linear", "Cursor", "Vercel",
   "Perplexity", "Notion", "Ramp", "Brex", "Scale AI", "Reddit",
@@ -43,10 +46,23 @@ const FEATURED_COMPANIES = [
   "Docker", "Benchling", "WorkOS", "Confluent", "Airwallex", "Crusoe",
 ];
 
-const FAQS = [
+function activeFeaturedCompanies(activeCompanies: string[]): string[] {
+  const activeSet = new Set(activeCompanies.map((c) => c.toLowerCase()));
+  return FEATURED_COMPANIES.filter((c) => activeSet.has(c.toLowerCase()));
+}
+
+function buildFaqs(companyCount: number, examples: string[]): typeof FAQS_BASE {
+  const exampleList = examples.slice(0, 8).join(", ");
+  return FAQS_BASE.map((faq) => ({
+    ...faq,
+    a: faq.a.replace("{{examples}}", exampleList).replace("{{count}}", `${companyCount}+`),
+  }));
+}
+
+const FAQS_BASE = [
   {
     q: "What is AshbyHQ?",
-    a: "AshbyHQ (Ashby) is a modern applicant tracking system used by leading tech startups. Companies like OpenAI, Figma, Anthropic, and 130+ others use Ashby to manage hiring and post public job listings via its job board API.",
+    a: "AshbyHQ (Ashby) is a modern applicant tracking system used by leading tech startups. Companies like {{examples}} and {{count}} others use Ashby to manage hiring and post public job listings via its job board API.",
   },
   {
     q: "What is Lever (lever.co)?",
@@ -62,7 +78,7 @@ const FAQS = [
   },
   {
     q: "Which companies use Ashby for hiring?",
-    a: "135+ top tech companies post jobs on AshbyHQ including OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, Perplexity, Notion, Ramp, Brex, Scale AI, Reddit, Shopify, Plaid, Airtable, Retool, Supabase, PostHog, Replit, Mercury, and many more.",
+    a: "{{count}} top tech companies post jobs on AshbyHQ including {{examples}}, and many more.",
   },
   {
     q: "How do I find all jobs posted on AshbyHQ, Lever, and Greenhouse?",
@@ -81,7 +97,9 @@ const FAQS = [
 export default async function HomePage() {
   const [stats, companies] = await Promise.all([getStats(), getCompanies()]);
 
-  const marqueeCompanies = [...FEATURED_COMPANIES, ...FEATURED_COMPANIES];
+  const activeFeatured = activeFeaturedCompanies(companies);
+  const marqueeCompanies = [...activeFeatured, ...activeFeatured];
+  const faqs = buildFaqs(stats.companies, activeFeatured);
 
   const websiteSchema = {
     "@context": "https://schema.org",
@@ -99,7 +117,7 @@ export default async function HomePage() {
   const faqSchema = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
-    mainEntity: FAQS.map((f) => ({
+    mainEntity: faqs.map((f) => ({
       "@type": "Question",
       name: f.q,
       acceptedAnswer: { "@type": "Answer", text: f.a },
@@ -198,8 +216,8 @@ export default async function HomePage() {
             {[
               { n: stats.total.toLocaleString(), label: "Active jobs" },
               { n: `${stats.companies}+`, label: "Companies tracked" },
-              { n: "135+", label: "Ashby, Lever & Greenhouse boards" },
-              { n: "3d", label: "Refresh cycle" },
+              { n: `${stats.companies}+`, label: "Ashby, Lever & Greenhouse boards" },
+              { n: "1D", label: "Refresh cycle" },
             ].map(({ n, label }) => (
               <div key={label} className="text-center">
                 <div className={`${spaceGrotesk.className} tabular-nums tracking-[-0.03em] text-[22px] font-bold text-[#F1F5F9]`}>{n}</div>
@@ -247,7 +265,7 @@ export default async function HomePage() {
                 {
                   step: "01",
                   title: "Companies post on Ashby, Lever, or Greenhouse",
-                  desc: "135+ top tech startups use AshbyHQ, Lever, or Greenhouse as their applicant tracking system and publish public job boards.",
+                  desc: `${stats.companies}+ top tech startups use AshbyHQ, Lever, or Greenhouse as their applicant tracking system and publish public job boards.`,
                 },
                 {
                   step: "02",
@@ -306,7 +324,7 @@ export default async function HomePage() {
                     </svg>
                   ),
                   title: "Remote filter",
-                  desc: "One click to show only remote-friendly roles across all 135+ companies.",
+                  desc: `One click to show only remote-friendly roles across all ${stats.companies}+ companies.`,
                 },
                 {
                   icon: (
@@ -314,8 +332,8 @@ export default async function HomePage() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                     </svg>
                   ),
-                  title: "135+ companies",
-                  desc: "OpenAI, Figma, Anthropic, Vercel, Linear, Cursor, Perplexity — all in one feed.",
+                  title: `${stats.companies}+ companies`,
+                  desc: `${activeFeatured.slice(0, 6).join(", ")} — all in one feed.`,
                 },
                 {
                   icon: (
@@ -372,10 +390,10 @@ export default async function HomePage() {
             </div>
 
             <div className="flex flex-col rounded-[10px] border border-[#E2E8F0] overflow-hidden">
-              {FAQS.map((faq, i) => (
+              {faqs.map((faq, i) => (
                 <details
                   key={i}
-                  className={`group bg-white ${i < FAQS.length - 1 ? "border-b border-[#E2E8F0]" : ""}`}
+                  className={`group bg-white ${i < faqs.length - 1 ? "border-b border-[#E2E8F0]" : ""}`}
                 >
                   <summary className="flex items-center justify-between py-5! px-6! cursor-pointer select-none gap-4 list-none [&::-webkit-details-marker]:hidden">
                     <span className={`${spaceGrotesk.className} text-[15px] font-semibold text-[#0F172A] tracking-[-0.01em]`}>

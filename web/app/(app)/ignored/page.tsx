@@ -20,8 +20,10 @@ export default function IgnoredPage() {
 
   useEffect(() => {
     if (ignoredIds.length === 0) {
-      setJobs([]);
-      setLoading(false);
+      Promise.resolve().then(() => {
+        setJobs([]);
+        setLoading(false);
+      });
       return;
     }
 

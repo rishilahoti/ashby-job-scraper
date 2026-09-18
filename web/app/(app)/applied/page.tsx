@@ -20,8 +20,10 @@ export default function AppliedPage() {
 
   useEffect(() => {
     if (appliedIds.length === 0) {
-      setJobs([]);
-      setLoading(false);
+      Promise.resolve().then(() => {
+        setJobs([]);
+        setLoading(false);
+      });
       return;
     }
 

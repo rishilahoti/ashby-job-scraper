@@ -42,8 +42,10 @@ export default function StatusProvider({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setStatuses(loadStatuses());
-    setMounted(true);
+    Promise.resolve().then(() => {
+      setStatuses(loadStatuses());
+      setMounted(true);
+    });
   }, []);
 
   const getJobStatus = useCallback(
