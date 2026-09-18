@@ -1,5 +1,5 @@
 const { contentHash } = require('../../utils');
-const { sanitizeDescription, decodeHtmlEntities } = require('../shared');
+const { sanitizeDescription, decodeHtmlEntities, sanitizeUrl } = require('../shared');
 
 function normalizeJob(raw, company) {
   const jobId = raw.id != null ? String(raw.id) : null;
@@ -25,8 +25,8 @@ function normalizeJob(raw, company) {
     employmentType: null,
     remote,
     description,
-    applyUrl: raw.absolute_url || '',
-    jobUrl: raw.absolute_url || '',
+    applyUrl: sanitizeUrl(raw.absolute_url),
+    jobUrl: sanitizeUrl(raw.absolute_url),
     publishedAt,
     scrapedAt: new Date().toISOString(),
     compensationSummary: null,

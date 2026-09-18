@@ -71,13 +71,9 @@ export default function AddCompanyForm() {
       try {
         setPhase("scraping");
 
-        const apiHeaders: Record<string, string> = { "Content-Type": "application/json" };
-        const apiSecret = process.env.NEXT_PUBLIC_API_SECRET;
-        if (apiSecret) apiHeaders["Authorization"] = `Bearer ${apiSecret}`;
-
         const res = await fetch("/api/companies", {
           method: "POST",
-          headers: apiHeaders,
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ slug, source: effectiveSource }),
           signal: controller.signal,
         });

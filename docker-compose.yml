@@ -9,7 +9,7 @@ services:
     command: ["postgres", "-c", "shared_buffers=128MB", "-c", "max_connections=50",
               "-c", "ssl=on", "-c", "ssl_cert_file=/certs/server.crt", "-c", "ssl_key_file=/certs/server.key"]
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./certs:/certs:ro

@@ -34,4 +34,16 @@ function normalizeSalaryInterval(raw) {
   return null;
 }
 
-module.exports = { sanitizeDescription, decodeHtmlEntities, normalizeSalaryInterval };
+// ATS fields are free text on their end — reject anything but http(s) so a
+// malicious `javascript:` URL never reaches a rendered <a href>.
+function sanitizeUrl(url) {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? url : '';
+  } catch {
+    return '';
+  }
+}
+
+module.exports = { sanitizeDescription, decodeHtmlEntities, normalizeSalaryInterval, sanitizeUrl };

@@ -10,6 +10,17 @@ export const revalidate = 600;
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.vercel.app";
 
+// Defense in depth for rows scraped before the ingestion-side URL sanitization
+// existed — only http(s) may ever reach an <a href>, never `javascript:`.
+function safeHref(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? url : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -181,14 +192,16 @@ export default async function JobDetailPage({
 
       {/* Actions */}
       <div className="flex items-center justify-start gap-2.5 mb-8 pb-6 border-b border-edge">
-        <a
-          href={job.applyUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center justify-center gap-1.5 h-9 px-5 bg-signal text-white text-sm font-medium rounded-md hover:bg-signal-muted transition-colors"
-        >
-          Apply &rarr;
-        </a>
+        {safeHref(job.applyUrl) && (
+          <a
+            href={safeHref(job.applyUrl)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-1.5 h-9 px-5 bg-signal text-white text-sm font-medium rounded-md hover:bg-signal-muted transition-colors"
+          >
+            Apply &rarr;
+          </a>
+        )}
         <StatusButton jobId={job.jobId} targetStatus="applied" label="Mark Applied" />
         <StatusButton jobId={job.jobId} targetStatus="ignored" label="Ignore" />
       </div>

@@ -7,7 +7,7 @@ function getDbPool(): Pool {
   const url = (process.env.DATABASE_URL || "").trim();
   pool = new Pool({
     connectionString: url,
-    ssl: url.includes("sslmode=require") ? { rejectUnauthorized: false } : false,
+    ssl: url.includes("sslmode=require") ? { rejectUnauthorized: true } : false,
     max: 3,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,

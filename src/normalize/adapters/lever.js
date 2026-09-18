@@ -1,5 +1,5 @@
 const { contentHash } = require('../../utils');
-const { normalizeSalaryInterval } = require('../shared');
+const { normalizeSalaryInterval, sanitizeUrl } = require('../shared');
 
 function formatSalaryRange(salaryRange) {
   if (!salaryRange || (salaryRange.min == null && salaryRange.max == null)) return null;
@@ -33,8 +33,8 @@ function normalizeJob(raw, company) {
     employmentType: categories.commitment || null,
     remote,
     description,
-    applyUrl: raw.applyUrl || raw.hostedUrl || '',
-    jobUrl: raw.hostedUrl || raw.applyUrl || '',
+    applyUrl: sanitizeUrl(raw.applyUrl || raw.hostedUrl),
+    jobUrl: sanitizeUrl(raw.hostedUrl || raw.applyUrl),
     publishedAt,
     scrapedAt: new Date().toISOString(),
     compensationSummary: formatSalaryRange(raw.salaryRange),

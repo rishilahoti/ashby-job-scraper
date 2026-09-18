@@ -12,13 +12,6 @@ const HEADERS = {
   "Accept-Language": "en-US,en;q=0.9",
 };
 
-function checkAuth(request: NextRequest): boolean {
-  const secret = process.env.API_SECRET;
-  if (!secret) return false; // fail closed if the secret isn't configured
-  const header = request.headers.get("authorization") ?? "";
-  return header === `Bearer ${secret}`;
-}
-
 const URL_PATTERNS: Record<Source, RegExp> = {
   ashby: /(?:https?:\/\/)?jobs\.ashbyhq\.com\/([a-zA-Z0-9_-]+)/,
   lever: /(?:https?:\/\/)?jobs\.lever\.co\/([a-zA-Z0-9_-]+)/,
@@ -44,6 +37,18 @@ function extractSlugAndSource(
   }
 
   return null;
+}
+
+// ATS fields are free text on their end — reject anything but http(s) so a
+// malicious `javascript:` URL never reaches a rendered <a href>.
+function sanitizeUrl(url: string | null | undefined): string {
+  if (!url) return "";
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? url : "";
+  } catch {
+    return "";
+  }
 }
 
 function contentHash(...fields: (string | null | undefined)[]): string {
@@ -166,8 +171,8 @@ function normalizeAshbyJob(raw: AshbyJob): NormalizedJob | null {
     employmentType: raw.employmentType || null,
     remote: Boolean(raw.isRemote),
     description,
-    applyUrl: raw.applyUrl || "",
-    jobUrl: raw.jobUrl || "",
+    applyUrl: sanitizeUrl(raw.applyUrl),
+    jobUrl: sanitizeUrl(raw.jobUrl),
     publishedAt: safeDate(raw.publishedAt),
     compensationSummary:
       raw.compensation?.compensationTierSummary ||
@@ -188,8 +193,8 @@ function normalizeLeverJob(raw: LeverJob): NormalizedJob | null {
     employmentType: categories.commitment || null,
     remote: raw.workplaceType === "remote",
     description: raw.descriptionPlain || "",
-    applyUrl: raw.applyUrl || raw.hostedUrl || "",
-    jobUrl: raw.hostedUrl || raw.applyUrl || "",
+    applyUrl: sanitizeUrl(raw.applyUrl || raw.hostedUrl),
+    jobUrl: sanitizeUrl(raw.hostedUrl || raw.applyUrl),
     publishedAt: safeDate(raw.createdAt),
     compensationSummary: formatSalaryRange(raw.salaryRange),
   };
@@ -207,8 +212,8 @@ function normalizeGreenhouseJob(raw: GreenhouseJob): NormalizedJob | null {
     employmentType: null,
     remote: /remote/i.test(location),
     description: htmlToPlainText(raw.content),
-    applyUrl: raw.absolute_url || "",
-    jobUrl: raw.absolute_url || "",
+    applyUrl: sanitizeUrl(raw.absolute_url),
+    jobUrl: sanitizeUrl(raw.absolute_url),
     publishedAt: safeDate(raw.first_published || raw.updated_at),
     compensationSummary: null,
   };
@@ -292,10 +297,6 @@ const SOURCE_CONFIG: Record<
 };
 
 export async function POST(request: NextRequest) {
-  if (!checkAuth(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
     const body = await request.json();
     const rawInput: string = body.url || body.slug || "";
