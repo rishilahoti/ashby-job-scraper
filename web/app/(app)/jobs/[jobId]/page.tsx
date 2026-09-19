@@ -52,6 +52,13 @@ export async function generateMetadata({
   };
 }
 
+// JobPosting schema requires validThrough; ATS sources don't expose a real
+// expiry, so we estimate one 45 days out from the best date we have.
+function estimateValidThrough(publishedAt: string): string {
+  const anchorMs = publishedAt ? new Date(publishedAt).getTime() : Date.now();
+  return new Date(anchorMs + 45 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 export default async function JobDetailPage({
   params,
 }: {
@@ -70,11 +77,6 @@ export default async function JobDetailPage({
     Temporary: "TEMPORARY",
   };
 
-  // Server Component, renders once per request (no client re-render/memoization to
-  // break); Date.now() here is just the "no publishedAt" fallback for validThrough.
-  // eslint-disable-next-line react-hooks/purity
-  const publishedAtMs = job.publishedAt ? new Date(job.publishedAt).getTime() : Date.now();
-
   const jobSchema: Record<string, unknown> = {
     "@context": "https://schema.org",
     "@type": "JobPosting",
@@ -83,9 +85,7 @@ export default async function JobDetailPage({
     identifier: { "@type": "PropertyValue", name: job.company, value: job.jobId },
     hiringOrganization: { "@type": "Organization", name: job.company },
     datePosted: job.publishedAt ? new Date(job.publishedAt).toISOString().slice(0, 10) : undefined,
-    validThrough: new Date(publishedAtMs + 45 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 10),
+    validThrough: estimateValidThrough(job.publishedAt),
     directApply: true,
     url: `${siteUrl}/jobs/${job.jobId}`,
     ...(job.employmentType && {

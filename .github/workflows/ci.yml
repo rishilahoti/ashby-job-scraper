@@ -12,6 +12,24 @@ permissions:
 jobs:
   scraper:
     runs-on: ubuntu-latest
+    services:
+      # test/db.test.js runs real queries against the configured database — a
+      # genuine ephemeral Postgres here, not a mock, so that test stays honest.
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
