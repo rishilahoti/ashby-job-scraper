@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { getJobs, getCompanies, getStats, getDepartments, getLocations } from "@/lib/query";
 import { POSITIVE_TAG_OPTIONS } from "@/lib/scoring";
+import { PROVIDER_NAMES } from "@/lib/providers";
 import type { JobFilters } from "@/lib/types";
 import JobList from "@/components/JobList";
 import Filters from "@/components/Filters";
@@ -10,11 +11,12 @@ import Pagination from "@/components/Pagination";
 export const revalidate = 300;
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.vercel.app";
+const providerList = PROVIDER_NAMES.join(", ");
 
 export async function generateMetadata(): Promise<Metadata> {
   const stats = await getStats();
-  const title = `Browse ${stats.total.toLocaleString()} Tech Startup Jobs on Ashby, Lever & Greenhouse`;
-  const description = `Discover ${stats.total.toLocaleString()} active job listings from ${stats.companies}+ top tech startups on AshbyHQ, Lever, and Greenhouse — OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, and more. Filter by remote, department, and company. Updated daily.`;
+  const title = `Browse ${stats.total.toLocaleString()} Tech Startup Jobs on Ashby, Greenhouse, Lever & More`;
+  const description = `Discover ${stats.total.toLocaleString()} active job listings from ${stats.companies}+ top tech startups across ${providerList} — OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, and more. Filter by remote, department, and company. Updated daily.`;
   return {
     title: { absolute: title },
     description,
@@ -80,7 +82,7 @@ export default async function FeedPage({
     "@type": "WebSite",
     name: "Ashby Jobs",
     url: siteUrl,
-    description: `Browse ${stats.total.toLocaleString()} active job listings from ${stats.companies}+ top tech startups on AshbyHQ, Lever, and Greenhouse.`,
+    description: `Browse ${stats.total.toLocaleString()} active job listings from ${stats.companies}+ top tech startups across ${providerList}.`,
     potentialAction: {
       "@type": "SearchAction",
       target: { "@type": "EntryPoint", urlTemplate: `${siteUrl}/?search={search_term_string}` },

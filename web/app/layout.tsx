@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { PROVIDER_NAMES } from "@/lib/providers";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.vercel.app";
+const providerList = PROVIDER_NAMES.join(", ");
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -11,11 +13,11 @@ export const metadata: Metadata = {
     google: "P2_1zWxkE0R-QmgUGw4dGpmHqVlIO0X-SaoFDdH-ciM",
   },
   title: {
-    default: "Ashby Jobs — Browse Ashby, Lever & Greenhouse Job Listings",
+    default: "Ashby Jobs — Browse Ashby, Greenhouse, Lever & More Job Listings",
     template: "%s | Ashby Jobs",
   },
   description:
-    "Browse and track job listings from top tech startups on AshbyHQ, Lever (lever.co), and Greenhouse. Find remote engineering, product, and design roles from companies like OpenAI, Figma, Anthropic, Linear, Cursor, and more. Updated daily.",
+    `Browse and track job listings from top tech startups across ${providerList} — all in one place. Find remote engineering, product, and design roles from companies like OpenAI, Figma, Anthropic, Linear, Cursor, and more. Updated daily.`,
   keywords: [
     "ashby hq jobs",
     "ashby jobs board",
@@ -26,6 +28,11 @@ export const metadata: Metadata = {
     "greenhouse jobs",
     "greenhouse.io jobs",
     "greenhouse job board",
+    "workable jobs",
+    "recruitee jobs",
+    "teamtailor jobs",
+    "pinpoint ats jobs",
+    "smartrecruiters jobs",
     "ashby lever greenhouse jobs",
     "tech startup jobs",
     "remote tech jobs",
@@ -41,15 +48,15 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     siteName: "Ashby Jobs",
-    title: "Ashby Jobs — Browse Ashby, Lever & Greenhouse Job Listings",
+    title: "Ashby Jobs — Browse Ashby, Greenhouse, Lever & More Job Listings",
     description:
-      "Browse job listings from top tech startups on AshbyHQ, Lever, and Greenhouse. Find remote engineering, product, and design roles. Updated daily.",
+      `Browse job listings from top tech startups across ${providerList}. Find remote engineering, product, and design roles. Updated daily.`,
   },
   twitter: {
     card: "summary_large_image",
-    title: "Ashby Jobs — Browse Ashby, Lever & Greenhouse Job Listings",
+    title: "Ashby Jobs — Browse Ashby, Greenhouse, Lever & More Job Listings",
     description:
-      "Browse job listings from top tech startups on AshbyHQ, Lever, and Greenhouse. Updated daily.",
+      `Browse job listings from top tech startups across ${providerList}. Updated daily.`,
   },
   robots: {
     index: true,

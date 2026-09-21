@@ -3,13 +3,21 @@ const { fetchJobBoard } = require('../fetch');
 const { loadRegistry } = require('../sources');
 const store = require('../store');
 
-// Ashby and Greenhouse's hosted job-board domains are indexed by Common Crawl
-// (free, no API key) — Lever explicitly blocks CCBot in robots.txt, so it has
-// no free crawl index to query and isn't supported here. Use search-engine
-// `site:jobs.lever.co` queries for that one instead.
+// Domains here share one hosted job-board domain with a path-based company slug
+// (jobs.ashbyhq.com/{slug}), which is what fetchCandidateSlugs()'s path-segment
+// extraction assumes — confirmed indexed by Common Crawl and CCBot-permitted in
+// robots.txt for all four. Lever explicitly blocks CCBot in robots.txt, so it has
+// no free crawl index to query and isn't supported here (use search-engine
+// `site:jobs.lever.co` queries for that one instead). Recruitee/Teamtailor/Pinpoint
+// use a per-company SUBDOMAIN instead of a path slug (company.recruitee.com) —
+// that needs hostname-based extraction, not the path-based logic below, so they
+// aren't wired into auto-discovery yet even though manual "+Add" already works
+// for them.
 const CDX_DOMAINS = {
   ashby: 'jobs.ashbyhq.com',
   greenhouse: 'job-boards.greenhouse.io',
+  workable: 'apply.workable.com',
+  smartrecruiters: 'jobs.smartrecruiters.com',
 };
 
 // Paths on jobs.ashbyhq.com that are Ashby app routes, not company slugs (see its robots.txt).
@@ -20,6 +28,11 @@ const ASHBY_RESERVED_PATHS = new Set(['meeting', 'b', 'api']);
 // into garbage (stray punctuation from a query string bleeding into the path); reject
 // those before ever hitting the live API with them.
 const SLUG_REGEX = /^[a-zA-Z0-9_-]+$/;
+
+// SmartRecruiters company identifiers are case-sensitive (e.g. "BMWDealerCareers") —
+// every other source's slug is lowercase-insensitive. Mirrors the same exception in
+// web/app/api/companies/route.ts's manual "+Add" flow.
+const CASE_SENSITIVE_SOURCES = new Set(['smartrecruiters']);
 
 const VERIFY_CONCURRENCY = 5;
 const VERIFY_DELAY_MS = 300;
@@ -58,7 +71,7 @@ async function fetchCandidateSlugs(source, cdxLimit) {
       continue;
     }
     if (!slug) continue;
-    slug = slug.toLowerCase();
+    if (!CASE_SENSITIVE_SOURCES.has(source)) slug = slug.toLowerCase();
     if (!SLUG_REGEX.test(slug)) continue;
     if (source === 'ashby' && ASHBY_RESERVED_PATHS.has(slug)) continue;
     slugs.add(slug);
@@ -67,13 +80,15 @@ async function fetchCandidateSlugs(source, cdxLimit) {
 }
 
 async function getKnownSlugs(source) {
+  const caseSensitive = CASE_SENSITIVE_SOURCES.has(source);
+  const norm = (s) => (caseSensitive ? s : s.toLowerCase());
   const known = new Set();
   for (const c of loadRegistry()) {
-    if ((c.source || 'ashby') === source) known.add(c.slug.toLowerCase());
+    if ((c.source || 'ashby') === source) known.add(norm(c.slug));
   }
   const pool = store.getPool();
   const { rows } = await pool.query('SELECT slug FROM companies WHERE source = $1', [source]);
-  for (const row of rows) known.add(row.slug.toLowerCase());
+  for (const row of rows) known.add(norm(row.slug));
   return known;
 }
 

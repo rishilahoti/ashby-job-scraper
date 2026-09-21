@@ -1,9 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import crypto from "crypto";
+// Reuses the scraper's own adapters (single source of truth for normalize logic —
+// see src/normalize/adapters/*.js) instead of a second, hand-kept-in-sync copy here.
+import { ADAPTERS } from "../../../../src/normalize";
 
-type Source = "ashby" | "lever" | "greenhouse";
-const SOURCES: Source[] = ["ashby", "lever", "greenhouse"];
+type Source = keyof typeof ADAPTERS;
+const SOURCES = Object.keys(ADAPTERS) as Source[];
+
+interface NormalizedJob {
+  jobId: string;
+  company: string;
+  source: Source;
+  title: string;
+  location: string;
+  team: string | null;
+  department: string | null;
+  employmentType: string | null;
+  remote: boolean;
+  description: string;
+  applyUrl: string;
+  jobUrl: string;
+  publishedAt: string;
+  scrapedAt: string;
+  compensationSummary: string | null;
+  compensationMin: number | null;
+  compensationMax: number | null;
+  compensationCurrency: string | null;
+  compensationInterval: string | null;
+  contentHash: string;
+}
 
 const HEADERS = {
   "User-Agent":
@@ -16,7 +41,17 @@ const URL_PATTERNS: Record<Source, RegExp> = {
   ashby: /(?:https?:\/\/)?jobs\.ashbyhq\.com\/([a-zA-Z0-9_-]+)/,
   lever: /(?:https?:\/\/)?jobs\.lever\.co\/([a-zA-Z0-9_-]+)/,
   greenhouse: /(?:https?:\/\/)?(?:job-boards|boards)\.greenhouse\.io\/([a-zA-Z0-9_-]+)/,
+  workable: /(?:https?:\/\/)?apply\.workable\.com\/([a-zA-Z0-9_-]+)/,
+  recruitee: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.recruitee\.com/,
+  teamtailor: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.teamtailor\.com/,
+  pinpoint: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.pinpointhq\.com/,
+  smartrecruiters: /(?:https?:\/\/)?jobs\.smartrecruiters\.com\/([a-zA-Z0-9_-]+)/,
 };
+
+// SmartRecruiters company identifiers are case-sensitive (e.g. "BMWDealerCareers") —
+// every other source's slug is lowercase-insensitive, so this stays a small exception
+// rather than changing the default behavior everywhere.
+const CASE_SENSITIVE_SLUG_SOURCES: Source[] = ["smartrecruiters"];
 
 function extractSlugAndSource(
   input: string,
@@ -26,125 +61,21 @@ function extractSlugAndSource(
 
   for (const source of SOURCES) {
     const match = trimmed.match(URL_PATTERNS[source]);
-    if (match) return { slug: match[1].toLowerCase(), source };
+    if (match) {
+      const slug = CASE_SENSITIVE_SLUG_SOURCES.includes(source) ? match[1] : match[1].toLowerCase();
+      return { slug, source };
+    }
   }
 
   if (/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
     const source = SOURCES.includes(explicitSource as Source)
       ? (explicitSource as Source)
       : "ashby";
-    return { slug: trimmed.toLowerCase(), source };
+    const slug = CASE_SENSITIVE_SLUG_SOURCES.includes(source) ? trimmed : trimmed.toLowerCase();
+    return { slug, source };
   }
 
   return null;
-}
-
-// ATS fields are free text on their end — reject anything but http(s) so a
-// malicious `javascript:` URL never reaches a rendered <a href>.
-function sanitizeUrl(url: string | null | undefined): string {
-  if (!url) return "";
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "http:" || parsed.protocol === "https:" ? url : "";
-  } catch {
-    return "";
-  }
-}
-
-function contentHash(...fields: (string | null | undefined)[]): string {
-  const payload = fields.map((f) => f ?? "").join("|");
-  return crypto.createHash("md5").update(payload).digest("hex");
-}
-
-// Handles both plain HTML (Ashby) and HTML-entity-double-encoded content (Greenhouse's
-// `content` field comes back as literal "&lt;div&gt;" text) by decoding twice around
-// the tag strip — a no-op for sources that were never encoded in the first place.
-function htmlToPlainText(html: string | null | undefined): string {
-  if (!html) return "";
-  const decode = (s: string) =>
-    s
-      .replace(/&nbsp;/g, " ")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&amp;/g, "&");
-  const stripped = decode(html).replace(/<[^>]*>/g, " ");
-  return decode(stripped).replace(/\s+/g, " ").trim();
-}
-
-function extractAshbyJobId(jobUrl: string | null): string | null {
-  if (!jobUrl) return null;
-  try {
-    const url = new URL(jobUrl);
-    const parts = url.pathname.split("/").filter(Boolean);
-    return parts[parts.length - 1] || null;
-  } catch {
-    return jobUrl;
-  }
-}
-
-function safeDate(raw: string | number | null | undefined): string {
-  if (!raw) return new Date().toISOString();
-  const d = new Date(raw);
-  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
-}
-
-function formatSalaryRange(
-  salaryRange: { currency?: string; min?: number; max?: number } | null | undefined
-): string | null {
-  if (!salaryRange || (salaryRange.min == null && salaryRange.max == null)) return null;
-  const currency = salaryRange.currency || "";
-  const min = salaryRange.min != null ? salaryRange.min.toLocaleString() : null;
-  const max = salaryRange.max != null ? salaryRange.max.toLocaleString() : null;
-  return min && max ? `${currency} ${min}–${max}`.trim() : `${currency} ${min || max}`.trim();
-}
-
-interface NormalizedJob {
-  jobId: string;
-  title: string;
-  location: string;
-  team: string | null;
-  department: string | null;
-  employmentType: string | null;
-  remote: boolean;
-  description: string;
-  applyUrl: string;
-  jobUrl: string;
-  publishedAt: string;
-  compensationSummary: string | null;
-}
-
-interface AshbyJob {
-  title?: string;
-  location?: string;
-  team?: string;
-  department?: string;
-  employmentType?: string;
-  isRemote?: boolean;
-  isListed?: boolean;
-  descriptionPlain?: string;
-  descriptionHtml?: string;
-  applyUrl?: string;
-  jobUrl?: string;
-  publishedAt?: string;
-  compensation?: {
-    compensationTierSummary?: string;
-    scrapeableCompensationSalarySummary?: string;
-  };
-}
-
-interface LeverJob {
-  id?: string;
-  text?: string;
-  country?: string;
-  workplaceType?: string;
-  descriptionPlain?: string;
-  hostedUrl?: string;
-  applyUrl?: string;
-  createdAt?: number;
-  salaryRange?: { currency?: string; min?: number; max?: number };
-  categories?: { location?: string; team?: string; department?: string; commitment?: string };
 }
 
 interface GreenhouseJob {
@@ -156,67 +87,6 @@ interface GreenhouseJob {
   first_published?: string;
   updated_at?: string;
   company_name?: string;
-}
-
-function normalizeAshbyJob(raw: AshbyJob): NormalizedJob | null {
-  const jobId = extractAshbyJobId(raw.jobUrl ?? null);
-  if (!jobId) return null;
-  const description = raw.descriptionPlain || htmlToPlainText(raw.descriptionHtml);
-  return {
-    jobId,
-    title: raw.title || "Untitled",
-    location: raw.location || "Unknown",
-    team: raw.team || null,
-    department: raw.department || null,
-    employmentType: raw.employmentType || null,
-    remote: Boolean(raw.isRemote),
-    description,
-    applyUrl: sanitizeUrl(raw.applyUrl),
-    jobUrl: sanitizeUrl(raw.jobUrl),
-    publishedAt: safeDate(raw.publishedAt),
-    compensationSummary:
-      raw.compensation?.compensationTierSummary ||
-      raw.compensation?.scrapeableCompensationSalarySummary ||
-      null,
-  };
-}
-
-function normalizeLeverJob(raw: LeverJob): NormalizedJob | null {
-  if (!raw.id) return null;
-  const categories = raw.categories || {};
-  return {
-    jobId: raw.id,
-    title: raw.text || "Untitled",
-    location: categories.location || raw.country || "Unknown",
-    team: categories.team || null,
-    department: categories.department || null,
-    employmentType: categories.commitment || null,
-    remote: raw.workplaceType === "remote",
-    description: raw.descriptionPlain || "",
-    applyUrl: sanitizeUrl(raw.applyUrl || raw.hostedUrl),
-    jobUrl: sanitizeUrl(raw.hostedUrl || raw.applyUrl),
-    publishedAt: safeDate(raw.createdAt),
-    compensationSummary: formatSalaryRange(raw.salaryRange),
-  };
-}
-
-function normalizeGreenhouseJob(raw: GreenhouseJob): NormalizedJob | null {
-  if (raw.id == null) return null;
-  const location = raw.location?.name || "Unknown";
-  return {
-    jobId: String(raw.id),
-    title: raw.title || "Untitled",
-    location,
-    team: null,
-    department: null,
-    employmentType: null,
-    remote: /remote/i.test(location),
-    description: htmlToPlainText(raw.content),
-    applyUrl: sanitizeUrl(raw.absolute_url),
-    jobUrl: sanitizeUrl(raw.absolute_url),
-    publishedAt: safeDate(raw.first_published || raw.updated_at),
-    compensationSummary: null,
-  };
 }
 
 type FetchResult =
@@ -231,8 +101,8 @@ async function fetchAshby(slug: string): Promise<FetchResult> {
   if (!res.ok) return { ok: false, status: res.status };
   const data = await res.json();
   if (!data || !Array.isArray(data.jobs)) return { ok: false, status: 502 };
-  const jobs = (data.jobs as AshbyJob[]).filter((j) => j.isListed !== false);
-  return { ok: true, jobs, companyName: data.jobBoard?.title || null };
+  // Unlisted/draft jobs are filtered centrally by ADAPTERS.ashby.filterRaw below.
+  return { ok: true, jobs: data.jobs, companyName: data.jobBoard?.title || null };
 }
 
 async function fetchLever(slug: string): Promise<FetchResult> {
@@ -258,41 +128,99 @@ async function fetchGreenhouse(slug: string): Promise<FetchResult> {
   return { ok: true, jobs, companyName: jobs[0]?.company_name || null };
 }
 
+async function fetchWorkable(slug: string): Promise<FetchResult> {
+  const res = await fetch(`https://apply.workable.com/api/v1/widget/accounts/${slug}?details=true`, {
+    headers: HEADERS,
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) return { ok: false, status: res.status };
+  const data = await res.json();
+  if (!data || !Array.isArray(data.jobs)) return { ok: false, status: 502 };
+  return { ok: true, jobs: data.jobs, companyName: data.name || null };
+}
+
+async function fetchRecruitee(slug: string): Promise<FetchResult> {
+  const res = await fetch(`https://${slug}.recruitee.com/api/offers/`, {
+    headers: HEADERS,
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) return { ok: false, status: res.status };
+  const data = await res.json();
+  if (!data || !Array.isArray(data.offers)) return { ok: false, status: 502 };
+  return { ok: true, jobs: data.offers, companyName: data.offers[0]?.company_name || null };
+}
+
+async function fetchTeamtailor(slug: string): Promise<FetchResult> {
+  const res = await fetch(`https://${slug}.teamtailor.com/jobs.json`, {
+    headers: HEADERS,
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) return { ok: false, status: res.status };
+  const data = await res.json();
+  if (!data || !Array.isArray(data.items)) return { ok: false, status: 502 };
+  return { ok: true, jobs: data.items, companyName: data.title || null };
+}
+
+async function fetchPinpoint(slug: string): Promise<FetchResult> {
+  const res = await fetch(`https://${slug}.pinpointhq.com/postings.json`, {
+    headers: HEADERS,
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) return { ok: false, status: res.status };
+  const data = await res.json();
+  if (!data || !Array.isArray(data.data)) return { ok: false, status: 502 };
+  return { ok: true, jobs: data.data, companyName: null };
+}
+
+async function fetchSmartRecruiters(slug: string): Promise<FetchResult> {
+  const res = await fetch(`https://api.smartrecruiters.com/v1/companies/${slug}/postings?limit=100`, {
+    headers: HEADERS,
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) return { ok: false, status: res.status };
+  const data = await res.json();
+  if (!data || !Array.isArray(data.content)) return { ok: false, status: 502 };
+  return { ok: true, jobs: data.content, companyName: data.content[0]?.company?.name || null };
+}
+
 const SOURCE_CONFIG: Record<
   Source,
   {
     fetch: (slug: string) => Promise<FetchResult>;
-    normalize: (raw: unknown) => NormalizedJob | null;
-    // Field list must mirror the matching src/normalize/adapters/*.js hash exactly —
-    // scheduler-scraped rows and web-added rows must hash the same job the same way,
-    // or the next scheduled re-scrape reports every job as falsely "updated".
-    hash: (raw: unknown, job: NormalizedJob) => string;
     boardUrl: (slug: string) => string;
   }
 > = {
   ashby: {
     fetch: fetchAshby,
-    normalize: (raw) => normalizeAshbyJob(raw as AshbyJob),
-    hash: (raw, job) => {
-      const r = raw as AshbyJob;
-      return contentHash(r.title, r.location, job.description, r.employmentType, String(Boolean(r.isRemote)), r.team, r.department);
-    },
     boardUrl: (slug) => `https://jobs.ashbyhq.com/${slug}`,
   },
   lever: {
     fetch: fetchLever,
-    normalize: (raw) => normalizeLeverJob(raw as LeverJob),
-    hash: (raw, job) => {
-      const categories = (raw as LeverJob).categories || {};
-      return contentHash((raw as LeverJob).text, categories.location, job.description, categories.commitment, String(job.remote), categories.team, categories.department);
-    },
     boardUrl: (slug) => `https://jobs.lever.co/${slug}`,
   },
   greenhouse: {
     fetch: fetchGreenhouse,
-    normalize: (raw) => normalizeGreenhouseJob(raw as GreenhouseJob),
-    hash: (raw, job) => contentHash((raw as GreenhouseJob).title, job.location, job.description, String(job.remote)),
     boardUrl: (slug) => `https://job-boards.greenhouse.io/${slug}`,
+  },
+  workable: {
+    fetch: fetchWorkable,
+    boardUrl: (slug) => `https://apply.workable.com/${slug}`,
+  },
+  recruitee: {
+    fetch: fetchRecruitee,
+    boardUrl: (slug) => `https://${slug}.recruitee.com`,
+  },
+  teamtailor: {
+    fetch: fetchTeamtailor,
+    boardUrl: (slug) => `https://${slug}.teamtailor.com`,
+  },
+  pinpoint: {
+    fetch: fetchPinpoint,
+    boardUrl: (slug) => `https://${slug}.pinpointhq.com`,
+  },
+  smartrecruiters: {
+    fetch: fetchSmartRecruiters,
+    boardUrl: (slug) => `https://jobs.smartrecruiters.com/${slug}`,
   },
 };
 
@@ -306,7 +234,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Invalid input. Provide a job board URL (Ashby, Lever, or Greenhouse) or a slug.",
+            "Invalid input. Provide a job board URL (Ashby, Lever, Greenhouse, Workable, Recruitee, Teamtailor, Pinpoint, or SmartRecruiters) or a slug.",
         },
         { status: 400 }
       );
@@ -363,25 +291,26 @@ export async function POST(request: NextRequest) {
     let total = 0;
     const seenJobIds: string[] = [];
 
-    for (const raw of result.jobs) {
-      const job = sourceConfig.normalize(raw);
+    const adapter = ADAPTERS[source];
+    for (const raw of adapter.filterRaw(result.jobs)) {
+      const job = adapter.normalizeJob(raw, companyNameForJobs) as NormalizedJob | null;
       if (!job) continue;
       total++;
       seenJobIds.push(job.jobId);
-
-      const hash = sourceConfig.hash(raw, job);
 
       const { rows } = await query(
         `INSERT INTO jobs (
            job_id, company, source, title, location, team, department,
            employment_type, remote, description,
            apply_url, job_url, published_at, scraped_at,
-           compensation_summary, content_hash, is_active
+           compensation_summary, compensation_min, compensation_max,
+           compensation_currency, compensation_interval, content_hash, is_active
          ) VALUES (
            $1, $2, $3, $4, $5, $6, $7,
            $8, $9, $10,
            $11, $12, $13, NOW(),
-           $14, $15, TRUE
+           $14, $15, $16,
+           $17, $18, $19, TRUE
          )
          ON CONFLICT (company, job_id) DO UPDATE SET
            source            = EXCLUDED.source,
@@ -396,7 +325,11 @@ export async function POST(request: NextRequest) {
            job_url           = EXCLUDED.job_url,
            published_at      = EXCLUDED.published_at,
            scraped_at        = NOW(),
-           compensation_summary = EXCLUDED.compensation_summary,
+           compensation_summary  = EXCLUDED.compensation_summary,
+           compensation_min      = EXCLUDED.compensation_min,
+           compensation_max      = EXCLUDED.compensation_max,
+           compensation_currency = EXCLUDED.compensation_currency,
+           compensation_interval = EXCLUDED.compensation_interval,
            content_hash      = CASE
                                  WHEN jobs.content_hash = EXCLUDED.content_hash THEN jobs.content_hash
                                  ELSE EXCLUDED.content_hash
@@ -405,7 +338,7 @@ export async function POST(request: NextRequest) {
            updated_at        = NOW()
          RETURNING
            (xmax = 0)                          AS was_inserted,
-           (xmax <> 0 AND content_hash = $15)  AS was_unchanged`,
+           (xmax <> 0 AND content_hash = $19)  AS was_unchanged`,
         [
           job.jobId,
           companyNameForJobs,
@@ -421,7 +354,11 @@ export async function POST(request: NextRequest) {
           job.jobUrl,
           job.publishedAt,
           job.compensationSummary,
-          hash,
+          job.compensationMin,
+          job.compensationMax,
+          job.compensationCurrency,
+          job.compensationInterval,
+          job.contentHash,
         ]
       );
 

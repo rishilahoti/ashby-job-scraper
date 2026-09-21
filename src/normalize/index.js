@@ -2,8 +2,13 @@ const { logger } = require('../utils');
 const ashby = require('./adapters/ashby');
 const lever = require('./adapters/lever');
 const greenhouse = require('./adapters/greenhouse');
+const workable = require('./adapters/workable');
+const recruitee = require('./adapters/recruitee');
+const teamtailor = require('./adapters/teamtailor');
+const pinpoint = require('./adapters/pinpoint');
+const smartrecruiters = require('./adapters/smartrecruiters');
 
-const ADAPTERS = { ashby, lever, greenhouse };
+const ADAPTERS = { ashby, lever, greenhouse, workable, recruitee, teamtailor, pinpoint, smartrecruiters };
 
 function normalizeResponse(apiResponse, company, source = 'ashby') {
   const adapter = ADAPTERS[source];
@@ -26,4 +31,4 @@ function normalizeResponse(apiResponse, company, source = 'ashby') {
   return jobs;
 }
 
-module.exports = { normalizeResponse };
+module.exports = { normalizeResponse, ADAPTERS };

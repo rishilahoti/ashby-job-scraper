@@ -1,7 +1,90 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { PROVIDERS } from "@/lib/providers";
+
+function ChecklistDropdown({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  options: readonly { value: string; label: string }[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: PointerEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  const toggle = (value: string) => {
+    onChange(selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value]);
+  };
+
+  const buttonLabel =
+    selected.length === 0
+      ? label
+      : selected.length === 1
+        ? options.find((o) => o.value === selected[0])?.label ?? label
+        : `${label} (${selected.length})`;
+
+  return (
+    <div ref={ref} className="relative inline-flex h-8">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={`h-8 max-w-32.5 pl-2 pr-1 text-sm bg-surface border rounded-md focus:outline-none
+                    focus:border-edge-strong cursor-pointer flex items-center justify-between gap-1
+          ${selected.length > 0 ? "border-edge-strong text-ink" : "border-edge text-ink-secondary hover:border-edge-strong"}`}
+      >
+        <span className="truncate">{buttonLabel}</span>
+        <svg
+          className="w-3.5 h-3.5 shrink-0 opacity-60"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+          aria-hidden
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          className="absolute left-0 top-full mt-1 z-50 w-44 rounded-md border border-edge
+                     bg-paper shadow-xl overflow-hidden p-1"
+        >
+          {options.map(({ value, label: optLabel }) => (
+            <label
+              key={value}
+              className="flex items-center gap-2 px-2 py-1.5 rounded text-sm text-ink-secondary
+                         hover:bg-surface hover:text-ink cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(value)}
+                onChange={() => toggle(value)}
+                className="cursor-pointer"
+              />
+              {optLabel}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Filters({
   companies,
@@ -79,21 +162,18 @@ export default function Filters({
     else setTags([tag.toLowerCase()]);
   };
 
-  const toggleSource = useCallback(
-    (source: string) => {
-      const next = current.source.includes(source)
-        ? current.source.filter((s) => s !== source)
-        : [...current.source, source];
+  const setSources = useCallback(
+    (sources: string[]) => {
       const params = new URLSearchParams(searchParams.toString());
-      if (next.length > 0) {
-        params.set("source", next.join(","));
+      if (sources.length > 0) {
+        params.set("source", sources.join(","));
       } else {
         params.delete("source");
       }
       params.delete("page");
       router.push(`?${params.toString()}`);
     },
-    [router, searchParams, current.source],
+    [router, searchParams],
   );
 
   return (
@@ -124,27 +204,13 @@ export default function Filters({
         ))}
       </select>
 
-      {/* Source — multi-select toggle buttons */}
-      <div className="flex items-center gap-1">
-        {[
-          { value: "ashby", label: "Ashby" },
-          { value: "greenhouse", label: "Greenhouse" },
-          { value: "lever", label: "Lever" },
-        ].map(({ value, label }) => (
-          <button
-            key={value}
-            onClick={() => toggleSource(value)}
-            aria-pressed={current.source.includes(value)}
-            className={`h-8 px-3 text-xs font-mono rounded-md border transition-colors cursor-pointer
-              ${current.source.includes(value)
-                ? "bg-ink text-paper border-ink"
-                : "bg-surface border-edge text-ink-secondary hover:border-edge-strong"
-              }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Source — checklist dropdown */}
+      <ChecklistDropdown
+        label="All providers"
+        options={PROVIDERS}
+        selected={current.source}
+        onChange={setSources}
+      />
 
       {/* Department */}
       <select

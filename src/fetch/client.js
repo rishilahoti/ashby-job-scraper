@@ -48,6 +48,37 @@ const SOURCE_REQUESTS = {
     },
     extractJobs: (data) => (Array.isArray(data?.jobs) ? data.jobs : null),
   },
+  workable: {
+    buildUrl: (slug) => {
+      const url = new URL(`${config.fetch.sources.workable.baseUrl}/${slug}`);
+      url.searchParams.set('details', 'true');
+      return url;
+    },
+    extractJobs: (data) => (Array.isArray(data?.jobs) ? data.jobs : null),
+  },
+  recruitee: {
+    buildUrl: (slug) => new URL(`https://${slug}.recruitee.com/api/offers/`),
+    extractJobs: (data) => (Array.isArray(data?.offers) ? data.offers : null),
+  },
+  teamtailor: {
+    buildUrl: (slug) => new URL(`https://${slug}.teamtailor.com/jobs.json`),
+    extractJobs: (data) => (Array.isArray(data?.items) ? data.items : null),
+  },
+  pinpoint: {
+    buildUrl: (slug) => new URL(`https://${slug}.pinpointhq.com/postings.json`),
+    extractJobs: (data) => (Array.isArray(data?.data) ? data.data : null),
+  },
+  smartrecruiters: {
+    // Capped at 100 postings (SmartRecruiters' own max `limit`) — fine for the
+    // vast majority of boards; only a handful of very large multi-location
+    // employers exceed it. Add offset-based pagination if that becomes a problem.
+    buildUrl: (slug) => {
+      const url = new URL(`${config.fetch.sources.smartrecruiters.baseUrl}/${slug}/postings`);
+      url.searchParams.set('limit', '100');
+      return url;
+    },
+    extractJobs: (data) => (Array.isArray(data?.content) ? data.content : null),
+  },
 };
 
 async function fetchJobBoard(slug, source = 'ashby') {

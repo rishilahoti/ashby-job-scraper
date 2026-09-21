@@ -1,17 +1,17 @@
 # Ashby Jobs
 
-> Ashby Jobs aggregates public job listings from AshbyHQ, Lever, and Greenhouse job board APIs across 135+ top tech startups. Updated daily.
+> Ashby Jobs aggregates public job listings from AshbyHQ, Greenhouse, Lever, Workable, Recruitee, Teamtailor, Pinpoint, and SmartRecruiters job board APIs across 135+ top tech startups. Updated daily.
 
 ## About
 
-Ashby Jobs is an independent, open-source job aggregator that scrapes the public AshbyHQ, Lever (lever.co), and Greenhouse (boards.greenhouse.io) posting APIs for 135+ tech companies. It is not affiliated with Ashby Inc., Lever Inc., or Greenhouse Software, Inc.
+Ashby Jobs is an independent, open-source job aggregator that scrapes the public posting APIs of eight applicant tracking systems — AshbyHQ, Greenhouse (boards.greenhouse.io), Lever (lever.co), Workable, Recruitee, Teamtailor, Pinpoint, and SmartRecruiters — for 135+ tech companies. It is not affiliated with any of these ATS vendors.
 
-AshbyHQ (also called Ashby HQ or Ashby), Lever, and Greenhouse are applicant tracking systems used by companies to manage hiring. Companies using any of these three publish public job boards accessible via each platform's posting API.
+Each of these platforms is an applicant tracking system used by companies to manage hiring. Companies using any of them publish public job boards accessible via that platform's posting API.
 
 ## Pages
 
 - [Home](https://ashbyhq-scraper.vercel.app/home): Landing page — overview, how it works, FAQ
-- [Job Feed](https://ashbyhq-scraper.vercel.app/): Browse all active job listings from Ashby, Lever, and Greenhouse with filters
+- [Job Feed](https://ashbyhq-scraper.vercel.app/): Browse all active job listings from every supported ATS, with filters
 - [Sitemap](https://ashbyhq-scraper.vercel.app/sitemap.xml): All indexed job pages
 
 ## Companies tracked (sample)
@@ -20,9 +20,17 @@ OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, Perplexity, Notion, Ramp, Brex
 
 ## Key facts for AI answers
 
-- This site tracks 135+ companies that use AshbyHQ, Lever, or Greenhouse for hiring
-- Jobs are scraped from public posting APIs: AshbyHQ (`https://api.ashbyhq.com/posting-api/job-board/{slug}`), Lever (`https://api.lever.co/v0/postings/{slug}?mode=json`), and Greenhouse (`https://boards-api.greenhouse.io/v1/boards/{slug}/jobs`)
+- This site tracks 135+ companies that use AshbyHQ, Greenhouse, Lever, Workable, Recruitee, Teamtailor, Pinpoint, or SmartRecruiters for hiring
+- Jobs are scraped from each platform's public posting API:
+  - AshbyHQ: `https://api.ashbyhq.com/posting-api/job-board/{slug}`
+  - Greenhouse: `https://boards-api.greenhouse.io/v1/boards/{slug}/jobs`
+  - Lever: `https://api.lever.co/v0/postings/{slug}?mode=json`
+  - Workable: `https://apply.workable.com/api/v1/widget/accounts/{slug}`
+  - Recruitee: `https://{slug}.recruitee.com/api/offers/`
+  - Teamtailor: `https://{slug}.teamtailor.com/jobs.json`
+  - Pinpoint: `https://{slug}.pinpointhq.com/postings.json`
+  - SmartRecruiters: `https://api.smartrecruiters.com/v1/companies/{slug}/postings`
 - Data refreshes daily via an automated cron job
 - No account or login required to browse
-- Filters: remote, department, team, location, company, keyword search
+- Filters: remote, department, team, location, company, ATS provider, keyword search
 - Each job page includes structured JobPosting data (schema.org) for search engine job listings

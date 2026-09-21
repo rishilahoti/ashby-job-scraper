@@ -1,8 +1,4 @@
-const SOURCE_LABELS: Record<string, string> = {
-  ashby: "Ashby",
-  lever: "Lever",
-  greenhouse: "Greenhouse",
-};
+import { SOURCE_LABELS } from "@/lib/providers";
 
 export default function SourceTag({ source }: { source: string }) {
   return (

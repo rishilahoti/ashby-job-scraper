@@ -33,3 +33,15 @@ jobs:
               run: node index.js discover --source greenhouse
               env:
                   DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+            - name: Discover Workable companies
+              continue-on-error: true
+              run: node index.js discover --source workable
+              env:
+                  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+            - name: Discover SmartRecruiters companies
+              continue-on-error: true
+              run: node index.js discover --source smartrecruiters
+              env:
+                  DATABASE_URL: ${{ secrets.DATABASE_URL }}

@@ -62,7 +62,7 @@ program
   .command('add <slug>')
   .description('Add a company to the source registry')
   .option('-n, --name <name>', 'Company display name')
-  .option('-s, --source <source>', 'ATS source: ashby, lever, or greenhouse', 'ashby')
+  .option('-s, --source <source>', 'ATS source: ashby, lever, greenhouse, workable, recruitee, teamtailor, pinpoint, or smartrecruiters', 'ashby')
   .action((slug, options) => {
     const { addCompany } = require('./src/sources');
     const success = addCompany(slug, options.name, options.source);
@@ -76,7 +76,7 @@ program
 program
   .command('discover')
   .description('Crawl Common Crawl for new Ashby/Greenhouse company slugs, verify against the live API, and add them')
-  .requiredOption('-s, --source <source>', 'ashby or greenhouse (Lever blocks Common Crawl\'s bot — not supported here)')
+  .requiredOption('-s, --source <source>', 'ashby, greenhouse, workable, or smartrecruiters (Lever blocks Common Crawl\'s bot; Recruitee/Teamtailor/Pinpoint use per-company subdomains — none of those four are supported here)')
   .option('--cdx-limit <n>', 'max Common Crawl URLs to scan', (v) => parseInt(v, 10), 3000)
   .option('--verify-limit <n>', 'max new candidates to verify against the live API', (v) => parseInt(v, 10), 300)
   .option('--dry-run', 'print what would be added without writing to the database')

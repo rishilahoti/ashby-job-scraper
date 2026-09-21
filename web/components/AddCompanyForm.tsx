@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, type FormEvent } from "react";
 import Link from "next/link";
 
 type Phase = "idle" | "validating" | "scraping" | "success" | "error";
-type Source = "ashby" | "lever" | "greenhouse";
+type Source = "ashby" | "lever" | "greenhouse" | "workable" | "recruitee" | "teamtailor" | "pinpoint" | "smartrecruiters";
 
 interface Result {
   company: string;
@@ -18,12 +18,22 @@ const SOURCE_META: Record<Source, { label: string; domain: string; placeholder: 
   ashby: { label: "Ashby", domain: "jobs.ashbyhq.com", placeholder: "https://jobs.ashbyhq.com/company  or  company-slug" },
   lever: { label: "Lever", domain: "jobs.lever.co", placeholder: "https://jobs.lever.co/company  or  company-slug" },
   greenhouse: { label: "Greenhouse", domain: "job-boards.greenhouse.io", placeholder: "https://job-boards.greenhouse.io/company  or  company-slug" },
+  workable: { label: "Workable", domain: "apply.workable.com", placeholder: "https://apply.workable.com/company  or  company-slug" },
+  recruitee: { label: "Recruitee", domain: "recruitee.com", placeholder: "https://company.recruitee.com  or  company-slug" },
+  teamtailor: { label: "Teamtailor", domain: "teamtailor.com", placeholder: "https://company.teamtailor.com  or  company-slug" },
+  pinpoint: { label: "Pinpoint", domain: "pinpointhq.com", placeholder: "https://company.pinpointhq.com  or  company-slug" },
+  smartrecruiters: { label: "SmartRecruiters", domain: "jobs.smartrecruiters.com", placeholder: "https://jobs.smartrecruiters.com/Company  or  Company (case-sensitive)" },
 };
 
 const URL_PATTERNS: Record<Source, RegExp> = {
   ashby: /(?:https?:\/\/)?jobs\.ashbyhq\.com\/([a-zA-Z0-9_-]+)/,
   lever: /(?:https?:\/\/)?jobs\.lever\.co\/([a-zA-Z0-9_-]+)/,
   greenhouse: /(?:https?:\/\/)?(?:job-boards|boards)\.greenhouse\.io\/([a-zA-Z0-9_-]+)/,
+  workable: /(?:https?:\/\/)?apply\.workable\.com\/([a-zA-Z0-9_-]+)/,
+  recruitee: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.recruitee\.com/,
+  teamtailor: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.teamtailor\.com/,
+  pinpoint: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.pinpointhq\.com/,
+  smartrecruiters: /(?:https?:\/\/)?jobs\.smartrecruiters\.com\/([a-zA-Z0-9_-]+)/,
 };
 
 export default function AddCompanyForm() {
@@ -113,7 +123,7 @@ export default function AddCompanyForm() {
           Add Company
         </h1>
         <p className="text-sm text-ink-secondary leading-relaxed">
-          Paste an Ashby, Lever, or Greenhouse job board URL (or company slug)
+          Paste a job board URL (or company slug) from any supported ATS
           to start tracking their listings. The system will validate the board
           exists, then scrape and index all open positions.
         </p>
@@ -275,7 +285,7 @@ export default function AddCompanyForm() {
         <h2 className="font-display text-sm font-semibold mb-2">How it works</h2>
         <ol className="space-y-1.5 text-xs text-ink-secondary leading-relaxed list-decimal list-inside">
           <li>
-            Pick Ashby, Lever, or Greenhouse, then paste a URL like{" "}
+            Pick an ATS, then paste a URL like{" "}
             <code className="font-mono text-ink bg-surface px-1 py-0.5 rounded">
               jobs.ashbyhq.com/stripe
             </code>{" "}
