@@ -2,7 +2,9 @@ import { Pool, type QueryResultRow } from "pg";
 
 let pool: Pool | null = null;
 
-function getDbPool(): Pool {
+// Exported so @auth/pg-adapter (web/auth.ts) can share this same pool instead
+// of opening a second connection pool to the same Postgres instance.
+export function getDbPool(): Pool {
   if (pool) return pool;
   const url = (process.env.DATABASE_URL || "").trim();
   pool = new Pool({

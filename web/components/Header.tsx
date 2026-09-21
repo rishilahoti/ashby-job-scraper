@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useSession, signOut } from "next-auth/react";
 import { useStatuses } from "./StatusProvider";
 import { useTheme } from "./ThemeProvider";
+import AccountMenu from "./AccountMenu";
 
 const GITHUB_REPO = "https://github.com/rishilahoti/ashbyhq-scraper";
 const GITHUB_API_REPO = "https://api.github.com/repos/rishilahoti/ashbyhq-scraper";
@@ -19,6 +21,8 @@ const MOBILE_LINKS: { href: string; label: string; icon: string; accent?: boolea
 export default function Header() {
   const { appliedCount, ignoredCount } = useStatuses();
   const { theme, setTheme } = useTheme();
+  const { status: sessionStatus } = useSession();
+  const isAuthed = sessionStatus === "authenticated";
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -69,7 +73,9 @@ export default function Header() {
           <NavLink href="/applied" label="Applied" count={appliedCount} />
           <NavLink href="/ignored" label="Ignored" count={ignoredCount} />
           <NavLink href="/add" label="+ Add" accent />
-          <ThemeSwitcher theme={theme} setTheme={setTheme} />
+          {/* Theme lives in the account dropdown once signed in, per AccountMenu. */}
+          {!isAuthed && <ThemeSwitcher theme={theme} setTheme={setTheme} />}
+          <AccountMenu />
         </nav>
 
         {/* Mobile menu toggle + floating dropdown */}
@@ -104,7 +110,28 @@ export default function Header() {
                 ))}
               </div>
               <div className="border-t border-edge p-1.5">
+                {isAuthed ? (
+                  <>
+                    <MobileTextLink href="/profile" onNavigate={() => setMenuOpen(false)}>Profile</MobileTextLink>
+                    <MobileTextLink href="/profile?tab=jobs" onNavigate={() => setMenuOpen(false)}>Jobs</MobileTextLink>
+                    <MobileTextLink href="/profile?tab=integrations" onNavigate={() => setMenuOpen(false)}>Integrations</MobileTextLink>
+                  </>
+                ) : (
+                  <MobileTextLink href="/signin" onNavigate={() => setMenuOpen(false)}>Sign in</MobileTextLink>
+                )}
+              </div>
+              <div className="border-t border-edge p-1.5">
                 <MobileThemeRow theme={theme} setTheme={setTheme} />
+                {isAuthed && (
+                  <button
+                    type="button"
+                    onClick={() => { setMenuOpen(false); signOut({ callbackUrl: "/" }); }}
+                    className="w-full flex items-center px-3 py-2.5 rounded-md text-sm font-medium
+                               text-signal hover:bg-signal-soft transition-colors cursor-pointer"
+                  >
+                    Sign out
+                  </button>
+                )}
               </div>
             </nav>
           )}
@@ -201,6 +228,27 @@ function ThemeSwitcher({
     >
       <span aria-hidden="true">{THEME_ICON[theme]}</span>
     </button>
+  );
+}
+
+function MobileTextLink({
+  href,
+  onNavigate,
+  children,
+}: {
+  href: string;
+  onNavigate: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      className="flex items-center px-3 py-2.5 rounded-md text-sm font-medium
+                 text-ink-secondary hover:text-ink hover:bg-surface transition-colors"
+    >
+      {children}
+    </Link>
   );
 }
 

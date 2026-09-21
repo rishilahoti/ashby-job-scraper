@@ -160,6 +160,12 @@ export default async function JobDetailPage({
         <ScoreBadge score={job.score} />
       </div>
 
+      {!job.isActive && (
+        <div className="mb-6 px-4 py-3 rounded-md border border-edge bg-surface text-sm text-ink-secondary">
+          This job is no longer available — it was removed on a later scrape. Showing the last known listing.
+        </div>
+      )}
+
       {/* Meta grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-surface rounded-lg mb-6">
         <MetaCell label="Department" value={job.department} />
@@ -197,7 +203,7 @@ export default async function JobDetailPage({
 
       {/* Actions */}
       <div className="flex items-center justify-start gap-2.5 mb-8 pb-6 border-b border-edge">
-        {safeHref(job.applyUrl) && (
+        {job.isActive && safeHref(job.applyUrl) && (
           <a
             href={safeHref(job.applyUrl)}
             target="_blank"
