@@ -63,6 +63,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
+    // allowDangerousEmailAccountLinking (above) trusts the OAuth profile's
+    // email as proof of ownership — true for Google/GitHub's own verified
+    // emails, but Google can return email_verified:false for some Workspace/
+    // SSO configurations. Reject those explicitly rather than silently
+    // linking on an unverified claim.
+    signIn({ account, profile }) {
+      if (account?.provider === "google") {
+        const googleProfile = profile as { email_verified?: boolean } | undefined;
+        if (googleProfile?.email_verified === false) return false;
+      }
+      return true;
+    },
     jwt({ token, user }) {
       if (user) token.id = user.id;
       return token;
