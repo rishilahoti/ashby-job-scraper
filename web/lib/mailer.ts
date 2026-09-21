@@ -1,3 +1,7 @@
+// Pinned to next-auth's peer range (^7||^8), not latest — newer majors fix a
+// handful of CVEs (SSRF via the `raw` option, disableFileAccess bypass, IDN
+// domain-spoofing) that don't apply here: we never use `raw`, and `to` is
+// always our own validated address, never attacker-influenced.
 import nodemailer from "nodemailer";
 
 // Plain SMTP — works with a Gmail account + App Password (no new third-party
