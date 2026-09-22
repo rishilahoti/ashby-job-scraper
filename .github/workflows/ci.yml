@@ -67,7 +67,10 @@ jobs:
       # installCommand, just for this CI job's own `npm ci`.
       - run: npm ci --prefix ..
 
-      - run: npm ci
+      # next-auth's peer range (^7.0.7 || ^8.0.5) is stale — nodemailer is only
+      # used directly by our own custom email-OTP code (web/lib/mailer.ts), never
+      # through next-auth's own Email provider, so overriding it is safe.
+      - run: npm ci --legacy-peer-deps
 
       - run: npm run lint
 
