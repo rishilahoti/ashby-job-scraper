@@ -44,17 +44,17 @@ function ChecklistDropdown({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className={`h-8 max-w-32.5 pl-2 pr-1 text-sm bg-surface border rounded-md focus:outline-none
-                    focus:border-edge-strong cursor-pointer flex items-center justify-between gap-1
+        className={`max-w-32.5 px-2 text-sm bg-surface border rounded-md focus:outline-none
+                    focus:border-edge-strong cursor-pointer flex items-center justify-between gap-1.5
           ${selected.length > 0 ? "border-edge-strong text-ink" : "border-edge text-ink-secondary hover:border-edge-strong"}`}
       >
         <span className="truncate">{buttonLabel}</span>
         <svg
-          className="w-3.5 h-3.5 shrink-0 opacity-60"
+          className="w-4 h-4 shrink-0 opacity-0"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
-          strokeWidth={2}
+          strokeWidth={4}
           aria-hidden
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />

@@ -6,6 +6,7 @@ import PostgresAdapter from "@auth/pg-adapter";
 import { getDbPool, query } from "@/lib/db";
 import { verifyCode } from "@/lib/otp";
 import { generatedAvatarUrl } from "@/lib/avatar";
+import { sendWelcomeEmail, notifyAdminOfNewSignup } from "@/lib/mailer";
 
 interface DbUser {
   id: number;
@@ -56,6 +57,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             [email, avatar]
           );
           user = inserted.rows[0];
+          void sendWelcomeEmail(user.email, user.name);
+          void notifyAdminOfNewSignup(user.email);
         }
 
         return { id: String(user.id), name: user.name, email: user.email, image: user.image };
@@ -75,8 +78,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       return true;
     },
-    jwt({ token, user }) {
-      if (user) token.id = user.id;
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+      } else if (token.id) {
+        // The JWT's picture is only set at sign-in, so it goes stale after
+        // linkAccount (or any other DB change) updates the user's image.
+        // Re-read it on every request so session.user.image stays current.
+        const { rows } = await query<{ image: string | null }>(`SELECT image FROM users WHERE id = $1`, [token.id as string]);
+        if (rows[0]) token.picture = rows[0].image;
+      }
       return token;
     },
     session({ session, token }) {
@@ -85,6 +96,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
   },
   events: {
+    // Fires once when the adapter creates a brand-new user row — i.e. a real
+    // OAuth signup, not a returning user logging back in.
+    async createUser({ user }) {
+      if (!user.email) return;
+      void sendWelcomeEmail(user.email, user.name ?? null);
+      void notifyAdminOfNewSignup(user.email);
+    },
     // Fires for every OAuth account association — a brand-new OAuth signup
     // (right after the adapter creates the user row) and an existing user
     // connecting an additional provider both go through here. Only adopts

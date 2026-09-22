@@ -421,6 +421,15 @@ export const getStats = withStaleFallback(unstable_cache(
   { revalidate: 300 }
 ), { total: 0, companies: 0 });
 
+export const getUserCount = withStaleFallback(unstable_cache(
+  async (): Promise<number> => {
+    const { rows } = await query<{ count: number }>(`SELECT COUNT(*)::int AS count FROM users`);
+    return rows[0]?.count ?? 0;
+  },
+  ["user-count"],
+  { revalidate: 300 }
+), 0);
+
 export const getDepartments = withStaleFallback(unstable_cache(
   async (): Promise<string[]> => {
     const { rows } = await query<{ department: string }>(

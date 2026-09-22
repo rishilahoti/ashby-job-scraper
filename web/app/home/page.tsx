@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { DM_Sans, Space_Grotesk } from "next/font/google";
-import { getStats, getCompanies } from "@/lib/query";
+import { getStats, getCompanies, getUserCount } from "@/lib/query";
 import { GitHubStarBadge } from "@/components/GitHubBadge";
 import { PROVIDER_NAMES } from "@/lib/providers";
 import styles from "./home.module.css";
@@ -98,7 +98,7 @@ const FAQS_BASE = [
 ];
 
 export default async function HomePage() {
-  const [stats, companies] = await Promise.all([getStats(), getCompanies()]);
+  const [stats, companies, userCount] = await Promise.all([getStats(), getCompanies(), getUserCount()]);
 
   const activeFeatured = activeFeaturedCompanies(companies);
   const marqueeCompanies = [...activeFeatured, ...activeFeatured];
@@ -219,7 +219,7 @@ export default async function HomePage() {
             {[
               { n: stats.total.toLocaleString(), label: "Active jobs" },
               { n: `${stats.companies}+`, label: "Companies tracked" },
-              { n: `${stats.companies}+`, label: "ATS boards tracked" },
+              { n: userCount.toLocaleString(), label: "Job seekers signed up" },
               { n: "1D", label: "Refresh cycle" },
             ].map(({ n, label }) => (
               <div key={label} className="text-center">
