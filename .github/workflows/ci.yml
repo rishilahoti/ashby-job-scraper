@@ -61,6 +61,12 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      # web/ imports code from the repo-root src/ (e.g. src/normalize/shared.js
+      # requires sanitize-html) — that's a root package.json dependency, not
+      # web's, so it has to be installed separately. Same fix as vercel.json's
+      # installCommand, just for this CI job's own `npm ci`.
+      - run: npm ci --prefix ..
+
       - run: npm ci
 
       - run: npm run lint
