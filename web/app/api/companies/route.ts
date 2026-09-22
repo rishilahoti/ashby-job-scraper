@@ -219,7 +219,11 @@ async function fetchWorkday(slug: string): Promise<FetchResult> {
     if (data.jobPostings.length < WORKDAY_PAGE_SIZE) break;
   }
 
-  return { ok: true, jobs, companyName: null };
+  // The CXS jobs endpoint has no company display-name field — fall back to the
+  // tenant subdomain (e.g. "nvidia" -> "Nvidia") rather than the full compound
+  // slug, which is what the generic slug-based fallback below would otherwise show.
+  const companyName = tenant.charAt(0).toUpperCase() + tenant.slice(1);
+  return { ok: true, jobs, companyName };
 }
 
 const SOURCE_CONFIG: Record<
