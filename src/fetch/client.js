@@ -81,14 +81,9 @@ const SOURCE_REQUESTS = {
   },
 };
 
-async function fetchJobBoard(slug, source = 'ashby') {
-  const sourceConfig = SOURCE_REQUESTS[source];
-  if (!sourceConfig) {
-    throw new FetchError(`Unknown source "${source}" for ${slug}`, slug, null, false);
-  }
-
-  const url = sourceConfig.buildUrl(slug);
-
+// One request/response cycle with the existing retry+backoff policy. Shared by
+// the single-page sources and Workday's paginated loop below.
+async function fetchOnce(url, options, slug, source, extractJobs) {
   let lastError;
 
   for (let attempt = 1; attempt <= config.fetch.maxRetries; attempt++) {
@@ -97,6 +92,7 @@ async function fetchJobBoard(slug, source = 'ashby') {
       const response = await fetch(url, {
         headers: DEFAULT_HEADERS,
         signal: AbortSignal.timeout(30000),
+        ...options,
       });
 
       if (!response.ok) {
@@ -108,7 +104,7 @@ async function fetchJobBoard(slug, source = 'ashby') {
       }
 
       const data = await response.json();
-      const jobs = sourceConfig.extractJobs(data);
+      const jobs = extractJobs(data);
       if (jobs === null) {
         throw new FetchError(
           `Invalid response structure for ${slug} (${source})`,
@@ -116,8 +112,7 @@ async function fetchJobBoard(slug, source = 'ashby') {
         );
       }
 
-      logger.info(`Fetched ${jobs.length} jobs from ${slug} (${source})`);
-      return { jobs };
+      return jobs;
     } catch (err) {
       // Network failures, timeouts, and bad JSON aren't FetchErrors — treat
       // them as retryable, same as the old "no status code" axios case.
@@ -143,6 +138,58 @@ async function fetchJobBoard(slug, source = 'ashby') {
   }
 
   throw lastError;
+}
+
+const WORKDAY_PAGE_SIZE = 20; // API-enforced max per page (HTTP 400 above it)
+// ponytail: caps every Workday board at 200 jobs (10 requests) per scrape so one
+// mega-employer (NVIDIA-scale boards run 2000+) can't blow up the VM's per-cycle
+// request budget. Raise the page cap if smaller/typical boards ever need more.
+const WORKDAY_MAX_PAGES = 10;
+
+async function fetchWorkdayJobBoard(slug, source) {
+  const [tenant, wdHost, site] = slug.split('/');
+  if (!tenant || !wdHost || !site) {
+    throw new FetchError(`Malformed workday slug "${slug}" (expected tenant/wdHost/site)`, slug, null, false);
+  }
+
+  const boardUrl = `https://${tenant}.${wdHost}.myworkdayjobs.com/${site}`;
+  const apiUrl = new URL(`https://${tenant}.${wdHost}.myworkdayjobs.com/wday/cxs/${tenant}/${site}/jobs`);
+
+  // ponytail: Workday's `total` field is unreliable across stateless requests
+  // (observed dropping to 0 on the 2nd+ page without a session cookie) — a
+  // short page (fewer than WORKDAY_PAGE_SIZE results) is the only trustworthy
+  // "no more pages" signal, backstopped by WORKDAY_MAX_PAGES either way.
+  const jobs = [];
+  for (let page = 0; page < WORKDAY_MAX_PAGES; page++) {
+    const body = JSON.stringify({ appliedFacets: {}, limit: WORKDAY_PAGE_SIZE, offset: page * WORKDAY_PAGE_SIZE, searchText: '' });
+    const pageJobs = await fetchOnce(
+      apiUrl,
+      { method: 'POST', headers: { ...DEFAULT_HEADERS, 'Content-Type': 'application/json' }, body },
+      slug, source,
+      (data) => (Array.isArray(data?.jobPostings) ? data.jobPostings : null)
+    );
+    // Each posting only carries a relative externalPath — bake in the board's
+    // base URL here so the adapter can build an absolute apply/job URL.
+    for (const job of pageJobs) jobs.push({ ...job, _boardUrl: boardUrl });
+    if (pageJobs.length < WORKDAY_PAGE_SIZE) break;
+  }
+
+  logger.info(`Fetched ${jobs.length} jobs from ${slug} (${source})`);
+  return { jobs };
+}
+
+async function fetchJobBoard(slug, source = 'ashby') {
+  if (source === 'workday') return fetchWorkdayJobBoard(slug, source);
+
+  const sourceConfig = SOURCE_REQUESTS[source];
+  if (!sourceConfig) {
+    throw new FetchError(`Unknown source "${source}" for ${slug}`, slug, null, false);
+  }
+
+  const url = sourceConfig.buildUrl(slug);
+  const jobs = await fetchOnce(url, {}, slug, source, sourceConfig.extractJobs);
+  logger.info(`Fetched ${jobs.length} jobs from ${slug} (${source})`);
+  return { jobs };
 }
 
 module.exports = { fetchJobBoard, FetchError };

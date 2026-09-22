@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, type FormEvent } from "react";
 import Link from "next/link";
 
 type Phase = "idle" | "validating" | "scraping" | "success" | "error";
-type Source = "ashby" | "lever" | "greenhouse" | "workable" | "recruitee" | "teamtailor" | "pinpoint" | "smartrecruiters";
+type Source = "ashby" | "lever" | "greenhouse" | "workable" | "recruitee" | "teamtailor" | "pinpoint" | "smartrecruiters" | "workday";
 
 interface Result {
   company: string;
@@ -23,6 +23,7 @@ const SOURCE_META: Record<Source, { label: string; domain: string; placeholder: 
   teamtailor: { label: "Teamtailor", domain: "teamtailor.com", placeholder: "https://company.teamtailor.com  or  company-slug" },
   pinpoint: { label: "Pinpoint", domain: "pinpointhq.com", placeholder: "https://company.pinpointhq.com  or  company-slug" },
   smartrecruiters: { label: "SmartRecruiters", domain: "jobs.smartrecruiters.com", placeholder: "https://jobs.smartrecruiters.com/Company  or  Company (case-sensitive)" },
+  workday: { label: "Workday", domain: "myworkdayjobs.com", placeholder: "https://company.wd5.myworkdayjobs.com/en-US/Site" },
 };
 
 const URL_PATTERNS: Record<Source, RegExp> = {
@@ -34,6 +35,9 @@ const URL_PATTERNS: Record<Source, RegExp> = {
   teamtailor: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.teamtailor\.com/,
   pinpoint: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.pinpointhq\.com/,
   smartrecruiters: /(?:https?:\/\/)?jobs\.smartrecruiters\.com\/([a-zA-Z0-9_-]+)/,
+  // Only ATS here spread across per-tenant subdomains AND a numbered host (wd1-wd12)
+  // AND an arbitrary site path — 3 capture groups joined into one slug below.
+  workday: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.(wd\d+)\.myworkdayjobs\.com\/(?:[a-zA-Z]{2}-[a-zA-Z]{2}\/)?([a-zA-Z0-9_-]+)/,
 };
 
 export default function AddCompanyForm() {
@@ -48,7 +52,7 @@ export default function AddCompanyForm() {
     const trimmed = raw.trim();
     for (const s of Object.keys(URL_PATTERNS) as Source[]) {
       const match = trimmed.match(URL_PATTERNS[s]);
-      if (match) return match[1];
+      if (match) return match.slice(1).filter(Boolean).join("/");
     }
     if (/^[a-zA-Z0-9_-]+$/.test(trimmed)) return trimmed;
     return null;

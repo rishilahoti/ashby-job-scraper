@@ -7,8 +7,9 @@ const recruitee = require('./adapters/recruitee');
 const teamtailor = require('./adapters/teamtailor');
 const pinpoint = require('./adapters/pinpoint');
 const smartrecruiters = require('./adapters/smartrecruiters');
+const workday = require('./adapters/workday');
 
-const ADAPTERS = { ashby, lever, greenhouse, workable, recruitee, teamtailor, pinpoint, smartrecruiters };
+const ADAPTERS = { ashby, lever, greenhouse, workable, recruitee, teamtailor, pinpoint, smartrecruiters, workday };
 
 function normalizeResponse(apiResponse, company, source = 'ashby') {
   const adapter = ADAPTERS[source];

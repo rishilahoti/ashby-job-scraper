@@ -6,6 +6,7 @@ const recruitee = require('../src/normalize/adapters/recruitee');
 const teamtailor = require('../src/normalize/adapters/teamtailor');
 const pinpoint = require('../src/normalize/adapters/pinpoint');
 const smartrecruiters = require('../src/normalize/adapters/smartrecruiters');
+const workday = require('../src/normalize/adapters/workday');
 
 test('workable.normalizeJob maps a real widget response shape', () => {
   const job = workable.normalizeJob({
@@ -150,4 +151,39 @@ test('smartrecruiters.normalizeJob returns null when id is missing', () => {
 test('smartrecruiters.filterRaw keeps only PUBLIC postings', () => {
   const raw = [{ visibility: 'PUBLIC' }, { visibility: 'INTERNAL' }];
   assert.equal(smartrecruiters.filterRaw(raw).length, 1);
+});
+
+test('workday.normalizeJob maps a real CXS jobs response shape', () => {
+  const job = workday.normalizeJob({
+    title: 'Principal Engagement Manager - Paradox',
+    externalPath: '/job/USA-IL-Chicago/Principal-Engagement-Manager---Paradox_JR-0109678',
+    locationsText: 'USA, IL, Chicago',
+    postedOn: 'Posted Yesterday',
+    remoteType: 'Flex',
+    bulletFields: ['JR-0109678'],
+    _boardUrl: 'https://workday.wd5.myworkdayjobs.com/Workday',
+  }, 'Workday');
+
+  assert.equal(job.jobId, '/job/USA-IL-Chicago/Principal-Engagement-Manager---Paradox_JR-0109678');
+  assert.equal(job.source, 'workday');
+  assert.equal(job.remote, false);
+  assert.equal(
+    job.applyUrl,
+    'https://workday.wd5.myworkdayjobs.com/Workday/job/USA-IL-Chicago/Principal-Engagement-Manager---Paradox_JR-0109678'
+  );
+  assert.ok(job.contentHash);
+});
+
+test('workday.normalizeJob returns null when externalPath is missing', () => {
+  assert.equal(workday.normalizeJob({ title: 'No path' }, 'Acme'), null);
+});
+
+test('workday.normalizeJob detects remoteType containing "Remote"', () => {
+  const job = workday.normalizeJob({
+    title: 'Remote Role',
+    externalPath: '/job/Remote/Remote-Role_JR-1',
+    remoteType: 'Remote',
+    _boardUrl: 'https://acme.wd1.myworkdayjobs.com/Acme',
+  }, 'Acme');
+  assert.equal(job.remote, true);
 });

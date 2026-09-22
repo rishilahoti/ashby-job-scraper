@@ -46,12 +46,16 @@ const URL_PATTERNS: Record<Source, RegExp> = {
   teamtailor: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.teamtailor\.com/,
   pinpoint: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.pinpointhq\.com/,
   smartrecruiters: /(?:https?:\/\/)?jobs\.smartrecruiters\.com\/([a-zA-Z0-9_-]+)/,
+  // Only ATS spread across per-tenant subdomains AND a numbered host (wd1-wd12)
+  // AND an arbitrary site path — the 3 capture groups get joined into one
+  // "tenant/wdHost/site" slug below, unlike every other source's single group.
+  workday: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.(wd\d+)\.myworkdayjobs\.com\/(?:[a-zA-Z]{2}-[a-zA-Z]{2}\/)?([a-zA-Z0-9_-]+)/,
 };
 
-// SmartRecruiters company identifiers are case-sensitive (e.g. "BMWDealerCareers") —
-// every other source's slug is lowercase-insensitive, so this stays a small exception
-// rather than changing the default behavior everywhere.
-const CASE_SENSITIVE_SLUG_SOURCES: Source[] = ["smartrecruiters"];
+// SmartRecruiters/Workday identifiers are case-sensitive (e.g. "BMWDealerCareers",
+// "NVIDIAExternalCareerSite") — every other source's slug is lowercase-insensitive,
+// so this stays a small exception rather than changing the default behavior everywhere.
+const CASE_SENSITIVE_SLUG_SOURCES: Source[] = ["smartrecruiters", "workday"];
 
 function extractSlugAndSource(
   input: string,
@@ -62,7 +66,8 @@ function extractSlugAndSource(
   for (const source of SOURCES) {
     const match = trimmed.match(URL_PATTERNS[source]);
     if (match) {
-      const slug = CASE_SENSITIVE_SLUG_SOURCES.includes(source) ? match[1] : match[1].toLowerCase();
+      const joined = match.slice(1).filter(Boolean).join("/");
+      const slug = CASE_SENSITIVE_SLUG_SOURCES.includes(source) ? joined : joined.toLowerCase();
       return { slug, source };
     }
   }
@@ -183,6 +188,40 @@ async function fetchSmartRecruiters(slug: string): Promise<FetchResult> {
   return { ok: true, jobs: data.content, companyName: data.content[0]?.company?.name || null };
 }
 
+const WORKDAY_PAGE_SIZE = 20; // API-enforced max per page (HTTP 400 above it)
+// ponytail: caps every Workday board at 200 jobs (10 requests) per add/re-scrape so
+// one mega-employer can't blow up a single request — same ceiling as src/fetch/client.js.
+const WORKDAY_MAX_PAGES = 10;
+
+async function fetchWorkday(slug: string): Promise<FetchResult> {
+  const [tenant, wdHost, site] = slug.split("/");
+  if (!tenant || !wdHost || !site) return { ok: false, status: 400 };
+
+  const boardUrl = `https://${tenant}.${wdHost}.myworkdayjobs.com/${site}`;
+  const apiUrl = `https://${tenant}.${wdHost}.myworkdayjobs.com/wday/cxs/${tenant}/${site}/jobs`;
+
+  const jobs: Record<string, unknown>[] = [];
+  for (let page = 0; page < WORKDAY_MAX_PAGES; page++) {
+    const res = await fetch(apiUrl, {
+      method: "POST",
+      headers: { ...HEADERS, "Content-Type": "application/json" },
+      body: JSON.stringify({ appliedFacets: {}, limit: WORKDAY_PAGE_SIZE, offset: page * WORKDAY_PAGE_SIZE, searchText: "" }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return { ok: false, status: res.status };
+    const data = await res.json();
+    if (!data || !Array.isArray(data.jobPostings)) return { ok: false, status: 502 };
+    // Each posting only carries a relative externalPath — bake in the board's
+    // base URL here so the adapter can build an absolute apply/job URL.
+    for (const job of data.jobPostings) jobs.push({ ...job, _boardUrl: boardUrl });
+    // `total` is unreliable across stateless requests (observed dropping to 0 on
+    // the 2nd+ page) — a short page is the only trustworthy "no more pages" signal.
+    if (data.jobPostings.length < WORKDAY_PAGE_SIZE) break;
+  }
+
+  return { ok: true, jobs, companyName: null };
+}
+
 const SOURCE_CONFIG: Record<
   Source,
   {
@@ -222,6 +261,13 @@ const SOURCE_CONFIG: Record<
     fetch: fetchSmartRecruiters,
     boardUrl: (slug) => `https://jobs.smartrecruiters.com/${slug}`,
   },
+  workday: {
+    fetch: fetchWorkday,
+    boardUrl: (slug) => {
+      const [tenant, wdHost, site] = slug.split("/");
+      return `https://${tenant}.${wdHost}.myworkdayjobs.com/${site}`;
+    },
+  },
 };
 
 export async function POST(request: NextRequest) {
@@ -234,7 +280,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Invalid input. Provide a job board URL (Ashby, Lever, Greenhouse, Workable, Recruitee, Teamtailor, Pinpoint, or SmartRecruiters) or a slug.",
+            "Invalid input. Provide a job board URL (Ashby, Lever, Greenhouse, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, or Workday) or a slug.",
         },
         { status: 400 }
       );
