@@ -1,29 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
+import { getProfileData } from "@/lib/profile";
 
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  const [{ rows: userRows }, { rows: accountRows }] = await Promise.all([
-    query<{ name: string | null; role: string | null; email: string; image: string | null }>(
-      `SELECT name, role, email, image FROM users WHERE id = $1`,
-      [session.user.id]
-    ),
-    query<{ provider: string }>(`SELECT provider FROM accounts WHERE "userId" = $1`, [session.user.id]),
-  ]);
+  const data = await getProfileData(session.user.id);
+  if (!data) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  const user = userRows[0];
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
-
-  return NextResponse.json({
-    name: user.name,
-    role: user.role,
-    email: user.email,
-    image: user.image,
-    connectedProviders: accountRows.map((r) => r.provider),
-  });
+  return NextResponse.json(data);
 }
 
 export async function PATCH(request: NextRequest) {

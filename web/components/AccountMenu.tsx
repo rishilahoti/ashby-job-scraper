@@ -46,7 +46,7 @@ export default function AccountMenu() {
         onClick={() => setOpen((v) => !v)}
         aria-label="Account menu"
         aria-expanded={open}
-        className="flex items-center justify-center w-8 h-8 rounded-full overflow-hidden
+        className="flex items-center justify-center w-8 h-8 p-0 rounded-full overflow-hidden
                    border border-edge hover:border-edge-strong transition-colors cursor-pointer"
       >
         {session.user.image ? (
