@@ -29,13 +29,22 @@ test('search_tsv: words match in any order, title hits rank first, unrelated upd
   // Mirrors upsertJob: every column rewritten, searchable text unchanged.
   await pool.query(`UPDATE jobs SET scraped_at = NOW(), updated_at = NOW() WHERE company = 'SearchTestCo' AND job_id = 'fts-1'`);
 
+  // Same shape as web/lib/query.ts: match via job_search_ids, rank by title_tsv.
   const { rows } = await pool.query(
     `SELECT job_id FROM jobs
-     WHERE company = 'SearchTestCo' AND search_tsv @@ websearch_to_tsquery('english', $1)
-     ORDER BY ts_rank(search_tsv, websearch_to_tsquery('english', $1)) DESC`,
+     WHERE company = 'SearchTestCo' AND id IN (SELECT job_search_ids(websearch_to_tsquery('english', $1)))
+     ORDER BY ts_rank(title_tsv, websearch_to_tsquery('english', $1)) DESC`,
     ['remote python']
   );
   assert.deepEqual(rows.map((r) => r.job_id), ['fts-2', 'fts-1']);
+
+  const inTitle = async () =>
+    (await pool.query(
+      `SELECT title_tsv @@ to_tsquery('english', 'python') AS hit FROM jobs WHERE company = 'SearchTestCo' AND job_id = 'fts-1'`
+    )).rows[0].hit;
+  assert.equal(await inTitle(), false);
+  await pool.query(`UPDATE jobs SET title = 'Python Office Manager' WHERE company = 'SearchTestCo' AND job_id = 'fts-1'`);
+  assert.equal(await inTitle(), true, 'title_tsv must follow title changes');
   await pool.query(`DELETE FROM jobs WHERE company = 'SearchTestCo'`);
 });
 
@@ -71,6 +80,59 @@ test('initDb survives a schema statement that runs longer than the pool timeout'
     await pool.query(`DROP TRIGGER IF EXISTS slow_test_sleep ON jobs`);
     await pool.query(`DROP FUNCTION IF EXISTS slow_test_sleep()`);
     await pool.query(`DELETE FROM jobs WHERE company = 'SlowTestCo'`);
+  }
+});
+
+test('job_search_ids reaches rows only through the search index', async () => {
+  // Evaluating search_tsv @@ on a row reads its ~2.6KB tsvector from TOAST;
+  // the planner doesn't cost that, and in production chose seq/index-walk
+  // plans doing it for all ~75k rows (7-15s searches).
+  const client = await getPool().connect();
+  const stats = async () =>
+    (await client.query(
+      `SELECT
+         (SELECT coalesce(sum(seq_scan), 0) FROM pg_stat_xact_user_tables WHERE relname = 'jobs')::int AS seq,
+         pg_stat_get_xact_numscans('idx_jobs_search'::regclass)::int AS gin`
+    )).rows[0];
+  const q = `websearch_to_tsquery('english', 'engineer')`;
+  try {
+    await client.query('BEGIN');
+    // Control: prove the counters see a seq scan when one happens.
+    await client.query('SET LOCAL enable_indexscan = off');
+    await client.query('SET LOCAL enable_bitmapscan = off');
+    let before = await stats();
+    await client.query(`SELECT count(*) FROM jobs WHERE search_tsv @@ ${q}`);
+    assert.ok((await stats()).seq > before.seq, 'control: forced seq scan must register');
+    await client.query('RESET enable_indexscan');
+    await client.query('RESET enable_bitmapscan');
+
+    before = await stats();
+    await client.query(`SELECT count(*) FROM job_search_ids(${q})`);
+    const after = await stats();
+    assert.equal(after.seq, before.seq, 'job_search_ids must not seq-scan jobs');
+    assert.ok(after.gin > before.gin, 'job_search_ids must use idx_jobs_search');
+  } finally {
+    await client.query('ROLLBACK');
+    client.release();
+  }
+});
+
+test('a scrape query survives the Node process stalling like production did', { timeout: 120000 }, async () => {
+  // Production incident: the scraper's event loop stalled ~41s on CPU-heavy
+  // parsing, and the pool's 30s client-side query_timeout (a wall-clock
+  // timer) then failed queries the server had long since answered.
+  const client = await getPool().connect();
+  try {
+    const query = client.query('SELECT 1 AS one'); // any client-side timer starts here
+    query.catch(() => {}); // awaited below; don't let an early rejection go unhandled
+    const until = Date.now() + 45000;
+    while (Date.now() < until) {
+      // Busy-wait: block the event loop like the scraper's stall did.
+    }
+    const { rows } = await query;
+    assert.equal(rows[0].one, 1);
+  } finally {
+    client.release();
   }
 });
 
