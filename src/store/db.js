@@ -1,13 +1,11 @@
-const { Pool } = require('pg');
+const { Pool, Client } = require('pg');
 const config = require('../config');
 const { logger } = require('../utils');
 const { normalizeLocation } = require('../normalize/shared');
 
 let pool = null;
 
-function getPool() {
-  if (pool) return pool;
-
+function connectionOptions() {
   const url = config.db.url;
   if (!url) {
     throw new Error(
@@ -16,10 +14,17 @@ function getPool() {
       'Locally, add it to your .env file.'
     );
   }
-
-  pool = new Pool({
+  return {
     connectionString: url,
     ssl: url.includes('sslmode=require') ? { rejectUnauthorized: false } : false,
+  };
+}
+
+function getPool() {
+  if (pool) return pool;
+
+  pool = new Pool({
+    ...connectionOptions(),
     max: 15,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
@@ -33,8 +38,28 @@ function getPool() {
   return pool;
 }
 
+// Schema setup runs on its own connection, not the pool: the pool's 30s
+// statement/query timeouts are for scrape queries, while a one-time migration
+// step (e.g. building the search GIN index over every job) legitimately takes
+// minutes. Under the pool it was cancelled at 30s — and since every pipeline
+// run starts with initDb, every run failed.
 async function initDb() {
-  const p = getPool();
+  const client = new Client({ ...connectionOptions(), connectionTimeoutMillis: 10000 });
+  client.on('error', (err) => logger.error(`Schema setup connection error: ${err.message}`));
+  await client.connect();
+  try {
+    // Serializes concurrent setups (scraper boot, discovery job): two sessions
+    // racing CREATE INDEX IF NOT EXISTS on one name can fail with a duplicate.
+    // Session-level lock, released when the connection closes.
+    await client.query('SELECT pg_advisory_lock(20260924)');
+    await migrateSchema(client);
+  } finally {
+    await client.end();
+  }
+  logger.info('PostgreSQL database initialized');
+}
+
+async function migrateSchema(p) {
 
   await p.query(`
     CREATE TABLE IF NOT EXISTS companies (
@@ -229,8 +254,6 @@ async function initDb() {
       END IF;
     END$$
   `);
-
-  logger.info('PostgreSQL database initialized');
 }
 
 // One-time backfill for job rows written before the shared location
