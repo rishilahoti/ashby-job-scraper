@@ -176,10 +176,43 @@ async function initDb() {
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_employment_type ON jobs (employment_type)`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_matched_keywords ON jobs USING GIN (matched_keywords)`);
 
-  // trigram index — makes ILIKE '%term%' (leading wildcard, unindexable by btree) fast
-  await p.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
-  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_title_trgm ON jobs USING GIN (title gin_trgm_ops)`);
-  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_company_trgm ON jobs USING GIN (company gin_trgm_ops)`);
+  // Full-text keyword search (web/lib/query.ts): words match in any order,
+  // descriptions included, title/company hits rank first. Trigger-maintained
+  // rather than a GENERATED column: upsertJob rewrites every row on every
+  // scrape, and re-parsing ~28k descriptions nightly is minutes of CPU on this
+  // 1-OCPU box — the trigger only recomputes when the searchable text changed.
+  await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS search_tsv tsvector`);
+  await p.query(`
+    CREATE OR REPLACE FUNCTION jobs_search_tsv() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF TG_OP = 'INSERT' OR NEW.search_tsv IS NULL
+         OR (NEW.title, NEW.company, NEW.department, NEW.team, NEW.location, NEW.description)
+            IS DISTINCT FROM (OLD.title, OLD.company, OLD.department, OLD.team, OLD.location, OLD.description) THEN
+        NEW.search_tsv :=
+          setweight(to_tsvector('english', concat_ws(' ', NEW.title, NEW.company)), 'A') ||
+          setweight(to_tsvector('english', concat_ws(' ', NEW.department, NEW.team, NEW.location)), 'B') ||
+          setweight(to_tsvector('english', coalesce(NEW.description, '')), 'D');
+      END IF;
+      RETURN NEW;
+    END $$
+  `);
+  await p.query(`CREATE OR REPLACE TRIGGER jobs_search_tsv BEFORE INSERT OR UPDATE ON jobs FOR EACH ROW EXECUTE FUNCTION jobs_search_tsv()`);
+  // Backfill via the trigger (NULL -> NULL still fires it, and the trigger
+  // fills NULLs; it never yields NULL, so this terminates). Batched so the
+  // first boot is many short transactions, not one multi-minute UPDATE
+  // locking every row, and a crash keeps finished batches. Every boot after
+  // that it's a single no-match scan.
+  for (;;) {
+    const { rowCount } = await p.query(
+      `UPDATE jobs SET search_tsv = NULL
+       WHERE id IN (SELECT id FROM jobs WHERE search_tsv IS NULL LIMIT 1000)`
+    );
+    if (rowCount === 0) break;
+  }
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_search ON jobs USING GIN (search_tsv)`);
+  // Only served the old title/company ILIKE search, replaced by idx_jobs_search.
+  await p.query(`DROP INDEX IF EXISTS idx_jobs_title_trgm`);
+  await p.query(`DROP INDEX IF EXISTS idx_jobs_company_trgm`);
 
   // migrate snapshot_data column from TEXT to JSONB if needed
   await p.query(`
