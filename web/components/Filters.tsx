@@ -224,7 +224,7 @@ export default function Filters({
       {/* Search */}
       <input
         type="text"
-        placeholder="Search titles, companies..."
+        placeholder="Search skills, titles, companies..."
         defaultValue={current.search}
         onKeyDown={(e) => {
           if (e.key === "Enter") setParam("search", e.currentTarget.value);

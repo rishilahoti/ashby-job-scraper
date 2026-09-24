@@ -209,10 +209,10 @@ const FILTER_SPECS: FilterSpec[] = [
   },
   {
     active: (f) => !!f.search,
-    sql: (f, params) => {
-      const term = `%${f.search}%`;
-      return `(title ILIKE ${pushParam(params, term)} OR company ILIKE ${pushParam(params, term)})`;
-    },
+    // Full-text over title/company/department/location/description
+    // (search_tsv, trigger-maintained in src/store/db.js): whole words, any
+    // order, plus websearch syntax — "exact phrase", -exclude, or.
+    sql: (f, params) => `search_tsv @@ websearch_to_tsquery('english', ${pushParam(params, f.search!)})`,
   },
   {
     active: (f) => !!f.tags && f.tags.length > 0,
@@ -266,17 +266,27 @@ const getCachedJobsPage = unstable_cache(
       return { data: paginated, total, page, totalPages: Math.ceil(total / limit) };
     }
 
-    const orderBy =
-      filters.sort === "newest"
-        ? "ORDER BY published_at DESC NULLS LAST, id DESC"
-        : filters.sort === "oldest"
-        ? "ORDER BY published_at ASC NULLS LAST, id DESC"
-        : `ORDER BY ${SCORE_EXPR} DESC, published_at DESC, id DESC`;
+    // Own copy of params: the relevance rank adds one only the data query
+    // uses, and an unused param would break the COUNT query.
+    const dataParams: SqlParam[] = [...params];
+    let orderBy: string;
+    if (filters.sort === "newest") {
+      orderBy = "ORDER BY published_at DESC NULLS LAST, id DESC";
+    } else if (filters.sort === "oldest") {
+      orderBy = "ORDER BY published_at ASC NULLS LAST, id DESC";
+    } else {
+      // When searching, best text match first (title hits outrank description
+      // mentions), then the usual score.
+      const rank = filters.search
+        ? `ts_rank(search_tsv, websearch_to_tsquery('english', ${pushParam(dataParams, filters.search)})) DESC, `
+        : "";
+      orderBy = `ORDER BY ${rank}${SCORE_EXPR} DESC, published_at DESC, id DESC`;
+    }
 
     const [dataResult, countResult] = await Promise.all([
       query<ScoredJobRow>(
-        `SELECT ${selectCols} FROM jobs ${where} ${orderBy} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-        [...params, limit, offset]
+        `SELECT ${selectCols} FROM jobs ${where} ${orderBy} LIMIT ${pushParam(dataParams, limit)} OFFSET ${pushParam(dataParams, offset)}`,
+        dataParams
       ),
       query<{ count: string }>(`SELECT COUNT(*) FROM jobs ${where}`, params),
     ]);
@@ -289,7 +299,8 @@ const getCachedJobsPage = unstable_cache(
 
     return { data: paginated, total, page, totalPages: Math.ceil(total / limit) };
   },
-  ["jobs-page-v2"],
+  // v3: search switched to full-text — don't serve v2's ILIKE-era results.
+  ["jobs-page-v3"],
   // Not lower than the feed page's own revalidate: the shortest one wins, so
   // 60 here silently made the static "/" re-render every minute.
   { revalidate: 300 }
