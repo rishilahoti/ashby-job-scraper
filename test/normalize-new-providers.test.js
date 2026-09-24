@@ -26,7 +26,7 @@ test('workable.normalizeJob maps a real widget response shape', () => {
   assert.equal(job.jobId, '98DA245FC8');
   assert.equal(job.source, 'workable');
   assert.equal(job.remote, false);
-  assert.equal(job.location, 'Park Royal, United Kingdom');
+  assert.equal(job.location, 'Park Royal');
   assert.equal(job.description, 'Do things');
   assert.ok(job.contentHash);
 });
@@ -90,7 +90,7 @@ test('teamtailor.normalizeJob maps the JSON Feed + schema.org _jobposting shape'
 
   assert.equal(job.jobId, '3ce2c88b-cbc6-4ae9-8ecb-000466c69037');
   assert.equal(job.source, 'teamtailor');
-  assert.equal(job.location, 'Stockholm, SE');
+  assert.equal(job.location, 'Stockholm');
   assert.equal(job.description, 'Own the books');
 });
 
@@ -167,6 +167,7 @@ test('workday.normalizeJob maps a real CXS jobs response shape', () => {
   assert.equal(job.jobId, '/job/USA-IL-Chicago/Principal-Engagement-Manager---Paradox_JR-0109678');
   assert.equal(job.source, 'workday');
   assert.equal(job.remote, false);
+  assert.equal(job.location, 'Chicago');
   assert.equal(
     job.applyUrl,
     'https://workday.wd5.myworkdayjobs.com/Workday/job/USA-IL-Chicago/Principal-Engagement-Manager---Paradox_JR-0109678'

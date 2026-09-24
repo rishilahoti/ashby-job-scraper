@@ -59,10 +59,26 @@ program
   });
 
 program
+  .command('migrate')
+  .description('Run one-time database backfills that don\'t run automatically on startup (currently: canonicalize existing job locations)')
+  .action(async () => {
+    const store = require('./src/store');
+    try {
+      await store.initDb();
+      await store.canonicalizeJobLocations();
+    } catch (err) {
+      logger.error(`Migration failed: ${err.message}`);
+      process.exit(1);
+    } finally {
+      await store.closeDb();
+    }
+  });
+
+program
   .command('add <slug>')
   .description('Add a company to the source registry')
   .option('-n, --name <name>', 'Company display name')
-  .option('-s, --source <source>', 'ATS source: ashby, lever, greenhouse, workable, recruitee, teamtailor, pinpoint, or smartrecruiters', 'ashby')
+  .option('-s, --source <source>', 'ATS source: ashby, lever, greenhouse, workable, recruitee, teamtailor, pinpoint, smartrecruiters, or workday', 'ashby')
   .action((slug, options) => {
     const { addCompany } = require('./src/sources');
     const success = addCompany(slug, options.name, options.source);

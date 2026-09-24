@@ -1,5 +1,5 @@
 const { contentHash } = require('../../utils');
-const { sanitizeDescription, sanitizeUrl } = require('../shared');
+const { sanitizeDescription, sanitizeUrl, normalizeLocation } = require('../shared');
 
 function formatCompensation(raw) {
   if (raw.compensation_minimum == null && raw.compensation_maximum == null) return null;
@@ -25,21 +25,23 @@ function normalizeJob(raw, company) {
   const jobId = raw.id != null ? String(raw.id) : null;
   if (!jobId) return null;
 
-  const location = raw.location?.name || raw.location?.city || 'Unknown';
+  const normalizedLocation = normalizeLocation(
+    raw.location?.name || raw.location?.city,
+    /remote/i.test(raw.workplace_type_text || raw.workplace_type || '')
+  );
   const description = sanitizeDescription(raw.description);
   // No explicit remote boolean — Pinpoint expresses it via workplace_type_text.
-  const remote = /remote/i.test(raw.workplace_type_text || raw.workplace_type || '');
 
   return {
     jobId,
     company,
     source: 'pinpoint',
     title: raw.title || 'Untitled',
-    location,
+    location: normalizedLocation.location,
     team: null,
     department: raw.job?.department || null,
     employmentType: raw.employment_type_text || raw.employment_type || null,
-    remote,
+    remote: normalizedLocation.remote,
     description,
     applyUrl: sanitizeUrl(raw.url),
     jobUrl: sanitizeUrl(raw.url),
@@ -54,10 +56,10 @@ function normalizeJob(raw, company) {
     compensationInterval: normalizeInterval(raw.compensation_frequency),
     contentHash: contentHash(
       raw.title,
-      location,
+      normalizedLocation.location,
       description,
       raw.employment_type,
-      String(remote),
+      String(normalizedLocation.remote),
       raw.job?.department
     ),
   };

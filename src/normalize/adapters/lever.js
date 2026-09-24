@@ -1,5 +1,5 @@
 const { contentHash } = require('../../utils');
-const { normalizeSalaryInterval, sanitizeUrl } = require('../shared');
+const { normalizeSalaryInterval, sanitizeUrl, normalizeLocation } = require('../shared');
 
 function formatSalaryRange(salaryRange) {
   if (!salaryRange || (salaryRange.min == null && salaryRange.max == null)) return null;
@@ -16,7 +16,10 @@ function normalizeJob(raw, company) {
 
   const categories = raw.categories || {};
   const description = raw.descriptionPlain || '';
-  const remote = raw.workplaceType === 'remote';
+  const normalizedLocation = normalizeLocation(
+    categories.location || raw.country,
+    raw.workplaceType === 'remote'
+  );
 
   const publishedAt = raw.createdAt
     ? new Date(raw.createdAt).toISOString()
@@ -27,11 +30,11 @@ function normalizeJob(raw, company) {
     company,
     source: 'lever',
     title: raw.text || 'Untitled',
-    location: categories.location || raw.country || 'Unknown',
+    location: normalizedLocation.location,
     team: categories.team || null,
     department: categories.department || null,
     employmentType: categories.commitment || null,
-    remote,
+    remote: normalizedLocation.remote,
     description,
     applyUrl: sanitizeUrl(raw.applyUrl || raw.hostedUrl),
     jobUrl: sanitizeUrl(raw.hostedUrl || raw.applyUrl),
@@ -44,10 +47,10 @@ function normalizeJob(raw, company) {
     compensationInterval: normalizeSalaryInterval(raw.salaryRange?.interval),
     contentHash: contentHash(
       raw.text,
-      categories.location,
+      normalizedLocation.location,
       description,
       categories.commitment,
-      String(remote),
+      String(normalizedLocation.remote),
       categories.team,
       categories.department
     ),

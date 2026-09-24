@@ -1,5 +1,5 @@
 const { contentHash } = require('../../utils');
-const { sanitizeDescription, sanitizeUrl } = require('../shared');
+const { sanitizeDescription, sanitizeUrl, normalizeLocation } = require('../shared');
 
 function formatLocation(jobLocation) {
   const place = Array.isArray(jobLocation) ? jobLocation[0] : jobLocation;
@@ -16,10 +16,9 @@ function normalizeJob(raw, company) {
   if (!jobId) return null;
 
   const jp = raw._jobposting || {};
-  const location = formatLocation(jp.jobLocation);
+  const normalizedLocation = normalizeLocation(formatLocation(jp.jobLocation), /remote/i.test(raw.title || ''));
   const description = sanitizeDescription(raw.content_html || jp.description);
   // No remote flag in the feed — infer the same way the Greenhouse adapter does.
-  const remote = /remote/i.test(location) || /remote/i.test(raw.title || '');
 
   const publishedAt = jp.datePosted || raw.date_published
     ? new Date(jp.datePosted || raw.date_published).toISOString()
@@ -30,11 +29,11 @@ function normalizeJob(raw, company) {
     company,
     source: 'teamtailor',
     title: raw.title || 'Untitled',
-    location,
+    location: normalizedLocation.location,
     team: null,
     department: null,
     employmentType: jp.employmentType || null,
-    remote,
+    remote: normalizedLocation.remote,
     description,
     applyUrl: sanitizeUrl(raw.url),
     jobUrl: sanitizeUrl(raw.url),
@@ -47,7 +46,7 @@ function normalizeJob(raw, company) {
     compensationMax: null,
     compensationCurrency: null,
     compensationInterval: null,
-    contentHash: contentHash(raw.title, location, description, String(remote)),
+    contentHash: contentHash(raw.title, normalizedLocation.location, description, String(normalizedLocation.remote)),
   };
 }
 

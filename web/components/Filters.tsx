@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PROVIDERS } from "@/lib/providers";
+import { parseLocationValues } from "@/lib/location-filter";
 
 function ChecklistDropdown({
   label,
@@ -16,6 +17,7 @@ function ChecklistDropdown({
   onChange: (next: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,6 +32,17 @@ function ChecklistDropdown({
   const toggle = (value: string) => {
     onChange(selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value]);
   };
+
+  const selectedSet = new Set(selected);
+  const searchTerm = search.trim().toLowerCase();
+  const visibleOptions = options
+    .filter(({ label: optionLabel }) =>
+      !searchTerm || optionLabel.toLowerCase().includes(searchTerm)
+    )
+    .sort((a, b) => {
+      const selectedOrder = Number(selectedSet.has(b.value)) - Number(selectedSet.has(a.value));
+      return selectedOrder || a.label.localeCompare(b.label);
+    });
 
   const buttonLabel =
     selected.length === 0
@@ -62,10 +75,20 @@ function ChecklistDropdown({
       </button>
       {open && (
         <div
-          className="absolute left-0 top-full mt-1 z-50 w-44 rounded-md border border-edge
+          className="absolute right-0 top-full mt-1 z-50 w-56 max-w-[calc(100vw-1rem)] rounded-md border border-edge
                      bg-paper shadow-xl overflow-hidden p-1"
         >
-          {options.map(({ value, label: optLabel }) => (
+          <input
+            type="search"
+            placeholder={`Search ${label.toLowerCase()}...`}
+            aria-label={`Search ${label.toLowerCase()}`}
+            className="mb-1 h-8 w-full rounded border border-edge bg-surface px-2 text-sm
+                       text-ink placeholder:text-ink-muted focus:outline-none focus:border-edge-strong"
+            value={search}
+            onChange={(event) => setSearch(event.currentTarget.value)}
+          />
+          <div className="max-h-64 overflow-y-auto overscroll-contain">
+          {visibleOptions.map(({ value, label: optLabel }) => (
             <label
               key={value}
               className="flex items-center gap-2 px-2 py-1.5 rounded text-sm text-ink-secondary
@@ -77,9 +100,10 @@ function ChecklistDropdown({
                 onChange={() => toggle(value)}
                 className="cursor-pointer"
               />
-              {optLabel}
+              <span className="min-w-0 truncate">{optLabel}</span>
             </label>
           ))}
+          </div>
         </div>
       )}
     </div>
@@ -114,6 +138,8 @@ export default function Filters({
     [router, searchParams],
   );
 
+  const currentLocations = parseLocationValues(searchParams.get("location"));
+
   const current = {
     search: searchParams.get("search") || "",
     company: searchParams.get("company") || "",
@@ -124,7 +150,7 @@ export default function Filters({
     remote: searchParams.get("remote") || "",
     employmentType: searchParams.get("employmentType") || "",
     department: searchParams.get("department") || "",
-    location: searchParams.get("location") || "",
+    locations: currentLocations,
     tags: (searchParams.get("tags") || "")
       .split(",")
       .map((t) => t.trim().toLowerCase())
@@ -139,7 +165,7 @@ export default function Filters({
     current.remote ||
     current.employmentType ||
     current.department ||
-    current.location ||
+    current.locations.length > 0 ||
     current.tags.length > 0 ||
     current.sort !== "score";
 
@@ -169,6 +195,20 @@ export default function Filters({
         params.set("source", sources.join(","));
       } else {
         params.delete("source");
+      }
+      params.delete("page");
+      router.push(`?${params.toString()}`);
+    },
+    [router, searchParams],
+  );
+
+  const setLocations = useCallback(
+    (locations: string[]) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (locations.length > 0) {
+        params.set("location", locations.join(","));
+      } else {
+        params.delete("location");
       }
       params.delete("page");
       router.push(`?${params.toString()}`);
@@ -224,18 +264,13 @@ export default function Filters({
         ))}
       </select>
 
-      {/* Location */}
-      <select
-        value={current.location}
-        onChange={(e) => setParam("location", e.target.value)}
-        className="h-8 max-w-32.5 px-2 text-sm bg-surface border border-edge rounded-md
-                   text-ink-secondary focus:outline-none focus:border-edge-strong cursor-pointer"
-      >
-        <option value="">All locations</option>
-        {locations.map((loc) => (
-          <option key={loc} value={loc}>{loc}</option>
-        ))}
-      </select>
+      {/* Location — searchable checklist */}
+      <ChecklistDropdown
+        label="All locations"
+        options={locations.map((location) => ({ value: location, label: location }))}
+        selected={current.locations}
+        onChange={setLocations}
+      />
 
       {/* Tags dropdown — single selection */}
       <select

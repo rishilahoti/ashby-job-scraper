@@ -1,5 +1,5 @@
 const { contentHash } = require('../../utils');
-const { sanitizeDescription, sanitizeUrl } = require('../shared');
+const { sanitizeDescription, sanitizeUrl, normalizeLocation } = require('../shared');
 
 function formatSalary(job) {
   if (job.salary_from == null && job.salary_to == null) return null;
@@ -13,9 +13,11 @@ function normalizeJob(raw, company) {
   const jobId = raw.shortcode;
   if (!jobId) return null;
 
-  const location = [raw.city, raw.state, raw.country].filter(Boolean).join(', ') || 'Unknown';
+  const normalizedLocation = normalizeLocation(
+    [raw.city, raw.state, raw.country].filter(Boolean).join(', '),
+    raw.telecommuting
+  );
   const description = sanitizeDescription(raw.description);
-  const remote = Boolean(raw.telecommuting);
 
   const publishedAt = raw.published_on || raw.created_at
     ? new Date(raw.published_on || raw.created_at).toISOString()
@@ -26,11 +28,11 @@ function normalizeJob(raw, company) {
     company,
     source: 'workable',
     title: raw.title || 'Untitled',
-    location,
+    location: normalizedLocation.location,
     team: null,
     department: raw.department || null,
     employmentType: raw.employment_type || null,
-    remote,
+    remote: normalizedLocation.remote,
     description,
     applyUrl: sanitizeUrl(raw.application_url || raw.url),
     jobUrl: sanitizeUrl(raw.url || raw.shortlink),
@@ -43,10 +45,10 @@ function normalizeJob(raw, company) {
     compensationInterval: null,
     contentHash: contentHash(
       raw.title,
-      location,
+      normalizedLocation.location,
       description,
       raw.employment_type,
-      String(remote),
+      String(normalizedLocation.remote),
       raw.department
     ),
   };

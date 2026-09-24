@@ -7,6 +7,7 @@ import type { JobFilters } from "@/lib/types";
 import JobList from "@/components/JobList";
 import Filters from "@/components/Filters";
 import Pagination from "@/components/Pagination";
+import { parseLocationValues } from "@/lib/location-filter";
 
 export const revalidate = 300;
 
@@ -57,7 +58,10 @@ export default async function FeedPage({
   if (sp.employmentType) filters.employmentType = sp.employmentType;
   if (sp.department) filters.department = sp.department;
   if (sp.team) filters.team = sp.team;
-  if (sp.location) filters.location = sp.location;
+  if (sp.location) {
+    const locations = parseLocationValues(sp.location);
+    if (locations.length > 0) filters.locations = locations;
+  }
   if (sp.tags) {
     const allowed = new Set(POSITIVE_TAG_OPTIONS.map((t) => t.toLowerCase()));
     filters.tags = sp.tags

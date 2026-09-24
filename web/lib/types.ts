@@ -39,7 +39,7 @@ export interface JobFilters {
   employmentType?: string;
   department?: string;
   team?: string;
-  location?: string;
+  locations?: string[];
   tags?: string[];
   sort?: "score" | "newest" | "oldest";
   page?: number;

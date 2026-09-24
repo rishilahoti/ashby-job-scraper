@@ -48,6 +48,7 @@ Frontend and database are hosted separately:
 - **Frontend** — Vercel, auto-deploys on push to `main`. Set `DATABASE_URL` in Vercel's Environment Variables to the self-hosted Postgres connection string, then trigger a redeploy — env var changes don't apply to already-running deployments.
 - **Database + scraper** — `docker-compose.yml` at repo root runs `db` (Postgres 17, SSL enabled via a self-signed cert in `./certs/`, published on `5432`), `scraper` (runs `node index.js start`, which scrapes immediately on boot then follows `CRON_SCHEDULE`, default daily), and `watchtower` (polls GHCR every 5 min, auto-pulls + recreates `scraper` on new pushes to `main` — no manual SSH/pull needed). The scraper image is built and pushed to GHCR by `.github/workflows/build-images.yml` on every push to `main`.
 - **Migrating from Neon (or any other Postgres)** — `scripts/migrate-from-neon.sh` runs `pg_dump | psql` from a source URL into the local `db` container. Run it from the deployment host after `docker compose up -d db`.
+- **One-time data backfills** (e.g. the location canonicalization migration) don't run automatically on startup — they can scan the whole `jobs` table, which shouldn't happen silently on every scraper restart. Run them once per database with `docker compose exec scraper node index.js migrate`.
 
 SSL note: the self-signed cert encrypts the connection but isn't CA-verified — both `src/store/db.js` and `web/lib/db.ts` connect with `rejectUnauthorized: false`, and only enable SSL at all when the connection string includes `sslmode=require`.
 
@@ -114,6 +115,7 @@ node index.js run   # scrape immediately
 | `node index.js run` | Run a single scrape cycle across all due companies |
 | `node index.js start` | Start the cron-based scheduler |
 | `node index.js report` | Generate a Markdown report from existing data |
+| `node index.js migrate` | Run one-time database backfills that don't run automatically on startup |
 | `node index.js add <slug> [-s source]` | Add a company to the source registry (ashby/lever/greenhouse) |
 | `node index.js discover -s <source> [--dry-run]` | Crawl Common Crawl for new Ashby/Greenhouse companies and verify+add them |
 

@@ -28,6 +28,11 @@ function getTransport() {
 }
 
 export async function sendOtpEmail(to: string, code: string): Promise<void> {
+  if (!process.env.EMAIL_SERVER_HOST && process.env.NODE_ENV !== "production") {
+    // No SMTP configured locally — print the code instead of failing, so sign-in is testable without a real inbox.
+    console.log(`[dev] OTP code for ${to}: ${code}`);
+    return;
+  }
   const from = process.env.EMAIL_FROM || process.env.EMAIL_SERVER_USER;
   await getTransport().sendMail({
     from: `Ashby Jobs <${from}>`,

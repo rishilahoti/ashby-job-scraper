@@ -174,6 +174,95 @@ function sortInMemory(scored: JobWithScore[], sort: JobFilters["sort"]): void {
   }
 }
 
+type SqlParam = string | number | boolean | string[];
+
+function pushParam(params: SqlParam[], value: SqlParam): string {
+  params.push(value);
+  return `$${params.length}`;
+}
+
+// One definition per filter, driving both the SQL WHERE builder
+// (getCachedJobsPage) and the in-memory fallback (filterSortPaginateInMemory)
+// below — each of these ten conditions used to be hand-written twice and had
+// already drifted once (location). `matches`/`sql` are two renderings of the
+// same rule for the two engines a predicate genuinely can't be shared across
+// — a parameterized SQL string vs. a JS closure over already-scored jobs.
+interface FilterSpec {
+  active(f: JobFilters): boolean;
+  matches(job: JobWithScore, f: JobFilters): boolean;
+  sql(f: JobFilters, params: SqlParam[]): string;
+}
+
+const FILTER_SPECS: FilterSpec[] = [
+  {
+    // Kept first: getCachedJobsPage's single-company branch assumes its
+    // param lands at $1 for the ORDER BY tie-break.
+    active: (f) => !!f.company,
+    matches: (j, f) => j.company?.trim().toLowerCase() === f.company!.trim().toLowerCase(),
+    sql: (f, params) => `LOWER(TRIM(company)) = LOWER(TRIM(${pushParam(params, f.company!)}))`,
+  },
+  {
+    active: (f) => !!f.source && f.source.length > 0,
+    matches: (j, f) => new Set(f.source).has(j.source),
+    sql: (f, params) => `source = ANY(${pushParam(params, f.source!)}::text[])`,
+  },
+  {
+    active: (f) => f.remote !== undefined,
+    matches: (j, f) => j.remote === f.remote,
+    sql: (f, params) => `remote = ${pushParam(params, f.remote!)}`,
+  },
+  {
+    active: (f) => !!f.employmentType,
+    matches: (j, f) => j.employmentType === f.employmentType,
+    sql: (f, params) => `employment_type = ${pushParam(params, f.employmentType!)}`,
+  },
+  {
+    active: (f) => !!f.department,
+    matches: (j, f) => !!j.department?.toLowerCase().includes(f.department!.toLowerCase()),
+    sql: (f, params) => `department ILIKE ${pushParam(params, `%${f.department}%`)}`,
+  },
+  {
+    active: (f) => !!f.team,
+    matches: (j, f) => !!j.team?.toLowerCase().includes(f.team!.toLowerCase()),
+    sql: (f, params) => `team ILIKE ${pushParam(params, `%${f.team}%`)}`,
+  },
+  {
+    active: (f) => !!f.locations && f.locations.length > 0,
+    matches: (j, f) => {
+      const set = new Set(f.locations!.map((l) => l.trim().toLowerCase()));
+      return set.has(j.location.trim().toLowerCase());
+    },
+    sql: (f, params) => {
+      const locations = f.locations!.map((l) => l.trim().toLowerCase());
+      return `LOWER(TRIM(location)) = ANY(${pushParam(params, locations)}::text[])`;
+    },
+  },
+  {
+    active: (f) => !!f.search,
+    matches: (j, f) => {
+      const term = f.search!.toLowerCase();
+      return j.title.toLowerCase().includes(term) || j.company.toLowerCase().includes(term);
+    },
+    sql: (f, params) => {
+      const term = `%${f.search}%`;
+      return `(title ILIKE ${pushParam(params, term)} OR company ILIKE ${pushParam(params, term)})`;
+    },
+  },
+  {
+    active: (f) => !!f.tags && f.tags.length > 0,
+    matches: (j, f) => {
+      const tagsLower = f.tags!.map((t) => t.toLowerCase());
+      return tagsLower.every((tag) => j.matchedKeywords.some((k) => k.toLowerCase() === tag));
+    },
+    sql: (f, params) => `matched_keywords @> ${pushParam(params, f.tags!.map((t) => t.toLowerCase()))}::text[]`,
+  },
+  {
+    active: (f) => f.minScore !== undefined,
+    matches: (j, f) => j.score >= f.minScore!,
+    sql: (f, params) => `${SCORE_EXPR} >= ${pushParam(params, f.minScore!)}`,
+  },
+];
+
 // In-memory fallback path — only used when the DB is unreachable, scoring the
 // last cached full listing. Not performance-critical (rare, resilience-only).
 function filterSortPaginateInMemory(
@@ -183,35 +272,8 @@ function filterSortPaginateInMemory(
   limit: number
 ): PaginatedResult<JobWithScore> {
   let scored = all;
-  if (filters.company) {
-    const target = filters.company.trim().toLowerCase();
-    scored = scored.filter((j) => j.company?.trim().toLowerCase() === target);
-  }
-  if (filters.source && filters.source.length > 0) {
-    const set = new Set(filters.source);
-    scored = scored.filter((j) => set.has(j.source));
-  }
-  if (filters.remote !== undefined) scored = scored.filter((j) => j.remote === filters.remote);
-  if (filters.employmentType) scored = scored.filter((j) => j.employmentType === filters.employmentType);
-  if (filters.department) {
-    const term = filters.department.toLowerCase();
-    scored = scored.filter((j) => j.department?.toLowerCase().includes(term));
-  }
-  if (filters.team) {
-    const term = filters.team.toLowerCase();
-    scored = scored.filter((j) => j.team?.toLowerCase().includes(term));
-  }
-  if (filters.location) scored = scored.filter((j) => j.location === filters.location);
-  if (filters.search) {
-    const term = filters.search.toLowerCase();
-    scored = scored.filter(
-      (j) => j.title.toLowerCase().includes(term) || j.company.toLowerCase().includes(term)
-    );
-  }
-  if (filters.minScore !== undefined) scored = scored.filter((j) => j.score >= filters.minScore!);
-  if (filters.tags && filters.tags.length > 0) {
-    const tagsLower = filters.tags.map((t) => t.toLowerCase());
-    scored = scored.filter((j) => tagsLower.every((tag) => j.matchedKeywords.some((k) => k.toLowerCase() === tag)));
+  for (const spec of FILTER_SPECS) {
+    if (spec.active(filters)) scored = scored.filter((j) => spec.matches(j, filters));
   }
   scored = [...scored];
   sortInMemory(scored, filters.sort);
@@ -236,50 +298,9 @@ const getCachedJobsPage = unstable_cache(
   const offset = (page - 1) * limit;
 
   const wheres: string[] = ["is_active = TRUE"];
-  const params: (string | number | boolean | string[])[] = [];
-  let idx = 1;
-
-  if (filters.company) {
-    wheres.push(`LOWER(TRIM(company)) = LOWER(TRIM($${idx++}))`);
-    params.push(filters.company);
-  }
-  if (filters.source && filters.source.length > 0) {
-    wheres.push(`source = ANY($${idx++}::text[])`);
-    params.push(filters.source);
-  }
-  if (filters.remote !== undefined) {
-    wheres.push(`remote = $${idx++}`);
-    params.push(filters.remote);
-  }
-  if (filters.employmentType) {
-    wheres.push(`employment_type = $${idx++}`);
-    params.push(filters.employmentType);
-  }
-  if (filters.department) {
-    wheres.push(`department ILIKE $${idx++}`);
-    params.push(`%${filters.department}%`);
-  }
-  if (filters.team) {
-    wheres.push(`team ILIKE $${idx++}`);
-    params.push(`%${filters.team}%`);
-  }
-  if (filters.location) {
-    wheres.push(`location = $${idx++}`);
-    params.push(filters.location);
-  }
-  if (filters.search) {
-    wheres.push(`(title ILIKE $${idx} OR company ILIKE $${idx + 1})`);
-    const term = `%${filters.search}%`;
-    params.push(term, term);
-    idx += 2;
-  }
-  if (filters.tags && filters.tags.length > 0) {
-    wheres.push(`matched_keywords @> $${idx++}::text[]`);
-    params.push(filters.tags.map((t) => t.toLowerCase()));
-  }
-  if (filters.minScore !== undefined) {
-    wheres.push(`${SCORE_EXPR} >= $${idx++}`);
-    params.push(filters.minScore);
+  const params: SqlParam[] = [];
+  for (const spec of FILTER_SPECS) {
+    if (spec.active(filters)) wheres.push(spec.sql(filters, params));
   }
 
   const where = `WHERE ${wheres.join(" AND ")}`;
@@ -315,7 +336,7 @@ const getCachedJobsPage = unstable_cache(
 
     const [dataResult, countResult] = await Promise.all([
       query<ScoredJobRow>(
-        `SELECT ${selectCols} FROM jobs ${where} ${orderBy} LIMIT $${idx} OFFSET $${idx + 1}`,
+        `SELECT ${selectCols} FROM jobs ${where} ${orderBy} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
         [...params, limit, offset]
       ),
       query<{ count: string }>(`SELECT COUNT(*) FROM jobs ${where}`, params),
@@ -329,7 +350,7 @@ const getCachedJobsPage = unstable_cache(
 
     return { data: paginated, total, page, totalPages: Math.ceil(total / limit) };
   },
-  ["jobs-page"],
+  ["jobs-page-v2"],
   { revalidate: 60 }
 );
 
@@ -445,13 +466,20 @@ export const getDepartments = withStaleFallback(unstable_cache(
 
 export const getLocations = withStaleFallback(unstable_cache(
   async (): Promise<string[]> => {
+    // TRIM inside DISTINCT, not after: "Cincinnati" and "Cincinnati " (or a
+    // tab, etc.) were different rows to SQL's untrimmed DISTINCT, so trimming
+    // only in JS let both through as "duplicate" list entries — duplicate
+    // React keys in the location dropdown. Postgres's TRIM() only strips
+    // plain ASCII spaces though (JS's .trim() also strips e.g. NBSP), so the
+    // Set below is the actual guarantee against duplicates; the SQL TRIM
+    // just shrinks what DISTINCT has to compare.
     const { rows } = await query<{ location: string }>(
-      `SELECT DISTINCT location FROM jobs
+      `SELECT DISTINCT TRIM(location) AS location FROM jobs
        WHERE is_active = TRUE AND location IS NOT NULL AND TRIM(location) != ''
-       ORDER BY location`
+       ORDER BY TRIM(location)`
     );
-    return rows.map((r) => r.location);
+    return [...new Set(rows.map((r) => r.location.trim()))];
   },
-  ["locations-list"],
+  ["locations-list-v3"],
   { revalidate: 300 }
 ), []);

@@ -1,5 +1,5 @@
 const { contentHash } = require('../../utils');
-const { sanitizeDescription, sanitizeUrl } = require('../shared');
+const { sanitizeDescription, sanitizeUrl, normalizeLocation } = require('../shared');
 
 // Recruitee's `salary` object uses a pay `period` ('month'/'year'/'hour') rather
 // than the interval strings the other ATSs use — map it onto the same schema.org
@@ -31,7 +31,7 @@ function normalizeJob(raw, company) {
   const description = [sanitizeDescription(raw.description), sanitizeDescription(raw.requirements)]
     .filter(Boolean)
     .join('\n\n');
-  const remote = Boolean(raw.remote);
+  const normalizedLocation = normalizeLocation(raw.location, raw.remote);
 
   const publishedAt = raw.published_at || raw.created_at
     ? new Date(raw.published_at || raw.created_at).toISOString()
@@ -42,11 +42,11 @@ function normalizeJob(raw, company) {
     company,
     source: 'recruitee',
     title: raw.title || 'Untitled',
-    location: raw.location || 'Unknown',
+    location: normalizedLocation.location,
     team: null,
     department: raw.department || null,
     employmentType: raw.employment_type_code || null,
-    remote,
+    remote: normalizedLocation.remote,
     description,
     applyUrl: sanitizeUrl(raw.careers_apply_url),
     jobUrl: sanitizeUrl(raw.careers_url),
@@ -59,10 +59,10 @@ function normalizeJob(raw, company) {
     compensationInterval: normalizeInterval(raw.salary?.period),
     contentHash: contentHash(
       raw.title,
-      raw.location,
+      normalizedLocation.location,
       description,
       raw.employment_type_code,
-      String(remote),
+      String(normalizedLocation.remote),
       raw.department
     ),
   };

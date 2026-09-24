@@ -1,4 +1,5 @@
 const { contentHash } = require('../../utils');
+const { normalizeLocation } = require('../shared');
 
 // ponytail: the public /wday/cxs/{tenant}/{site}/jobs list endpoint has no
 // description or employment-type field (only title/location/postedOn/remoteType) —
@@ -11,8 +12,7 @@ function normalizeJob(raw, company) {
   const jobId = raw.externalPath || null;
   if (!jobId) return null;
 
-  const location = raw.locationsText || 'Unknown';
-  const remote = /remote/i.test(raw.remoteType || '');
+  const normalizedLocation = normalizeLocation(raw.locationsText, /remote/i.test(raw.remoteType || ''));
   const url = raw._boardUrl ? `${raw._boardUrl}${raw.externalPath}` : null;
 
   return {
@@ -20,11 +20,11 @@ function normalizeJob(raw, company) {
     company,
     source: 'workday',
     title: raw.title || 'Untitled',
-    location,
+    location: normalizedLocation.location,
     team: null,
     department: null,
     employmentType: null,
-    remote,
+    remote: normalizedLocation.remote,
     description: '',
     applyUrl: url,
     jobUrl: url,
@@ -38,7 +38,12 @@ function normalizeJob(raw, company) {
     compensationMax: null,
     compensationCurrency: null,
     compensationInterval: null,
-    contentHash: contentHash(raw.title, location, raw.remoteType, String(remote)),
+    contentHash: contentHash(
+      raw.title,
+      normalizedLocation.location,
+      raw.remoteType,
+      String(normalizedLocation.remote)
+    ),
   };
 }
 

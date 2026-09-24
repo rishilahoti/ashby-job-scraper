@@ -7,9 +7,11 @@ import {
 	getLocations,
 } from '@/lib/query';
 import { POSITIVE_TAG_OPTIONS } from '@/lib/scoring';
+import { PROVIDERS } from '@/lib/providers';
 import type { JobFilters } from '@/lib/types';
+import { parseLocationValues } from '@/lib/location-filter';
 
-const SOURCES = new Set(['ashby', 'greenhouse', 'lever']);
+const SOURCES = new Set<string>(PROVIDERS.map((p) => p.value));
 const EMPLOYMENT_TYPES = new Set([
 	'FullTime',
 	'Intern',
@@ -136,18 +138,20 @@ export async function GET(request: NextRequest) {
 
 		const locationRaw = sp.get('location');
 		if (locationRaw) {
-			const location = locationRaw.trim();
+			const requestedLocations = parseLocationValues(locationRaw);
 			const locations = await getLocations();
-			const canonicalLocation = locations.find(
-				(l) => l.toLowerCase() === location.toLowerCase()
+			const canonicalLocations = requestedLocations.map((location) =>
+				locations.find((candidate) => candidate.toLowerCase() === location.toLowerCase())
 			);
-			if (!canonicalLocation) {
+			if (canonicalLocations.some((location) => !location)) {
 				return NextResponse.json(
 					{ error: 'Invalid location filter' },
 					{ status: 400 }
 				);
 			}
-			filters.location = canonicalLocation;
+			filters.locations = canonicalLocations.filter(
+				(location): location is string => Boolean(location)
+			);
 		}
 
 		const tagsParam = sp.get('tags');

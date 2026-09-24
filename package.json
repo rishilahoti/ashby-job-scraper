@@ -19,6 +19,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "cities.json": "^1.1.61",
     "commander": "^14.0.3",
     "node-cron": "^4.2.1",
     "pg": "^8.19.0",

@@ -1,4 +1,5 @@
 const { contentHash } = require('../../utils');
+const { normalizeLocation } = require('../shared');
 
 // ponytail: the public /postings list endpoint (unlike Ashby/Lever/Greenhouse's
 // single-call boards) has no description field — full text only lives on the
@@ -9,10 +10,9 @@ function normalizeJob(raw, company) {
   const jobId = raw.id != null ? String(raw.id) : null;
   if (!jobId) return null;
 
-  const location = raw.location?.fullLocation || 'Unknown';
+  const normalizedLocation = normalizeLocation(raw.location?.fullLocation, raw.location?.remote);
   const employmentType = raw.typeOfEmployment?.label || null;
   const department = raw.department?.label || null;
-  const remote = Boolean(raw.location?.remote);
 
   const publishedAt = raw.releasedDate
     ? new Date(raw.releasedDate).toISOString()
@@ -25,11 +25,11 @@ function normalizeJob(raw, company) {
     company,
     source: 'smartrecruiters',
     title: raw.name || 'Untitled',
-    location,
+    location: normalizedLocation.location,
     team: null,
     department,
     employmentType,
-    remote,
+    remote: normalizedLocation.remote,
     description: '',
     applyUrl: `https://jobs.smartrecruiters.com/${identifier}/${jobId}`,
     jobUrl: `https://jobs.smartrecruiters.com/${identifier}/${jobId}`,
@@ -40,7 +40,7 @@ function normalizeJob(raw, company) {
     compensationMax: null,
     compensationCurrency: null,
     compensationInterval: null,
-    contentHash: contentHash(raw.name, location, employmentType, String(remote), department),
+    contentHash: contentHash(raw.name, normalizedLocation.location, employmentType, String(normalizedLocation.remote), department),
   };
 }
 

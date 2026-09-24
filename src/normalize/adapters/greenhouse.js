@@ -1,12 +1,11 @@
 const { contentHash } = require('../../utils');
-const { sanitizeDescription, decodeHtmlEntities, sanitizeUrl } = require('../shared');
+const { sanitizeDescription, decodeHtmlEntities, sanitizeUrl, normalizeLocation } = require('../shared');
 
 function normalizeJob(raw, company) {
   const jobId = raw.id != null ? String(raw.id) : null;
   if (!jobId) return null;
 
-  const location = raw.location?.name || 'Unknown';
-  const remote = /remote/i.test(location);
+  const normalizedLocation = normalizeLocation(raw.location?.name);
   const description = sanitizeDescription(decodeHtmlEntities(raw.content));
 
   const publishedAt = raw.first_published || raw.updated_at
@@ -18,12 +17,12 @@ function normalizeJob(raw, company) {
     company,
     source: 'greenhouse',
     title: raw.title || 'Untitled',
-    location,
+    location: normalizedLocation.location,
     team: null,
     department: null,
     // Greenhouse's public job board API doesn't expose employment type or department.
     employmentType: null,
-    remote,
+    remote: normalizedLocation.remote,
     description,
     applyUrl: sanitizeUrl(raw.absolute_url),
     jobUrl: sanitizeUrl(raw.absolute_url),
@@ -34,7 +33,7 @@ function normalizeJob(raw, company) {
     compensationMax: null,
     compensationCurrency: null,
     compensationInterval: null,
-    contentHash: contentHash(raw.title, location, description, String(remote)),
+    contentHash: contentHash(raw.title, normalizedLocation.location, description, String(normalizedLocation.remote)),
   };
 }
 

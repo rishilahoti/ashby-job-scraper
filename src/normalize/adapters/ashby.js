@@ -1,5 +1,5 @@
 const { contentHash } = require('../../utils');
-const { sanitizeDescription, normalizeSalaryInterval, sanitizeUrl } = require('../shared');
+const { sanitizeDescription, normalizeSalaryInterval, sanitizeUrl, normalizeLocation } = require('../shared');
 
 function extractJobId(jobUrl) {
   if (!jobUrl) return null;
@@ -40,16 +40,18 @@ function normalizeJob(raw, company) {
   }
   if (!publishedAt) publishedAt = new Date().toISOString();
 
+  const normalizedLocation = normalizeLocation(raw.location, raw.isRemote);
+
   return {
     jobId,
     company,
     source: 'ashby',
     title: raw.title || 'Untitled',
-    location: raw.location || 'Unknown',
+    location: normalizedLocation.location,
     team: raw.team || null,
     department: raw.department || null,
     employmentType: raw.employmentType || null,
-    remote: Boolean(raw.isRemote),
+    remote: normalizedLocation.remote,
     description,
     applyUrl: sanitizeUrl(raw.applyUrl),
     jobUrl: sanitizeUrl(raw.jobUrl),
@@ -62,7 +64,7 @@ function normalizeJob(raw, company) {
     compensationInterval,
     contentHash: contentHash(
       raw.title,
-      raw.location,
+      normalizedLocation.location,
       description,
       raw.employmentType,
       String(raw.isRemote),

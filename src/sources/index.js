@@ -3,7 +3,18 @@ const path = require('path');
 const { logger } = require('../utils');
 
 const REGISTRY_PATH = path.resolve(__dirname, 'registry.json');
-const VALID_SOURCES = new Set(['ashby', 'lever', 'greenhouse']);
+const SUPPORTED_SOURCES = [
+  'ashby',
+  'lever',
+  'greenhouse',
+  'workable',
+  'recruitee',
+  'teamtailor',
+  'pinpoint',
+  'smartrecruiters',
+  'workday',
+];
+const VALID_SOURCES = new Set(SUPPORTED_SOURCES);
 
 function loadRegistry() {
   const raw = fs.readFileSync(REGISTRY_PATH, 'utf-8');
@@ -59,44 +70,50 @@ async function getEnabledCompaniesWithDb(pool) {
 
 const SLUG_MAX_LEN = 128;
 const SLUG_REGEX = /^[a-zA-Z0-9_-]+$/;
+const WORKDAY_SLUG_REGEX = /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+$/;
 
-function isValidSlug(slug) {
+function isValidSlug(slug, source = 'ashby') {
   return (
     typeof slug === 'string' &&
     slug.length > 0 &&
     slug.length <= SLUG_MAX_LEN &&
-    SLUG_REGEX.test(slug)
+    (source === 'workday' ? WORKDAY_SLUG_REGEX.test(slug) : SLUG_REGEX.test(slug))
   );
 }
 
 function addCompany(slug, name, source = 'ashby') {
-  if (!isValidSlug(slug)) {
-    logger.warn(`Invalid slug rejected: "${slug}" (alphanumeric, hyphen, underscore only; max ${SLUG_MAX_LEN} chars)`);
+  const normalizedSource = typeof source === 'string' ? source.trim().toLowerCase() : source;
+
+  if (!isValidSlug(slug, normalizedSource)) {
+    const format = normalizedSource === 'workday'
+      ? 'tenant/wdHost/site (each segment may contain alphanumeric characters, hyphens, or underscores)'
+      : 'alphanumeric, hyphen, underscore only';
+    logger.warn(`Invalid slug rejected: "${slug}" (${format}; max ${SLUG_MAX_LEN} chars)`);
     return false;
   }
-  if (!VALID_SOURCES.has(source)) {
-    logger.warn(`Invalid source rejected: "${source}" (expected one of ${[...VALID_SOURCES].join(', ')})`);
+  if (!VALID_SOURCES.has(normalizedSource)) {
+    logger.warn(`Invalid source rejected: "${source}" (expected one of ${SUPPORTED_SOURCES.join(', ')})`);
     return false;
   }
 
   const normalizedSlug = slug.toLowerCase();
   const registry = loadRegistry();
-  const exists = registry.find(c => c.slug.toLowerCase() === normalizedSlug && (c.source || 'ashby') === source);
+  const exists = registry.find(c => c.slug.toLowerCase() === normalizedSlug && (c.source || 'ashby') === normalizedSource);
   if (exists) {
-    logger.warn(`Company with slug "${slug}" already exists for source "${source}"`);
+    logger.warn(`Company with slug "${slug}" already exists for source "${normalizedSource}"`);
     return false;
   }
 
   registry.push({
     company: name || slug,
     slug: normalizedSlug,
-    source,
+    source: normalizedSource,
     enabled: true,
     frequencyHours: 12,
   });
 
   fs.writeFileSync(REGISTRY_PATH, JSON.stringify(registry, null, 2) + '\n', 'utf-8');
-  logger.info(`Added company "${name || slug}" (${normalizedSlug}, ${source}) to registry`);
+  logger.info(`Added company "${name || slug}" (${normalizedSlug}, ${normalizedSource}) to registry`);
   return true;
 }
 
@@ -113,4 +130,11 @@ function getDueCompanies(companiesLastScraped, allCompanies) {
   });
 }
 
-module.exports = { loadRegistry, getEnabledCompanies, getEnabledCompaniesWithDb, addCompany, getDueCompanies };
+module.exports = {
+  loadRegistry,
+  getEnabledCompanies,
+  getEnabledCompaniesWithDb,
+  addCompany,
+  getDueCompanies,
+  SUPPORTED_SOURCES,
+};

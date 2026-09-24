@@ -1,6 +1,7 @@
 const { Pool } = require('pg');
 const config = require('../config');
 const { logger } = require('../utils');
+const { normalizeLocation } = require('../normalize/shared');
 
 let pool = null;
 
@@ -171,6 +172,7 @@ async function initDb() {
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_department ON jobs (department)`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_team ON jobs (team)`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_location ON jobs (location)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_location ON jobs (location) WHERE is_active = TRUE`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_employment_type ON jobs (employment_type)`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_matched_keywords ON jobs USING GIN (matched_keywords)`);
 
@@ -198,6 +200,96 @@ async function initDb() {
   logger.info('PostgreSQL database initialized');
 }
 
+// One-time backfill for job rows written before the shared location
+// normalizer existed. Not run automatically by initDb(): on a large table
+// this is a real full-table scan, not something that should silently ride
+// along on every scraper boot. Run explicitly via `node index.js migrate`
+// once per database — the schema_migrations marker makes every run after
+// the first a single cheap row lookup.
+async function canonicalizeJobLocations() {
+  const p = getPool();
+
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      name TEXT PRIMARY KEY,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  const locationMigration = await p.query(
+    `SELECT 1 FROM schema_migrations WHERE name = 'canonical-job-locations-v3'`
+  );
+  if (locationMigration.rowCount > 0) {
+    logger.info('Job locations already canonicalized — nothing to do');
+    return;
+  }
+
+  // Advisory lock (same pattern as the pipeline's run lock) stops two
+  // concurrent `migrate` runs from racing this backfill. Held on one
+  // dedicated connection so lock and unlock can't land on different pooled
+  // sessions and leak the lock.
+  const client = await p.connect();
+  try {
+    const { rows: lockRows } = await client.query('SELECT pg_try_advisory_lock(20260421) AS locked');
+    if (!lockRows[0].locked) {
+      logger.warn('Location canonicalization already running elsewhere — skipping');
+      return;
+    }
+    try {
+      // Chunked by id, not one SELECT * FROM jobs: bounds memory to one
+      // page and avoids holding a single long transaction over the whole
+      // table. normalizeLocation() is idempotent, so a crash mid-backfill
+      // (marker only inserted at the end) just redoes the scan on the next
+      // `migrate` run rather than corrupting anything.
+      // ponytail: full rescan on restart rather than an id checkpoint —
+      // fine at tens of thousands of rows, revisit if the table grows
+      // enough that redoing the scan gets expensive.
+      let lastId = 0;
+      let totalUpdated = 0;
+      for (;;) {
+        const { rows } = await client.query(
+          'SELECT id, location, remote FROM jobs WHERE id > $1 ORDER BY id LIMIT 1000',
+          [lastId]
+        );
+        if (rows.length === 0) break;
+        lastId = rows[rows.length - 1].id;
+
+        const updates = [];
+        for (const row of rows) {
+          const normalized = normalizeLocation(row.location, row.remote);
+          if (normalized.location !== row.location || normalized.remote !== row.remote) {
+            updates.push([normalized.location, normalized.remote, row.id]);
+          }
+        }
+        if (updates.length > 0) {
+          const values = [];
+          const placeholders = updates.map((update, index) => {
+            const base = index * 3;
+            values.push(...update);
+            return `($${base + 1}, $${base + 2}, $${base + 3})`;
+          });
+          await client.query(
+            `UPDATE jobs AS jobs
+             SET location = updates.location, remote = updates.remote::boolean
+             FROM (VALUES ${placeholders.join(', ')}) AS updates(location, remote, id)
+             WHERE jobs.id = updates.id::integer`,
+            values
+          );
+          totalUpdated += updates.length;
+        }
+        logger.info(`Canonicalizing job locations: scanned up to id ${lastId}, ${totalUpdated} updated so far`);
+      }
+      await client.query(
+        `INSERT INTO schema_migrations (name) VALUES ('canonical-job-locations-v3')`
+      );
+      logger.info(`Canonicalized ${totalUpdated} existing job locations`);
+    } finally {
+      await client.query('SELECT pg_advisory_unlock(20260421)');
+    }
+  } finally {
+    client.release();
+  }
+}
+
 async function closeDb() {
   if (pool) {
     await pool.end();
@@ -205,4 +297,4 @@ async function closeDb() {
   }
 }
 
-module.exports = { getPool, initDb, closeDb };
+module.exports = { getPool, initDb, canonicalizeJobLocations, closeDb };

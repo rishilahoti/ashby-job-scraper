@@ -22,6 +22,45 @@ test('normalizeSalaryInterval maps known intervals, null for unknown', () => {
   assert.equal(shared.normalizeSalaryInterval(null), null);
 });
 
+test('normalizeLocation canonicalizes country and remote variants', () => {
+  for (const value of ['Brazil - Remote', 'Brazil (Remote)', 'Brazil, Remote', 'Brazil/Remote']) {
+    assert.deepEqual(shared.normalizeLocation(value), {
+      location: 'Brazil',
+      remote: true,
+    });
+  }
+
+  assert.deepEqual(shared.normalizeLocation('Remote - US'), {
+    location: 'United States',
+    remote: true,
+  });
+  assert.deepEqual(shared.normalizeLocation('Sao Paulo, Brazil'), {
+    location: 'Sao Paulo',
+    remote: false,
+  });
+  assert.deepEqual(shared.normalizeLocation('USA, IL, Chicago'), {
+    location: 'Chicago',
+    remote: false,
+  });
+  for (const value of ['Bangalore Office', 'Bangalore', 'Bengaluru', 'Bengauru']) {
+    assert.deepEqual(shared.normalizeLocation(value), {
+      location: 'Bengaluru',
+      remote: false,
+    });
+  }
+  assert.deepEqual(shared.normalizeLocation('Bangalore Urban'), {
+    location: 'Bengaluru',
+    remote: false,
+  });
+});
+
+test('normalizeLocation does not fuzzy-merge unrelated multi-word cities', () => {
+  assert.deepEqual(shared.normalizeLocation('New York, NY, United States'), {
+    location: 'New York',
+    remote: false,
+  });
+});
+
 test('ashby.normalizeJob maps core fields and extracts jobId from jobUrl', () => {
   const job = ashby.normalizeJob({
     jobUrl: 'https://jobs.ashbyhq.com/acme/abc-123',
