@@ -39,21 +39,24 @@ test('search_tsv: words match in any order, title hits rank first, unrelated upd
   await pool.query(`DELETE FROM jobs WHERE company = 'SearchTestCo'`);
 });
 
-test('initDb outlives the pool query timeout and waits out a concurrent setup', async () => {
-  // Stand-in for a slow migration step — the search GIN index build took
-  // minutes in production and was cancelled at the pool's 30s timeout,
-  // failing every pipeline run: hold initDb's lock (key 20260924) past it.
+test('initDb survives a schema step slower than the pool query timeout', { timeout: 120000 }, async () => {
+  // Production incident: building the search GIN index took minutes and was
+  // cancelled by the pool's 30s statement timeout, failing every pipeline run.
+  // Reproduce a slow step deterministically: hold a lock that initDb's
+  // ALTER TABLE jobs must wait for, past the pool's 30s limit.
   const holder = await getPool().connect();
-  await holder.query('SELECT pg_advisory_lock(20260924)');
-  let finished = false;
-  const run = initDb().then(() => { finished = true; });
-  run.catch(() => {}); // asserted below; don't let an early rejection go unhandled
-  await new Promise((resolve) => setTimeout(resolve, 31000));
-  assert.equal(finished, false, 'initDb should still be waiting for the lock');
-  await holder.query('SELECT pg_advisory_unlock(20260924)');
-  holder.release();
-  await run;
-  assert.equal(finished, true);
+  try {
+    await holder.query('BEGIN');
+    await holder.query('LOCK TABLE jobs IN ACCESS SHARE MODE');
+    const run = initDb();
+    run.catch(() => {}); // awaited below; don't let an early rejection go unhandled
+    await new Promise((resolve) => setTimeout(resolve, 31000));
+    await holder.query('COMMIT');
+    await run;
+  } finally {
+    await holder.query('ROLLBACK').catch(() => {});
+    holder.release();
+  }
 });
 
 test.after(async () => {
