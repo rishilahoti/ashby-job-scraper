@@ -39,23 +39,38 @@ test('search_tsv: words match in any order, title hits rank first, unrelated upd
   await pool.query(`DELETE FROM jobs WHERE company = 'SearchTestCo'`);
 });
 
-test('initDb survives a schema step slower than the pool query timeout', { timeout: 120000 }, async () => {
-  // Production incident: building the search GIN index took minutes and was
+test('initDb survives a schema statement that runs longer than the pool timeout', { timeout: 120000 }, async () => {
+  // Production incident: the search GIN index build ran for minutes and was
   // cancelled by the pool's 30s statement timeout, failing every pipeline run.
-  // Reproduce a slow step deterministically: hold a lock that initDb's
-  // ALTER TABLE jobs must wait for, past the pool's 30s limit.
-  const holder = await getPool().connect();
+  // Reproduce a long-running (not lock-waiting) statement: make initDb's
+  // search backfill UPDATE hit one row whose trigger sleeps 31s.
+  const pool = getPool();
+  await initDb();
+  await pool.query(`DELETE FROM jobs WHERE company = 'SlowTestCo'`);
+  await pool.query(`ALTER TABLE jobs DISABLE TRIGGER jobs_search_tsv`);
+  await pool.query(
+    `INSERT INTO jobs (job_id, company, title, scraped_at, content_hash)
+     VALUES ('slow-1', 'SlowTestCo', 'Slow', NOW(), 'h')`
+  );
+  await pool.query(`ALTER TABLE jobs ENABLE TRIGGER jobs_search_tsv`);
+  await pool.query(`
+    CREATE OR REPLACE FUNCTION slow_test_sleep() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.company = 'SlowTestCo' THEN PERFORM pg_sleep(31); END IF;
+      RETURN NEW;
+    END $$
+  `);
+  await pool.query(
+    `CREATE OR REPLACE TRIGGER slow_test_sleep BEFORE UPDATE ON jobs FOR EACH ROW EXECUTE FUNCTION slow_test_sleep()`
+  );
   try {
-    await holder.query('BEGIN');
-    await holder.query('LOCK TABLE jobs IN ACCESS SHARE MODE');
-    const run = initDb();
-    run.catch(() => {}); // awaited below; don't let an early rejection go unhandled
-    await new Promise((resolve) => setTimeout(resolve, 31000));
-    await holder.query('COMMIT');
-    await run;
+    await initDb();
+    const { rows } = await pool.query(`SELECT search_tsv IS NOT NULL AS filled FROM jobs WHERE job_id = 'slow-1'`);
+    assert.equal(rows[0].filled, true);
   } finally {
-    await holder.query('ROLLBACK').catch(() => {});
-    holder.release();
+    await pool.query(`DROP TRIGGER IF EXISTS slow_test_sleep ON jobs`);
+    await pool.query(`DROP FUNCTION IF EXISTS slow_test_sleep()`);
+    await pool.query(`DELETE FROM jobs WHERE company = 'SlowTestCo'`);
   }
 });
 

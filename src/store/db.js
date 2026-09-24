@@ -48,6 +48,11 @@ async function initDb() {
   client.on('error', (err) => logger.error(`Schema setup connection error: ${err.message}`));
   await client.connect();
   try {
+    // Work is unbounded, waiting is not. A stuck session must not hang every
+    // later setup, and a waiting ALTER TABLE queues every read of that table
+    // (the site's) behind it — so fail after 30s of waiting for any lock; the
+    // next run retries (every step is idempotent).
+    await client.query(`SET lock_timeout = '30s'`);
     // Serializes concurrent setups (scraper boot, discovery job): two sessions
     // racing CREATE INDEX IF NOT EXISTS on one name can fail with a duplicate.
     // Session-level lock, released when the connection closes.
