@@ -92,7 +92,7 @@ test('job_search_ids reaches rows only through the search index', async () => {
     (await client.query(
       `SELECT
          (SELECT coalesce(sum(seq_scan), 0) FROM pg_stat_xact_user_tables WHERE relname = 'jobs')::int AS seq,
-         (SELECT coalesce(sum(idx_scan), 0) FROM pg_stat_xact_user_indexes WHERE indexrelname = 'idx_jobs_search')::int AS gin`
+         pg_stat_get_xact_numscans('idx_jobs_search'::regclass)::int AS gin`
     )).rows[0];
   const q = `websearch_to_tsquery('english', 'engineer')`;
   try {
