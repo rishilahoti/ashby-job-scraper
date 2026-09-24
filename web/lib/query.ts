@@ -167,10 +167,12 @@ function pushParam(params: SqlParam[], value: SqlParam): string {
   return `$${params.length}`;
 }
 
-// How well a row matches the search box text (search_tsv, see the search
-// filter below); higher is better. Title/company hits outrank description ones.
+// How well a job's title/company match the search box text; higher is
+// better, 0 when only other fields matched (those then follow by score).
+// title_tsv, not search_tsv: it's small and stored in the row, while ranking
+// on search_tsv read every match's ~2.6KB tsvector from TOAST (7s for "AI").
 function searchRankSql(params: SqlParam[], search: string): string {
-  return `ts_rank(search_tsv, websearch_to_tsquery('english', ${pushParam(params, search)}))`;
+  return `ts_rank(title_tsv, websearch_to_tsquery('english', ${pushParam(params, search)}))`;
 }
 
 // One definition per filter for the SQL WHERE builder (getCachedJobsPage).
@@ -215,10 +217,12 @@ const FILTER_SPECS: FilterSpec[] = [
   },
   {
     active: (f) => !!f.search,
-    // Full-text over title/company/department/location/description
-    // (search_tsv, trigger-maintained in src/store/db.js): whole words, any
-    // order, plus websearch syntax — "exact phrase", -exclude, or.
-    sql: (f, params) => `search_tsv @@ websearch_to_tsquery('english', ${pushParam(params, f.search!)})`,
+    // Full-text over title/company/department/location/description: whole
+    // words, any order, plus websearch syntax — "exact phrase", -exclude, or.
+    // Always through job_search_ids (src/store/db.js), never search_tsv @@
+    // directly: that's what keeps every search on the GIN index.
+    sql: (f, params) =>
+      `id IN (SELECT job_search_ids(websearch_to_tsquery('english', ${pushParam(params, f.search!)})))`,
   },
   {
     active: (f) => !!f.tags && f.tags.length > 0,
@@ -310,8 +314,8 @@ const getCachedJobsPage = unstable_cache(
 
     return { data: paginated, total, page, totalPages: Math.ceil(total / limit) };
   },
-  // v3: search switched to full-text — don't serve v2's ILIKE-era results.
-  ["jobs-page-v3"],
+  // v4: search ranks by title_tsv — don't serve v3's differently ranked results.
+  ["jobs-page-v4"],
   // Not lower than the feed page's own revalidate: the shortest one wins, so
   // 60 here silently made the static "/" re-render every minute.
   { revalidate: 300 }
