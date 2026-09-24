@@ -28,13 +28,17 @@ function getPool() {
     max: 15,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
-    // Enforced by the server on actual execution time. No client-side
-    // query_timeout: that's a wall-clock timer in this process, and when the
-    // event loop stalls on CPU-heavy parsing (1-OCPU VM) it fired for queries
-    // the server had long answered — failing whole companies' scrapes.
-    // keepAlive covers what it was guarding against: a dead connection.
+    // The execution limit, enforced by the server.
     statement_timeout: 30000,
+    // Client-side backstop for what the server can't report: a connection
+    // that silently died mid-query. It's a wall-clock timer in this process,
+    // so it must outlast statement_timeout plus an event-loop stall — at 30s
+    // it failed 4 companies' queries the server had already answered after a
+    // ~41s stall parsing a 992-job board on the 1-OCPU VM.
+    query_timeout: 120000,
+    // Probe idle connections after 10s, not the OS default of 2 hours.
     keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
   });
   pool.on('error', (err) => {
     logger.error(`Unexpected pool error: ${err.message}`);

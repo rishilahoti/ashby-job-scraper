@@ -86,38 +86,46 @@ test('initDb survives a schema statement that runs longer than the pool timeout'
 test('job_search_ids reaches rows only through the search index', async () => {
   // Evaluating search_tsv @@ on a row reads its ~2.6KB tsvector from TOAST;
   // the planner doesn't cost that, and in production chose seq/index-walk
-  // plans doing it for all ~75k rows (7-15s searches). The function pins the
-  // GIN index. On CI's tiny table the planner would otherwise seq-scan —
-  // the control query below shows it — so this is a real check.
+  // plans doing it for all ~75k rows (7-15s searches).
   const client = await getPool().connect();
-  const scans = async () =>
+  const stats = async () =>
     (await client.query(
-      `SELECT coalesce(sum(seq_scan), 0)::int AS seq FROM pg_stat_xact_user_tables WHERE relname = 'jobs'`
-    )).rows[0].seq;
+      `SELECT
+         (SELECT coalesce(sum(seq_scan), 0) FROM pg_stat_xact_user_tables WHERE relname = 'jobs')::int AS seq,
+         (SELECT coalesce(sum(idx_scan), 0) FROM pg_stat_xact_user_indexes WHERE indexrelname = 'idx_jobs_search')::int AS gin`
+    )).rows[0];
+  const q = `websearch_to_tsquery('english', 'engineer')`;
   try {
     await client.query('BEGIN');
-    const q = `websearch_to_tsquery('english', 'engineer')`;
-    let before = await scans();
+    // Control: prove the counters see a seq scan when one happens.
+    await client.query('SET LOCAL enable_indexscan = off');
+    await client.query('SET LOCAL enable_bitmapscan = off');
+    let before = await stats();
     await client.query(`SELECT count(*) FROM jobs WHERE search_tsv @@ ${q}`);
-    assert.ok((await scans()) > before, 'control: a plain query seq-scans this small table');
-    before = await scans();
+    assert.ok((await stats()).seq > before.seq, 'control: forced seq scan must register');
+    await client.query('RESET enable_indexscan');
+    await client.query('RESET enable_bitmapscan');
+
+    before = await stats();
     await client.query(`SELECT count(*) FROM job_search_ids(${q})`);
-    assert.equal(await scans(), before, 'job_search_ids must not seq-scan jobs');
+    const after = await stats();
+    assert.equal(after.seq, before.seq, 'job_search_ids must not seq-scan jobs');
+    assert.ok(after.gin > before.gin, 'job_search_ids must use idx_jobs_search');
   } finally {
     await client.query('ROLLBACK');
     client.release();
   }
 });
 
-test('a scrape query survives the Node process stalling past 30s', { timeout: 120000 }, async () => {
-  // Production incident: the scraper's event loop stalled ~40s on CPU-heavy
-  // parsing, and the pool's client-side query_timeout (a wall-clock timer)
-  // then failed queries the server had long since answered.
+test('a scrape query survives the Node process stalling like production did', { timeout: 120000 }, async () => {
+  // Production incident: the scraper's event loop stalled ~41s on CPU-heavy
+  // parsing, and the pool's 30s client-side query_timeout (a wall-clock
+  // timer) then failed queries the server had long since answered.
   const client = await getPool().connect();
   try {
     const query = client.query('SELECT 1 AS one'); // any client-side timer starts here
     query.catch(() => {}); // awaited below; don't let an early rejection go unhandled
-    const until = Date.now() + 31000;
+    const until = Date.now() + 45000;
     while (Date.now() < until) {
       // Busy-wait: block the event loop like the scraper's stall did.
     }
