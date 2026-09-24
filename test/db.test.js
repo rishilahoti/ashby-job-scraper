@@ -27,7 +27,7 @@ test('search_tsv: words match in any order, title hits rank first, unrelated upd
   await insert('fts-1', 'Office Manager', 'Some remote work, we also use Python.');
   await insert('fts-2', 'Senior Python Developer', 'Fully remote role.');
   // Mirrors upsertJob: every column rewritten, searchable text unchanged.
-  await pool.query(`UPDATE jobs SET scraped_at = NOW(), updated_at = NOW() WHERE job_id = 'fts-1'`);
+  await pool.query(`UPDATE jobs SET scraped_at = NOW(), updated_at = NOW() WHERE company = 'SearchTestCo' AND job_id = 'fts-1'`);
 
   const { rows } = await pool.query(
     `SELECT job_id FROM jobs

@@ -19,7 +19,7 @@ const SCORE_EXPR =
     ? `(base_score + CASE WHEN published_at >= NOW() - INTERVAL '${FRESHNESS_HOURS} hours' THEN ${FRESHNESS_BOOST} ELSE 0 END)`
     : "base_score";
 
-type ScoredJobRow = JobRow & { base_score: number; matched_keywords: string[]; computed_score: string | number };
+type ScoredJobRow = JobRow & { base_score: number; matched_keywords: string[]; computed_score: string | number; search_rank?: number };
 
 const LIST_COLUMNS = `
   id, job_id, company, source, title, location, team, department,
@@ -167,6 +167,12 @@ function pushParam(params: SqlParam[], value: SqlParam): string {
   return `$${params.length}`;
 }
 
+// How well a row matches the search box text (search_tsv, see the search
+// filter below); higher is better. Title/company hits outrank description ones.
+function searchRankSql(params: SqlParam[], search: string): string {
+  return `ts_rank(search_tsv, websearch_to_tsquery('english', ${pushParam(params, search)}))`;
+}
+
 // One definition per filter for the SQL WHERE builder (getCachedJobsPage).
 interface FilterSpec {
   active(f: JobFilters): boolean;
@@ -250,8 +256,11 @@ const getCachedJobsPage = unstable_cache(
       // variants before pagination — fetch it whole (bounded, cheap) rather
       // than pushing LIMIT/OFFSET.
       const orderBy = `ORDER BY job_id, CASE WHEN TRIM(company) = TRIM($1) THEN 0 ELSE 1 END, published_at DESC NULLS LAST`;
+      // Search + default sort: relevance first, same as the general path below.
+      const rankBySearch = !!filters.search && filters.sort !== "newest" && filters.sort !== "oldest";
+      const rankCol = rankBySearch ? `, ${searchRankSql(params, filters.search!)} AS search_rank` : "";
       const { rows: rawRows } = await query<ScoredJobRow>(
-        `SELECT ${selectCols} FROM jobs ${where} ${orderBy}`,
+        `SELECT ${selectCols}${rankCol} FROM jobs ${where} ${orderBy}`,
         params
       );
       const canonicalRecord = await getCanonicalCompanyNamesRecord();
@@ -260,6 +269,11 @@ const getCachedJobsPage = unstable_cache(
       const scored = rows.map(rowToJobWithScore);
       applyCanonicalNames(scored, canonicalRecord);
       sortInMemory(scored, filters.sort);
+      if (rankBySearch) {
+        const rank = new Map(rows.map((r) => [r.job_id, Number(r.search_rank)]));
+        // Stable sort: equally relevant jobs keep the score order from above.
+        scored.sort((a, b) => rank.get(b.jobId)! - rank.get(a.jobId)!);
+      }
 
       const total = scored.length;
       const paginated = scored.slice(offset, offset + limit).map(stripForList);
@@ -275,11 +289,8 @@ const getCachedJobsPage = unstable_cache(
     } else if (filters.sort === "oldest") {
       orderBy = "ORDER BY published_at ASC NULLS LAST, id DESC";
     } else {
-      // When searching, best text match first (title hits outrank description
-      // mentions), then the usual score.
-      const rank = filters.search
-        ? `ts_rank(search_tsv, websearch_to_tsquery('english', ${pushParam(dataParams, filters.search)})) DESC, `
-        : "";
+      // When searching, best text match first, then the usual score.
+      const rank = filters.search ? `${searchRankSql(dataParams, filters.search)} DESC, ` : "";
       orderBy = `ORDER BY ${rank}${SCORE_EXPR} DESC, published_at DESC, id DESC`;
     }
 
