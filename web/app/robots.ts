@@ -8,7 +8,10 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/api/", "/applied", "/ignored", "/add"],
+        // "/?" blocks feed filter/page combos: duplicates of the canonical "/"
+        // that each cost a render per crawl. "/?" not "/*?" so hashed metadata
+        // URLs like /icon?abc stay fetchable. Job pages stay crawlable (ISR-cached).
+        disallow: ["/api/", "/?", "/applied", "/ignored", "/add", "/signin", "/profile"],
       },
     ],
     sitemap: `${siteUrl}/sitemap.xml`,

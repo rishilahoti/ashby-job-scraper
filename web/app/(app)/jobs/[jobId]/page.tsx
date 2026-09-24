@@ -1,12 +1,24 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { cache } from "react";
 import { getJobById } from "@/lib/query";
 import ScoreBadge from "@/components/ScoreBadge";
 import StatusButton from "@/components/StatusButton";
 import SourceTag from "@/components/SourceTag";
 
-export const revalidate = 600;
+// Scraper runs daily, so a day-old render is at most one scrape behind — and
+// crawlers re-fetching within the day hit the cache instead of a render.
+export const revalidate = 86400;
+
+// Without this, a dynamic segment ignores `revalidate` and renders on every
+// request (ƒ). Empty list = nothing prebuilt, each job cached on first visit.
+export function generateStaticParams() {
+  return [];
+}
+
+// generateMetadata and the page both need the job — one DB query per render, not two.
+const getJob = cache(getJobById);
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.vercel.app";
 
@@ -27,7 +39,7 @@ export async function generateMetadata({
   params: Promise<{ jobId: string }>;
 }): Promise<Metadata> {
   const { jobId } = await params;
-  const job = await getJobById(jobId);
+  const job = await getJob(jobId);
   if (!job) return {};
 
   const title = `${job.title} at ${job.company}`;
@@ -65,7 +77,7 @@ export default async function JobDetailPage({
   params: Promise<{ jobId: string }>;
 }) {
   const { jobId } = await params;
-  const job = await getJobById(jobId);
+  const job = await getJob(jobId);
 
   if (!job) notFound();
 

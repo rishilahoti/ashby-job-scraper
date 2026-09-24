@@ -22,6 +22,8 @@ export default function JobRow({ job, index }: { job: JobWithScore; index: numbe
       <div className="min-w-0">
         <Link
           href={`/jobs/${job.jobId}`}
+          // Feed shows up to 100 rows; viewport prefetch hit the server for each.
+          prefetch={false}
           className="text-sm font-medium text-ink hover:text-signal transition-colors leading-snug"
         >
           {job.title}

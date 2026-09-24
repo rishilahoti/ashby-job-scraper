@@ -3,11 +3,9 @@ import type { Metadata } from "next";
 import { getJobs, getCompanies, getStats, getDepartments, getLocations } from "@/lib/query";
 import { POSITIVE_TAG_OPTIONS } from "@/lib/scoring";
 import { PROVIDER_NAMES } from "@/lib/providers";
-import type { JobFilters } from "@/lib/types";
 import JobList from "@/components/JobList";
 import Filters from "@/components/Filters";
-import Pagination from "@/components/Pagination";
-import { parseLocationValues } from "@/lib/location-filter";
+import FeedResults from "@/components/FeedResults";
 
 export const revalidate = 300;
 
@@ -37,44 +35,11 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default async function FeedPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | undefined>>;
-}) {
-  const sp = await searchParams;
-
-  const filters: JobFilters = {};
-  if (sp.search) filters.search = sp.search;
-  if (sp.company) filters.company = sp.company;
-  if (sp.source) {
-    filters.source = sp.source
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean);
-  }
-  if (sp.remote === "true") filters.remote = true;
-  if (sp.minScore) filters.minScore = parseInt(sp.minScore, 10);
-  if (sp.employmentType) filters.employmentType = sp.employmentType;
-  if (sp.department) filters.department = sp.department;
-  if (sp.team) filters.team = sp.team;
-  if (sp.location) {
-    const locations = parseLocationValues(sp.location);
-    if (locations.length > 0) filters.locations = locations;
-  }
-  if (sp.tags) {
-    const allowed = new Set(POSITIVE_TAG_OPTIONS.map((t) => t.toLowerCase()));
-    filters.tags = sp.tags
-      .split(",")
-      .map((t) => t.trim().toLowerCase())
-      .filter((t) => t && allowed.has(t));
-    if (filters.tags.length === 0) delete filters.tags;
-  }
-  if (sp.sort) filters.sort = sp.sort as JobFilters["sort"];
-  if (sp.page) filters.page = parseInt(sp.page, 10);
-
+// No searchParams here on purpose: reading them makes the page render on the
+// server for every request. The page is static; FeedResults handles filters.
+export default async function FeedPage() {
   const [result, companies, stats, departments, locations] = await Promise.all([
-    getJobs(filters),
+    getJobs(),
     getCompanies(),
     getStats(),
     getDepartments(),
@@ -117,12 +82,15 @@ export default async function FeedPage({
         />
       </Suspense>
 
-      <div className="mt-2">
-        <JobList jobs={result.data} />
-      </div>
-
-      <Suspense fallback={null}>
-        <Pagination page={result.page} totalPages={result.totalPages} total={result.total} />
+      {/* Fallback is the static HTML crawlers and first paint get. */}
+      <Suspense
+        fallback={
+          <div className="mt-2">
+            <JobList jobs={result.data} />
+          </div>
+        }
+      >
+        <FeedResults initial={result} />
       </Suspense>
     </div>
   );
