@@ -103,6 +103,8 @@ function MenuLink({ href, onNavigate, children }: { href: string; onNavigate: ()
     <Link
       href={href}
       onClick={onNavigate}
+      // /profile is server-rendered per request; don't pay for it on menu open.
+      prefetch={false}
       className="block px-2 py-1.5 rounded-md text-sm text-ink-secondary hover:text-ink hover:bg-surface transition-colors"
     >
       {children}

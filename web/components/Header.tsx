@@ -246,6 +246,8 @@ function MobileTextLink({
   return (
     <Link
       href={href}
+      // Mostly /profile links — server-rendered per request, so no prefetch.
+      prefetch={false}
       onClick={onNavigate}
       className="flex items-center px-3 py-2.5 rounded-md text-sm font-medium
                  text-ink-secondary hover:text-ink hover:bg-surface transition-colors"

@@ -290,7 +290,9 @@ const getCachedJobsPage = unstable_cache(
     return { data: paginated, total, page, totalPages: Math.ceil(total / limit) };
   },
   ["jobs-page-v2"],
-  { revalidate: 60 }
+  // Not lower than the feed page's own revalidate: the shortest one wins, so
+  // 60 here silently made the static "/" re-render every minute.
+  { revalidate: 300 }
 );
 
 export async function getJobs(
