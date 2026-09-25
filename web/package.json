@@ -13,7 +13,7 @@
   "dependencies": {
     "@auth/pg-adapter": "^1.11.3",
     "@tailwindcss/postcss": "^4.2.1",
-    "@types/node": "^25.3.2",
+    "@types/node": "^26.6.1",
     "@types/pg": "^8.16.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
