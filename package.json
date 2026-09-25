@@ -20,7 +20,7 @@
   "license": "MIT",
   "dependencies": {
     "cities.json": "^1.1.61",
-    "commander": "^14.0.3",
+    "commander": "^15.0.0",
     "node-cron": "^4.2.1",
     "pg": "^8.19.0",
     "sanitize-html": "^2.17.1"
