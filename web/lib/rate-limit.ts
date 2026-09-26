@@ -6,12 +6,13 @@ export function getClientIp(request: Request): string {
   return request.headers.get("x-real-ip") ?? "unknown";
 }
 
-// Sliding-window log in Postgres, one round trip: count this key's recent
-// hits, record this one only if it's allowed (a flood of blocked requests
-// adds no rows, so the table stays bounded), and prune day-old rows — same
+// Fixed-window counter in Postgres, one round trip: the upsert row-locks this
+// key's counter, so concurrent requests increment it one at a time and each
+// sees its own count — a burst can't all read the same "under the limit" count
+// and slip through. One row per key per window, day-old windows pruned — same
 // opportunistic cleanup as email_otp_codes.
-// ponytail: two requests racing at the edge can both get in (max + 1); fine
-// for abuse throttling, lock the key's rows if it ever has to be exact.
+// ponytail: fixed window allows up to 2x max across a window boundary; fine
+// for abuse throttling, switch to a sliding window if it ever has to be exact.
 export async function isRateLimited(
   bucket: string,
   key: string,
@@ -19,15 +20,15 @@ export async function isRateLimited(
   windowMinutes: number
 ): Promise<boolean> {
   const { rows } = await query<{ limited: boolean }>(
-    `WITH recent AS (
-       SELECT COUNT(*) AS n FROM rate_limit_hits
-       WHERE bucket = $1 AND key = $2 AND created_at > NOW() - make_interval(mins => $3)
-     ), hit AS (
-       INSERT INTO rate_limit_hits (bucket, key) SELECT $1, $2 FROM recent WHERE n < $4
+    `WITH hit AS (
+       INSERT INTO rate_limit_counters (bucket, key, window_start)
+       VALUES ($1, $2, date_bin(make_interval(mins => $3), NOW(), TIMESTAMPTZ 'epoch'))
+       ON CONFLICT (bucket, key, window_start) DO UPDATE SET hits = rate_limit_counters.hits + 1
+       RETURNING hits
      ), prune AS (
-       DELETE FROM rate_limit_hits WHERE created_at < NOW() - INTERVAL '1 day'
+       DELETE FROM rate_limit_counters WHERE window_start < NOW() - INTERVAL '1 day'
      )
-     SELECT n >= $4 AS limited FROM recent`,
+     SELECT hits > $4 AS limited FROM hit`,
     [bucket, key, windowMinutes, max]
   );
   return rows[0].limited;

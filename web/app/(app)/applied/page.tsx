@@ -16,7 +16,7 @@ export default function AppliedPage() {
     [statuses]
   );
 
-  const { jobs, loading } = useJobsByIds(appliedIds);
+  const { jobs, loading, incomplete } = useJobsByIds(appliedIds);
 
   return (
     <div>
@@ -24,6 +24,10 @@ export default function AppliedPage() {
         <h1 className="font-display text-xl font-bold tracking-tight">Applied</h1>
         <span className="font-mono text-sm text-ink-muted">{jobs.length}</span>
       </div>
+
+      {incomplete && (
+        <p className="mb-4 text-sm text-ink-muted">Some jobs couldn&apos;t load. Refresh to retry.</p>
+      )}
 
       {loading ? (
         <div className="py-20 text-center">

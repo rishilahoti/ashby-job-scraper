@@ -94,16 +94,17 @@ CREATE TABLE IF NOT EXISTS user_job_status
 
 CREATE INDEX IF NOT EXISTS idx_user_job_status_user ON user_job_status ("userId");
 
--- Generic sliding-window rate limiter (web/lib/rate-limit.ts) — one row per allowed hit,
--- keyed by an arbitrary bucket (e.g. "otp-request-ip", "add-company-ip") and
--- key (e.g. an IP). Old rows are opportunistically deleted on every write,
--- same as email_otp_codes above, so this never grows unbounded.
-CREATE TABLE IF NOT EXISTS rate_limit_hits
+-- Generic fixed-window rate limiter (web/lib/rate-limit.ts) — one counter row
+-- per bucket (e.g. "otp-request-ip", "add-company-ip"), key (e.g. an IP) and
+-- window, incremented atomically. Day-old windows are opportunistically
+-- deleted on every call, same as email_otp_codes above.
+CREATE TABLE IF NOT EXISTS rate_limit_counters
 (
-  id SERIAL PRIMARY KEY,
   bucket TEXT NOT NULL,
   key TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  window_start TIMESTAMPTZ NOT NULL,
+  hits INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (bucket, key, window_start)
 );
 
-CREATE INDEX IF NOT EXISTS idx_rate_limit_hits_lookup ON rate_limit_hits (bucket, key, created_at);
+CREATE INDEX IF NOT EXISTS idx_rate_limit_counters_window ON rate_limit_counters (window_start);

@@ -24,7 +24,12 @@ export function saveStatuses(map: StatusMap) {
 // unmark/reload and keeps re-merging itself back in.
 export function clearStatuses() {
   if (typeof window === "undefined") return;
-  localStorage.removeItem(STORAGE_KEY);
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Storage blocked: nothing to clear, and throwing here would stop
+    // StatusProvider before it ever shows the merged statuses.
+  }
 }
 
 export function getStatus(map: StatusMap, jobId: string): JobStatus {

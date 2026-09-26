@@ -19,8 +19,13 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-/** Jobs for `ids`, in order, fetching only ids not seen yet this session. */
-export async function loadJobsByIds(ids: string[]): Promise<JobWithScore[]> {
+type Loaded = { jobs: JobWithScore[]; incomplete: boolean };
+
+/**
+ * Jobs for `ids`, in order, fetching only ids not seen yet this session.
+ * `incomplete`: some batch failed, so the list is short (retried next load).
+ */
+export async function loadJobsByIds(ids: string[]): Promise<Loaded> {
   const missing = ids.filter((id) => !cache.has(id));
   await Promise.all(
     chunk(missing, BATCH_SIZE).map((batch) => {
@@ -38,19 +43,22 @@ export async function loadJobsByIds(ids: string[]): Promise<JobWithScore[]> {
         .catch(() => {}); // left uncached, so the next load retries it
     })
   );
-  return ids.map((id) => cache.get(id)).filter((job): job is JobWithScore => !!job);
+  return {
+    jobs: ids.map((id) => cache.get(id)).filter((job): job is JobWithScore => !!job),
+    incomplete: ids.some((id) => !cache.has(id)),
+  };
 }
 
 /** Applied/Ignored pages: jobs for a (possibly 200+) list of ids. */
-export function useJobsByIds(ids: string[]): { jobs: JobWithScore[]; loading: boolean } {
-  const [jobs, setJobs] = useState<JobWithScore[]>([]);
+export function useJobsByIds(ids: string[]): Loaded & { loading: boolean } {
+  const [loaded, setLoaded] = useState<Loaded>({ jobs: [], incomplete: false });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     loadJobsByIds(ids).then((result) => {
       if (cancelled) return;
-      setJobs(result);
+      setLoaded(result);
       setLoading(false);
     });
     return () => {
@@ -58,5 +66,5 @@ export function useJobsByIds(ids: string[]): { jobs: JobWithScore[]; loading: bo
     };
   }, [ids]);
 
-  return { jobs, loading };
+  return { ...loaded, loading };
 }

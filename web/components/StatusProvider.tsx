@@ -41,8 +41,8 @@ export function useStatuses() {
 }
 
 async function fetchServerStatuses(): Promise<StatusMap> {
-  const res = await fetch("/api/status");
-  if (!res.ok) return {};
+  const res = await fetch("/api/status").catch(() => null);
+  if (!res?.ok) return {};
   const data = await res.json();
   return (data.statuses || {}) as StatusMap;
 }
@@ -84,17 +84,20 @@ export default function StatusProvider({ children }: { children: ReactNode }) {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ jobId, status: local[jobId] }),
-            })
+            }).then(
+              (r) => r.ok,
+              () => false // network error: same as a failed write, not a crash
+            )
           )
         );
-        synced = results.every((r) => r.ok);
+        synced = results.every(Boolean);
         for (const id of localOnlyIds) server[id] = local[id];
       }
 
       // Merged into server state above — keep it there. Leaving the local
       // copy behind means the next unmark+reload re-merges it right back in,
       // and it'd also leak into whichever account next signs in on this browser.
-      // Kept if any write failed (401/500), so the next load retries it.
+      // Kept if any write failed (401/500/network), so the next load retries it.
       if (synced) clearStatuses();
       setStatuses(server);
       setMounted(true);
