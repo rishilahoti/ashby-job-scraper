@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { query } from "./db";
 import { scoreJob } from "./scoring";
 import rulesData from "../../src/config/rules.json";
+import { type SqlParam, pushParam, buildSearchSql, tsquerySql } from "./search-terms";
 import type {
   Job,
   JobWithScore,
@@ -160,19 +161,15 @@ function sortInMemory(scored: JobWithScore[], sort: JobFilters["sort"]): void {
   }
 }
 
-type SqlParam = string | number | boolean | string[];
-
-function pushParam(params: SqlParam[], value: SqlParam): string {
-  params.push(value);
-  return `$${params.length}`;
-}
-
 // How well a job's title/company match the search box text; higher is
 // better, 0 when only other fields matched (those then follow by score).
 // title_tsv, not search_tsv: it's small and stored in the row, while ranking
 // on search_tsv read every match's ~2.6KB tsvector from TOAST (7s for "AI").
+// Ranked against the query's terms OR'd, not AND'd: ts_rank on the AND form
+// scores a title with only some of the words (or any -excluded one) the same
+// 1e-20 as a title with none, so partial title hits never ranked first.
 function searchRankSql(params: SqlParam[], search: string): string {
-  return `ts_rank(title_tsv, websearch_to_tsquery('english', ${pushParam(params, search)}))`;
+  return `ts_rank(title_tsv, replace(${tsquerySql(params, search)}::text, ' & ', ' | ')::tsquery)`;
 }
 
 // One definition per filter for the SQL WHERE builder (getCachedJobsPage).
@@ -220,9 +217,10 @@ const FILTER_SPECS: FilterSpec[] = [
     // Full-text over title/company/department/location/description: whole
     // words, any order, plus websearch syntax — "exact phrase", -exclude, or.
     // Always through job_search_ids (src/store/db.js), never search_tsv @@
-    // directly: that's what keeps every search on the GIN index.
-    sql: (f, params) =>
-      `id IN (SELECT job_search_ids(websearch_to_tsquery('english', ${pushParam(params, f.search!)})))`,
+    // directly: that's what keeps every search on the GIN index. Terms FTS
+    // itself mangles (symbols, short acronym-like terms) fall back to a
+    // literal title match instead — see buildSearchSql.
+    sql: (f, params) => buildSearchSql(params, f.search!),
   },
   {
     active: (f) => !!f.tags && f.tags.length > 0,
@@ -314,8 +312,10 @@ const getCachedJobsPage = unstable_cache(
 
     return { data: paginated, total, page, totalPages: Math.ceil(total / limit) };
   },
-  // v4: search ranks by title_tsv — don't serve v3's differently ranked results.
-  ["jobs-page-v4"],
+  // v5: C++/C#/IT fall back to a literal title match, dotted words (Node.js)
+  // are split on both sides, and partial title matches now rank — don't
+  // serve v4's stale result sets.
+  ["jobs-page-v5"],
   // Not lower than the feed page's own revalidate: the shortest one wins, so
   // 60 here silently made the static "/" re-render every minute.
   { revalidate: 300 }
@@ -347,12 +347,18 @@ export async function getJobById(jobId: string): Promise<JobWithScore | null> {
   return scoreJob(rowToJob(rows[0]));
 }
 
+// No is_active filter — this backs the Applied/Ignored pages, which must
+// still show a job someone marked before it closed (JobRow flags !isActive
+// as "Closed" rather than silently dropping it from the list). DISTINCT ON:
+// a job_id can exist under several company-name variants (see
+// dedupeRowsByJobId) — show one, preferring a still-active copy.
 export async function getJobsByIds(jobIds: string[]): Promise<JobWithScore[]> {
   if (jobIds.length === 0) return [];
-  const placeholders = jobIds.map((_, i) => `$${i + 1}`).join(", ");
   const { rows } = await query<JobRow>(
-    `SELECT ${LIST_COLUMNS_BULK} FROM jobs WHERE job_id IN (${placeholders}) AND is_active = TRUE`,
-    jobIds
+    `SELECT DISTINCT ON (job_id) ${LIST_COLUMNS_BULK} FROM jobs
+     WHERE job_id = ANY($1::text[])
+     ORDER BY job_id, is_active DESC, updated_at DESC`,
+    [jobIds]
   );
   return rows.map((r) => scoreJob(rowToJob(r))).map(stripForList);
 }
@@ -398,6 +404,23 @@ export const getStats = withStaleFallback(unstable_cache(
   ["stats"],
   { revalidate: 300 }
 ), { total: 0, companies: 0 });
+
+// Home page's Ashby-specific FAQ copy: getStats counts every platform (1061 vs
+// ~590 Ashby companies). Lowercased names, companies with live Ashby jobs only;
+// EXISTS probes idx_jobs_company_jobid per company instead of scanning jobs.
+export const getAshbyCompanies = withStaleFallback(unstable_cache(
+  async (): Promise<string[]> => {
+    const { rows } = await query<{ name: string }>(
+      `SELECT DISTINCT LOWER(TRIM(c.name)) AS name FROM companies c
+       WHERE c.source = 'ashby' AND EXISTS (
+         SELECT 1 FROM jobs j WHERE j.company = c.name AND j.source = 'ashby' AND j.is_active = TRUE
+       )`
+    );
+    return rows.map((r) => r.name);
+  },
+  ["ashby-companies"],
+  { revalidate: 300 }
+), []);
 
 export const getUserCount = withStaleFallback(unstable_cache(
   async (): Promise<number> => {

@@ -3,6 +3,12 @@ import { query } from "@/lib/db";
 // Reuses the scraper's own adapters (single source of truth for normalize logic —
 // see src/normalize/adapters/*.js) instead of a second, hand-kept-in-sync copy here.
 import { ADAPTERS } from "../../../../src/normalize";
+// Same shared scoring core src/store/jobs.js's upsertJob uses — without this,
+// jobs added here got base_score 0 and no matched_keywords until their content
+// next changed and the scraper's own upsertJob happened to recompute them.
+import { computeStoredScore } from "../../../../src/intelligence/rules-engine";
+import rules from "../../../../src/config/rules.json";
+import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 
 type Source = keyof typeof ADAPTERS;
 const SOURCES = Object.keys(ADAPTERS) as Source[];
@@ -274,8 +280,18 @@ const SOURCE_CONFIG: Record<
   },
 };
 
+// Unauthenticated and, per job board, does up to WORKDAY_MAX_PAGES fetches
+// plus one upsert query per job against a 3-connection pool — an IP looping
+// this endpoint against big boards can tie up the pool for everyone else.
+const IP_MAX_REQUESTS = 5;
+const IP_WINDOW_MINUTES = 10;
+
 export async function POST(request: NextRequest) {
   try {
+    if (await isRateLimited("add-company-ip", getClientIp(request), IP_MAX_REQUESTS, IP_WINDOW_MINUTES)) {
+      return NextResponse.json({ error: "Too many requests. Try again later." }, { status: 429 });
+    }
+
     const body = await request.json();
     const rawInput: string = body.url || body.slug || "";
 
@@ -335,32 +351,60 @@ export async function POST(request: NextRequest) {
 
     const companyNameForJobs = existingRow?.name ?? canonicalName;
 
-    let inserted = 0;
-    let updated = 0;
-    let unchanged = 0;
-    let total = 0;
-    const seenJobIds: string[] = [];
-
+    // Keyed by jobId: a multi-row upsert can't touch the same row twice.
+    const byId = new Map<string, NormalizedJob>();
     const adapter = ADAPTERS[source];
     for (const raw of adapter.filterRaw(result.jobs)) {
       const job = adapter.normalizeJob(raw, companyNameForJobs) as NormalizedJob | null;
-      if (!job) continue;
-      total++;
-      seenJobIds.push(job.jobId);
+      if (job) byId.set(job.jobId, job);
+    }
+    const seenJobIds = [...byId.keys()];
+    const total = seenJobIds.length;
 
-      const { rows } = await query(
+    // Classified against the pre-write hashes, same as the scraper's
+    // detectChanges — RETURNING would only see the just-written hash.
+    const { rows: existing } = await query<{ job_id: string; content_hash: string | null }>(
+      `SELECT job_id, content_hash FROM jobs WHERE company = $1`,
+      [companyNameForJobs]
+    );
+    const oldHash = new Map(existing.map((r) => [r.job_id, r.content_hash]));
+    let inserted = 0;
+    let updated = 0;
+    let unchanged = 0;
+    for (const job of byId.values()) {
+      if (!oldHash.has(job.jobId)) inserted++;
+      else if (oldHash.get(job.jobId) === job.contentHash) unchanged++;
+      else updated++;
+    }
+
+    // One multi-row upsert instead of a sequential query per job, which held
+    // one of the pool's 3 connections for hundreds of round trips on big boards.
+    // ponytail: whole board in one statement; chunk it if a board ever gets
+    // big enough for the payload or the trigger's tsvector work to matter.
+    if (byId.size > 0) {
+      const payload = [...byId.values()].map((job) => ({ ...job, ...computeStoredScore(job, rules) }));
+      await query(
         `INSERT INTO jobs (
            job_id, company, source, title, location, team, department,
            employment_type, remote, description,
            apply_url, job_url, published_at, scraped_at,
            compensation_summary, compensation_min, compensation_max,
-           compensation_currency, compensation_interval, content_hash, is_active
-         ) VALUES (
-           $1, $2, $3, $4, $5, $6, $7,
-           $8, $9, $10,
-           $11, $12, $13, NOW(),
-           $14, $15, $16,
-           $17, $18, $19, TRUE
+           compensation_currency, compensation_interval, content_hash, is_active,
+           base_score, matched_keywords
+         )
+         SELECT "jobId", $2, $3, title, location, team, department,
+                "employmentType", remote, description,
+                "applyUrl", "jobUrl", "publishedAt", NOW(),
+                "compensationSummary", "compensationMin", "compensationMax",
+                "compensationCurrency", "compensationInterval", "contentHash", TRUE,
+                "baseScore", "matchedKeywords"
+         FROM jsonb_to_recordset($1::jsonb) AS r(
+           "jobId" text, title text, location text, team text, department text,
+           "employmentType" text, remote boolean, description text,
+           "applyUrl" text, "jobUrl" text, "publishedAt" timestamptz,
+           "compensationSummary" text, "compensationMin" numeric, "compensationMax" numeric,
+           "compensationCurrency" text, "compensationInterval" text, "contentHash" text,
+           "baseScore" int, "matchedKeywords" text[]
          )
          ON CONFLICT (company, job_id) DO UPDATE SET
            source            = EXCLUDED.source,
@@ -380,42 +424,13 @@ export async function POST(request: NextRequest) {
            compensation_max      = EXCLUDED.compensation_max,
            compensation_currency = EXCLUDED.compensation_currency,
            compensation_interval = EXCLUDED.compensation_interval,
-           content_hash      = CASE
-                                 WHEN jobs.content_hash = EXCLUDED.content_hash THEN jobs.content_hash
-                                 ELSE EXCLUDED.content_hash
-                               END,
+           content_hash      = EXCLUDED.content_hash,
            is_active         = TRUE,
-           updated_at        = NOW()
-         RETURNING
-           (xmax = 0)                          AS was_inserted,
-           (xmax <> 0 AND content_hash = $19)  AS was_unchanged`,
-        [
-          job.jobId,
-          companyNameForJobs,
-          source,
-          job.title,
-          job.location,
-          job.team,
-          job.department,
-          job.employmentType,
-          job.remote,
-          job.description,
-          job.applyUrl,
-          job.jobUrl,
-          job.publishedAt,
-          job.compensationSummary,
-          job.compensationMin,
-          job.compensationMax,
-          job.compensationCurrency,
-          job.compensationInterval,
-          job.contentHash,
-        ]
+           base_score        = EXCLUDED.base_score,
+           matched_keywords  = EXCLUDED.matched_keywords,
+           updated_at        = NOW()`,
+        [JSON.stringify(payload), companyNameForJobs, source]
       );
-
-      const { was_inserted, was_unchanged } = rows[0];
-      if (was_inserted) inserted++;
-      else if (was_unchanged) unchanged++;
-      else updated++;
     }
 
     // Mirrors src/store/jobs.js markRemovedJobs — without this, a job pulled from a
@@ -453,7 +468,7 @@ export async function GET() {
       `SELECT c.name, c.slug, c.source, c.last_scraped_at,
               COUNT(j.id)::int as job_count
        FROM companies c
-       LEFT JOIN jobs j ON j.company = c.name AND j.is_active = TRUE
+       LEFT JOIN jobs j ON j.company = c.name AND j.source = c.source AND j.is_active = TRUE
        GROUP BY c.id, c.name, c.slug, c.source, c.last_scraped_at
        ORDER BY c.name`
     );

@@ -15,6 +15,7 @@ import {
   setStatus as writeStatus,
   getStatus,
   countByStatus,
+  clearStatuses,
   type JobStatus,
   type StatusMap,
 } from "@/lib/status-store";
@@ -75,8 +76,9 @@ export default function StatusProvider({ children }: { children: ReactNode }) {
       const [server, local] = [await fetchServerStatuses(), loadStatuses()];
       const localOnlyIds = Object.keys(local).filter((id) => !(id in server));
 
+      let synced = true;
       if (localOnlyIds.length > 0) {
-        await Promise.all(
+        const results = await Promise.all(
           localOnlyIds.map((jobId) =>
             fetch("/api/status", {
               method: "POST",
@@ -85,9 +87,15 @@ export default function StatusProvider({ children }: { children: ReactNode }) {
             })
           )
         );
+        synced = results.every((r) => r.ok);
         for (const id of localOnlyIds) server[id] = local[id];
       }
 
+      // Merged into server state above — keep it there. Leaving the local
+      // copy behind means the next unmark+reload re-merges it right back in,
+      // and it'd also leak into whichever account next signs in on this browser.
+      // Kept if any write failed (401/500), so the next load retries it.
+      if (synced) clearStatuses();
       setStatuses(server);
       setMounted(true);
     })();

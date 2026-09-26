@@ -2,12 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { generateCode, storeCode } from "@/lib/otp";
 import { sendOtpEmail } from "@/lib/mailer";
+import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 
 const RESEND_COOLDOWN_SECONDS = 60;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// The per-email cooldown below only stops spamming one address — nothing
+// stopped one IP from requesting codes for unlimited different emails.
+const IP_MAX_REQUESTS = 10;
+const IP_WINDOW_MINUTES = 60;
 
 export async function POST(request: NextRequest) {
   try {
+    if (await isRateLimited("otp-request-ip", getClientIp(request), IP_MAX_REQUESTS, IP_WINDOW_MINUTES)) {
+      return NextResponse.json({ error: "Too many requests. Try again later." }, { status: 429 });
+    }
+
     const body = await request.json();
     const email = String(body?.email || "").toLowerCase().trim();
     if (!EMAIL_REGEX.test(email)) {

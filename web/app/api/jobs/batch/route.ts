@@ -24,15 +24,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const validIds = ids.filter((id) => isValidId(id));
-    if (validIds.length !== ids.length) {
-      return NextResponse.json(
-        { error: "Invalid ID format (alphanumeric, hyphen, underscore; max 64 chars)" },
-        { status: 400 }
-      );
-    }
-
-    const jobs = await getJobsByIds(validIds);
+    // Malformed ids are skipped (same as not found), not a 400 for the whole
+    // batch: one bad id used to hide the other 199 jobs on Applied/Ignored.
+    const jobs = await getJobsByIds(ids.filter((id) => isValidId(id)));
 
     return NextResponse.json(
       { data: jobs },

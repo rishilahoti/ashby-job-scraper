@@ -31,21 +31,21 @@ export async function verifyCode(email: string, code: string): Promise<boolean> 
   const normalizedEmail = email.toLowerCase().trim();
   const codeHash = hashCode(code, normalizedEmail);
 
-  const { rows } = await query<{ id: number; code_hash: string; attempts: number }>(
-    `SELECT id, code_hash, attempts FROM email_otp_codes
-     WHERE email = $1 AND consumed_at IS NULL AND expires_at > NOW()
-     ORDER BY created_at DESC LIMIT 1`,
-    [normalizedEmail]
+  // Count the attempt and consume on a match in one statement: the WHERE
+  // re-evaluates under the row lock, so concurrent guesses serialize instead
+  // of all reading attempts=0 and sneaking past MAX_ATTEMPTS, and only the
+  // first of two parallel correct guesses sees consumed_at IS NULL.
+  const { rows } = await query<{ ok: boolean }>(
+    `UPDATE email_otp_codes
+     SET attempts = attempts + 1,
+         consumed_at = CASE WHEN code_hash = $3 THEN NOW() END
+     WHERE id = (
+       SELECT id FROM email_otp_codes
+       WHERE email = $1 AND consumed_at IS NULL AND expires_at > NOW()
+       ORDER BY created_at DESC LIMIT 1
+     ) AND attempts < $2 AND consumed_at IS NULL
+     RETURNING consumed_at IS NOT NULL AS ok`,
+    [normalizedEmail, MAX_ATTEMPTS, codeHash]
   );
-  const row = rows[0];
-  if (!row) return false;
-  if (row.attempts >= MAX_ATTEMPTS) return false;
-
-  if (row.code_hash !== codeHash) {
-    await query(`UPDATE email_otp_codes SET attempts = attempts + 1 WHERE id = $1`, [row.id]);
-    return false;
-  }
-
-  await query(`UPDATE email_otp_codes SET consumed_at = NOW() WHERE id = $1`, [row.id]);
-  return true;
+  return rows[0]?.ok === true;
 }

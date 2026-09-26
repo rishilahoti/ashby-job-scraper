@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { getPool, initDb, closeDb } = require('../src/store/db');
+const { upsertJob } = require('../src/store/jobs');
 
 test('getPool().query executes a simple query against the configured database', async () => {
   const pool = getPool();
@@ -29,11 +30,14 @@ test('search_tsv: words match in any order, title hits rank first, unrelated upd
   // Mirrors upsertJob: every column rewritten, searchable text unchanged.
   await pool.query(`UPDATE jobs SET scraped_at = NOW(), updated_at = NOW() WHERE company = 'SearchTestCo' AND job_id = 'fts-1'`);
 
-  // Same shape as web/lib/query.ts: match via job_search_ids, rank by title_tsv.
+  // Same shape as web/lib/query.ts: match via job_search_ids, rank by title_tsv
+  // against the OR'd terms (the AND form scored this partial title hit 1e-20,
+  // the same as no title hit, so the order below was a coin flip).
+  const q = `websearch_to_tsquery('english', split_compound_words($1))`;
   const { rows } = await pool.query(
     `SELECT job_id FROM jobs
-     WHERE company = 'SearchTestCo' AND id IN (SELECT job_search_ids(websearch_to_tsquery('english', $1)))
-     ORDER BY ts_rank(title_tsv, websearch_to_tsquery('english', $1)) DESC`,
+     WHERE company = 'SearchTestCo' AND id IN (SELECT job_search_ids(${q}))
+     ORDER BY ts_rank(title_tsv, replace(${q}::text, ' & ', ' | ')::tsquery) DESC`,
     ['remote python']
   );
   assert.deepEqual(rows.map((r) => r.job_id), ['fts-2', 'fts-1']);
@@ -46,6 +50,56 @@ test('search_tsv: words match in any order, title hits rank first, unrelated upd
   await pool.query(`UPDATE jobs SET title = 'Python Office Manager' WHERE company = 'SearchTestCo' AND job_id = 'fts-1'`);
   assert.equal(await inTitle(), true, 'title_tsv must follow title changes');
   await pool.query(`DELETE FROM jobs WHERE company = 'SearchTestCo'`);
+});
+
+test('search_tsv splits dotted compound words so a bare search still matches "Node.js"', async () => {
+  await initDb();
+  const pool = getPool();
+  await pool.query(`DELETE FROM jobs WHERE company = 'CompoundTestCo'`);
+  await pool.query(
+    `INSERT INTO jobs (job_id, company, title, description, scraped_at, content_hash)
+     VALUES ('cw-1', 'CompoundTestCo', 'Node.js Engineer', '', NOW(), 'h')`
+  );
+
+  // Same query shape as web/lib/search-terms.ts tsquerySql: split on both sides.
+  const matches = async (term) =>
+    (await pool.query(
+      `SELECT job_id FROM jobs
+       WHERE company = 'CompoundTestCo'
+         AND id IN (SELECT job_search_ids(websearch_to_tsquery('english', split_compound_words($1))))`,
+      [term]
+    )).rows.map((r) => r.job_id);
+
+  assert.deepEqual(await matches('node'), ['cw-1'], 'bare "node" must match a "Node.js" title');
+  assert.deepEqual(await matches('js'), ['cw-1'], 'the split must also leave a separate "js" lexeme');
+  assert.deepEqual(await matches('Node.js'), ['cw-1'], 'the dotted query itself must still match');
+  assert.deepEqual(await matches('"node.js engineer"'), ['cw-1'], 'and so must a quoted phrase containing it');
+  await pool.query(`DELETE FROM jobs WHERE company = 'CompoundTestCo'`);
+});
+
+test('upsertJob reports insert vs. update correctly, not "unchanged" for every real update', async () => {
+  await initDb();
+  const pool = getPool();
+  await pool.query(`DELETE FROM jobs WHERE company = 'UpsertTestCo'`);
+
+  const baseJob = {
+    jobId: 'up-1', company: 'UpsertTestCo', source: 'ashby', title: 'Engineer',
+    location: 'Remote', team: null, department: null, employmentType: 'FullTime',
+    remote: true, description: 'v1', applyUrl: 'https://x', jobUrl: 'https://x',
+    publishedAt: new Date().toISOString(), scrapedAt: new Date().toISOString(),
+    compensationSummary: null, compensationMin: null, compensationMax: null,
+    compensationCurrency: null, compensationInterval: null, contentHash: 'hash-v1',
+  };
+
+  assert.equal(await upsertJob(baseJob), 'inserted');
+  // RETURNING used to compare content_hash against the row's own just-written
+  // value, so this always came back 'unchanged' — JOB_UPDATED never fired.
+  assert.equal(
+    await upsertJob({ ...baseJob, description: 'v2', contentHash: 'hash-v2' }),
+    'updated'
+  );
+
+  await pool.query(`DELETE FROM jobs WHERE company = 'UpsertTestCo'`);
 });
 
 test('initDb survives a schema statement that runs longer than the pool timeout', { timeout: 120000 }, async () => {

@@ -34,6 +34,12 @@ export default function JobRow({ job, index }: { job: JobWithScore; index: numbe
           <span className="text-xs text-ink-muted">{job.location}</span>
           <Separator />
           <SourceTag source={job.source} />
+          {!job.isActive && (
+            <>
+              <Separator />
+              <span className="text-xs text-ink-muted font-mono">CLOSED</span>
+            </>
+          )}
           {job.remote && (
             <>
               <Separator />

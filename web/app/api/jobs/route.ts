@@ -20,7 +20,9 @@ const EMPLOYMENT_TYPES = new Set([
 ]);
 const SORT_OPTIONS = new Set(['score', 'newest', 'oldest']);
 const MAX_SEARCH_LEN = 200;
-const MAX_PAGE = 1000;
+// Sanity ceiling only (bounds unstable_cache entries from bogus ?page=), far
+// above any real page count — 1000 used to strand pages past it (~1168 today).
+const MAX_PAGE = 20000;
 const MAX_LIMIT = 100;
 
 function safeInt(value: string | null, def: number, max: number): number {

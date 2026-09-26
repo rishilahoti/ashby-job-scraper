@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { DM_Sans, Space_Grotesk } from "next/font/google";
-import { getStats, getCompanies, getUserCount } from "@/lib/query";
+import { getStats, getCompanies, getUserCount, getAshbyCompanies } from "@/lib/query";
 import { GitHubStarBadge } from "@/components/GitHubBadge";
 import { PROVIDER_NAMES } from "@/lib/providers";
 import styles from "./home.module.css";
@@ -98,11 +98,14 @@ const FAQS_BASE = [
 ];
 
 export default async function HomePage() {
-  const [stats, companies, userCount] = await Promise.all([getStats(), getCompanies(), getUserCount()]);
+  const [stats, companies, userCount, ashbyCompanies] = await Promise.all([
+    getStats(), getCompanies(), getUserCount(), getAshbyCompanies(),
+  ]);
 
   const activeFeatured = activeFeaturedCompanies(companies);
   const marqueeCompanies = [...activeFeatured, ...activeFeatured];
-  const faqs = buildFaqs(stats.companies, activeFeatured);
+  // The FAQ's {{count}}/{{examples}} are all Ashby claims ("... use Ashby").
+  const faqs = buildFaqs(ashbyCompanies.length, activeFeaturedCompanies(ashbyCompanies));
 
   const websiteSchema = {
     "@context": "https://schema.org",

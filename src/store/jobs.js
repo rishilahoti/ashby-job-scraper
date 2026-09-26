@@ -53,7 +53,10 @@ async function upsertJob(job) {
   const { baseScore, matchedKeywords } = computeStoredScore(job, config.intelligence.rules);
 
   const { rows } = await pool.query(
-    `INSERT INTO jobs (
+    `WITH old_hash AS (
+        SELECT content_hash FROM jobs WHERE company = $2 AND job_id = $1
+      )
+      INSERT INTO jobs (
         job_id, company, source, title, location, team, department,
         employment_type, remote, description,
         apply_url, job_url, published_at, scraped_at,
@@ -87,17 +90,14 @@ async function upsertJob(job) {
         compensation_max      = EXCLUDED.compensation_max,
         compensation_currency = EXCLUDED.compensation_currency,
         compensation_interval = EXCLUDED.compensation_interval,
-        content_hash      = CASE
-                              WHEN jobs.content_hash = EXCLUDED.content_hash THEN jobs.content_hash
-                              ELSE EXCLUDED.content_hash
-                            END,
+        content_hash      = EXCLUDED.content_hash,
         is_active         = TRUE,
         base_score        = EXCLUDED.base_score,
         matched_keywords  = EXCLUDED.matched_keywords,
         updated_at        = NOW()
       RETURNING
-        (xmax = 0)                          AS was_inserted,
-        (xmax <> 0 AND content_hash = $20)  AS was_unchanged`,
+        (xmax = 0)                                               AS was_inserted,
+        (xmax <> 0 AND (SELECT content_hash FROM old_hash) = $20) AS was_unchanged`,
     [
       job.jobId, job.company, job.source || 'ashby', job.title, job.location, job.team, job.department,
       job.employmentType, !!job.remote, job.description,
