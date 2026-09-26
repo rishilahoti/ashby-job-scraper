@@ -164,7 +164,7 @@ test('workday.normalizeJob maps a real CXS jobs response shape', () => {
     _boardUrl: 'https://workday.wd5.myworkdayjobs.com/Workday',
   }, 'Workday');
 
-  assert.equal(job.jobId, '/job/USA-IL-Chicago/Principal-Engagement-Manager---Paradox_JR-0109678');
+  assert.equal(job.jobId, 'Principal-Engagement-Manager---Paradox_JR-0109678');
   assert.equal(job.source, 'workday');
   assert.equal(job.remote, false);
   assert.equal(job.location, 'Chicago');
@@ -173,6 +173,15 @@ test('workday.normalizeJob maps a real CXS jobs response shape', () => {
     'https://workday.wd5.myworkdayjobs.com/Workday/job/USA-IL-Chicago/Principal-Engagement-Manager---Paradox_JR-0109678'
   );
   assert.ok(job.contentHash);
+});
+
+test('workday.normalizeJob keeps jobId route-safe for dotted/accented/long titles', () => {
+  const job = workday.normalizeJob({
+    title: 'x',
+    externalPath: '/job/München/Sr.-Staff-Engineer-(Platform)-Distributed-Systems-and-Infrastructure_JR-0123456',
+  }, 'Acme');
+  assert.match(job.jobId, /^[a-zA-Z0-9_-]{1,64}$/);
+  assert.ok(job.jobId.endsWith('_JR-0123456'), 'requisition id must survive the trim');
 });
 
 test('workday.normalizeJob returns null when externalPath is missing', () => {

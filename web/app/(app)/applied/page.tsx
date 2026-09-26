@@ -1,14 +1,12 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useMemo } from "react";
 import { useStatuses } from "@/components/StatusProvider";
+import { useJobsByIds } from "@/lib/useJobsByIds";
 import JobList from "@/components/JobList";
-import type { JobWithScore } from "@/lib/types";
 
 export default function AppliedPage() {
   const { statuses } = useStatuses();
-  const [jobs, setJobs] = useState<JobWithScore[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const appliedIds = useMemo(
     () =>
@@ -18,24 +16,7 @@ export default function AppliedPage() {
     [statuses]
   );
 
-  useEffect(() => {
-    if (appliedIds.length === 0) {
-      Promise.resolve().then(() => {
-        setJobs([]);
-        setLoading(false);
-      });
-      return;
-    }
-
-    const params = new URLSearchParams();
-    appliedIds.forEach((id) => params.append("ids", id));
-
-    fetch(`/api/jobs/batch?${params.toString()}`)
-      .then((r) => r.json())
-      .then((res) => setJobs(res.data ?? []))
-      .catch(() => setJobs([]))
-      .finally(() => setLoading(false));
-  }, [appliedIds]);
+  const { jobs, loading, incomplete } = useJobsByIds(appliedIds);
 
   return (
     <div>
@@ -43,6 +24,10 @@ export default function AppliedPage() {
         <h1 className="font-display text-xl font-bold tracking-tight">Applied</h1>
         <span className="font-mono text-sm text-ink-muted">{jobs.length}</span>
       </div>
+
+      {incomplete && (
+        <p className="mb-4 text-sm text-ink-muted">Some jobs couldn&apos;t load. Refresh to retry.</p>
+      )}
 
       {loading ? (
         <div className="py-20 text-center">

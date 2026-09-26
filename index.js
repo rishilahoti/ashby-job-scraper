@@ -60,12 +60,13 @@ program
 
 program
   .command('migrate')
-  .description('Run one-time database backfills that don\'t run automatically on startup (currently: canonicalize existing job locations)')
+  .description('Run one-time database backfills that don\'t run automatically on startup (currently: canonicalize existing job locations, resplit compound search terms)')
   .action(async () => {
     const store = require('./src/store');
     try {
       await store.initDb();
       await store.canonicalizeJobLocations();
+      await store.resplitCompoundSearchTerms();
     } catch (err) {
       logger.error(`Migration failed: ${err.message}`);
       process.exit(1);

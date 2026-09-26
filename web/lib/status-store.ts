@@ -19,6 +19,19 @@ export function saveStatuses(map: StatusMap) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
 }
 
+// Called once local statuses have been merged into the signed-in user's
+// server-side statuses — otherwise this stale copy survives every future
+// unmark/reload and keeps re-merging itself back in.
+export function clearStatuses() {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Storage blocked: nothing to clear, and throwing here would stop
+    // StatusProvider before it ever shows the merged statuses.
+  }
+}
+
 export function getStatus(map: StatusMap, jobId: string): JobStatus {
   return map[jobId] || "new";
 }

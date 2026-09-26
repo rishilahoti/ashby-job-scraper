@@ -1,14 +1,12 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useMemo } from "react";
 import { useStatuses } from "@/components/StatusProvider";
+import { useJobsByIds } from "@/lib/useJobsByIds";
 import JobList from "@/components/JobList";
-import type { JobWithScore } from "@/lib/types";
 
 export default function IgnoredPage() {
   const { statuses } = useStatuses();
-  const [jobs, setJobs] = useState<JobWithScore[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const ignoredIds = useMemo(
     () =>
@@ -18,24 +16,7 @@ export default function IgnoredPage() {
     [statuses]
   );
 
-  useEffect(() => {
-    if (ignoredIds.length === 0) {
-      Promise.resolve().then(() => {
-        setJobs([]);
-        setLoading(false);
-      });
-      return;
-    }
-
-    const params = new URLSearchParams();
-    ignoredIds.forEach((id) => params.append("ids", id));
-
-    fetch(`/api/jobs/batch?${params.toString()}`)
-      .then((r) => r.json())
-      .then((res) => setJobs(res.data ?? []))
-      .catch(() => setJobs([]))
-      .finally(() => setLoading(false));
-  }, [ignoredIds]);
+  const { jobs, loading, incomplete } = useJobsByIds(ignoredIds);
 
   return (
     <div>
@@ -43,6 +24,10 @@ export default function IgnoredPage() {
         <h1 className="font-display text-xl font-bold tracking-tight">Ignored</h1>
         <span className="font-mono text-sm text-ink-muted">{jobs.length}</span>
       </div>
+
+      {incomplete && (
+        <p className="mb-4 text-sm text-ink-muted">Some jobs couldn&apos;t load. Refresh to retry.</p>
+      )}
 
       {loading ? (
         <div className="py-20 text-center">

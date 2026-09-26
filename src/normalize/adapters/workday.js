@@ -9,8 +9,13 @@ const { normalizeLocation } = require('../shared');
 // it's the only way to turn `externalPath` into an absolute URL, since Workday embeds
 // no host/tenant info in each job.
 function normalizeJob(raw, company) {
-  const jobId = raw.externalPath || null;
-  if (!jobId) return null;
+  // externalPath ("/job/Santa-Clara/Engineer_JR123") has slashes, but jobId
+  // must pass /jobs/[jobId] and /api/jobs/*'s ^[a-zA-Z0-9_-]{1,64}$ check.
+  // The last segment is a title slug ending in Workday's requisition id, so
+  // other characters become "-" and a long title is trimmed from the front.
+  const segment = (raw.externalPath || '').split('/').filter(Boolean).pop();
+  if (!segment) return null;
+  const jobId = segment.replace(/[^\w-]/g, '-').slice(-64);
 
   const normalizedLocation = normalizeLocation(raw.locationsText, /remote/i.test(raw.remoteType || ''));
   const url = raw._boardUrl ? `${raw._boardUrl}${raw.externalPath}` : null;

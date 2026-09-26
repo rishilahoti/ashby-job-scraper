@@ -214,6 +214,10 @@ async function migrateSchema(p) {
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_location ON jobs (location) WHERE is_active = TRUE`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_employment_type ON jobs (employment_type)`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_matched_keywords ON jobs USING GIN (matched_keywords)`);
+  // web's getJobById / getJobsByIds (job pages, Applied/Ignored batches) look
+  // up by job_id alone — the (company, job_id) unique index can't serve that,
+  // so each lookup was a full table scan.
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_job_id ON jobs (job_id)`);
 
   // Full-text keyword search (web/lib/query.ts): words match in any order,
   // descriptions included, title/company hits rank first. Trigger-maintained
@@ -225,6 +229,18 @@ async function migrateSchema(p) {
   // ranking, so ranking thousands of matches never reads TOAST.
   await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS search_tsv tsvector`);
   await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS title_tsv tsvector`);
+  // Postgres's parser tokenizes "Node.js"/"Vue.js"/"ASP.NET"-shaped text as one
+  // "host"-like lexeme distinct from "node"/"vue"/"asp" — searching the bare
+  // name misses every job whose title only has the dotted form. Splitting on
+  // a letter-dot-letter boundary before to_tsvector gives both a "node" and a
+  // "js" lexeme; decimals ("3.5") and leading dots (".NET") are untouched
+  // since both sides of the dot must be letters.
+  await p.query(`
+    CREATE OR REPLACE FUNCTION split_compound_words(t text) RETURNS text
+    LANGUAGE sql IMMUTABLE AS $$
+      SELECT regexp_replace(t, '([[:alpha:]])\\.([[:alpha:]])', '\\1 \\2', 'g')
+    $$
+  `);
   await p.query(`
     CREATE OR REPLACE FUNCTION jobs_search_tsv() RETURNS trigger LANGUAGE plpgsql AS $$
     BEGIN
@@ -232,13 +248,13 @@ async function migrateSchema(p) {
          OR (NEW.title, NEW.company, NEW.department, NEW.team, NEW.location, NEW.description)
             IS DISTINCT FROM (OLD.title, OLD.company, OLD.department, OLD.team, OLD.location, OLD.description) THEN
         NEW.search_tsv :=
-          setweight(to_tsvector('english', concat_ws(' ', NEW.title, NEW.company)), 'A') ||
-          setweight(to_tsvector('english', concat_ws(' ', NEW.department, NEW.team, NEW.location)), 'B') ||
-          setweight(to_tsvector('english', coalesce(NEW.description, '')), 'D');
+          setweight(to_tsvector('english', split_compound_words(concat_ws(' ', NEW.title, NEW.company))), 'A') ||
+          setweight(to_tsvector('english', split_compound_words(concat_ws(' ', NEW.department, NEW.team, NEW.location))), 'B') ||
+          setweight(to_tsvector('english', split_compound_words(coalesce(NEW.description, ''))), 'D');
       END IF;
       IF TG_OP = 'INSERT' OR NEW.title_tsv IS NULL
          OR (NEW.title, NEW.company) IS DISTINCT FROM (OLD.title, OLD.company) THEN
-        NEW.title_tsv := to_tsvector('english', concat_ws(' ', NEW.title, NEW.company));
+        NEW.title_tsv := to_tsvector('english', split_compound_words(concat_ws(' ', NEW.title, NEW.company)));
       END IF;
       RETURN NEW;
     END $$
@@ -381,6 +397,54 @@ async function canonicalizeJobLocations() {
   }
 }
 
+// One-time backfill for job rows written before the trigger split dotted
+// compound words (Node.js, ASP.NET, ...) into separate lexemes — plain
+// jobs_search_tsv() firing on future writes never touches existing rows.
+// Not run automatically by initDb() for the same reason as
+// canonicalizeJobLocations above. Run via `node index.js migrate`.
+async function resplitCompoundSearchTerms() {
+  const p = getPool();
+
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      name TEXT PRIMARY KEY,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  const done = await p.query(
+    `SELECT 1 FROM schema_migrations WHERE name = 'compound-word-tsvector-v1'`
+  );
+  if (done.rowCount > 0) {
+    logger.info('Compound search terms already resplit — nothing to do');
+    return;
+  }
+
+  // Ranged by id, not "WHERE <pattern> LIMIT 1000": the pattern isn't
+  // indexed, so paging by match count would re-scan the whole remaining
+  // table on every batch. This touches each row exactly once. Setting the
+  // two vectors NULL re-triggers jobs_search_tsv, which recomputes them with
+  // split_compound_words applied. No advisory lock: that recompute is
+  // idempotent, so an overlapping second run only repeats work.
+  const { rows } = await p.query('SELECT COALESCE(MAX(id), 0) AS max_id FROM jobs');
+  let totalUpdated = 0;
+  for (let lastId = 0; lastId < rows[0].max_id; lastId += 1000) {
+    const { rowCount } = await p.query(
+      `UPDATE jobs SET search_tsv = NULL, title_tsv = NULL
+       WHERE id > $1 AND id <= $2
+         AND (title || ' ' || company || ' ' || coalesce(department, '') || ' '
+              || coalesce(team, '') || ' ' || coalesce(location, '') || ' '
+              || coalesce(description, '')) ~ '[[:alpha:]]\\.[[:alpha:]]'`,
+      [lastId, lastId + 1000]
+    );
+    totalUpdated += rowCount ?? 0;
+    logger.info(`Resplitting compound search terms: scanned up to id ${lastId + 1000}, ${totalUpdated} updated so far`);
+  }
+  await p.query(
+    `INSERT INTO schema_migrations (name) VALUES ('compound-word-tsvector-v1') ON CONFLICT DO NOTHING`
+  );
+  logger.info(`Resplit compound search terms for ${totalUpdated} existing jobs`);
+}
+
 async function closeDb() {
   if (pool) {
     await pool.end();
@@ -388,4 +452,4 @@ async function closeDb() {
   }
 }
 
-module.exports = { getPool, initDb, canonicalizeJobLocations, closeDb };
+module.exports = { getPool, initDb, canonicalizeJobLocations, resplitCompoundSearchTerms, closeDb };
