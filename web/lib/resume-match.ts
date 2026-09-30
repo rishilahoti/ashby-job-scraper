@@ -36,7 +36,7 @@ const COMPUTED_SCORE_SQL =
     : "base_score";
 const RESUME_LIST_COLUMNS = `
   id, job_id, company, source, title, location, team, department,
-  employment_type, remote, description, apply_url, job_url,
+  employment_type, remote, description, NULL::text AS experience_label, apply_url, job_url,
   published_at, scraped_at, compensation_summary,
   compensation_min, compensation_max, compensation_currency, compensation_interval, content_hash,
   is_active, created_at, updated_at
@@ -109,10 +109,19 @@ export async function ensureUserResumeColumns(): Promise<void> {
         ADD COLUMN IF NOT EXISTS resume_text TEXT,
         ADD COLUMN IF NOT EXISTS resume_filename TEXT,
         ADD COLUMN IF NOT EXISTS resume_uploaded_at TIMESTAMPTZ
-    `).then(() => undefined);
+    `)
+      .then(() => undefined)
+      .catch((error) => {
+        ensuredResumeColumns = null;
+        throw error;
+      });
   }
 
   return ensuredResumeColumns;
+}
+
+export function isPdfBytes(data: Uint8Array): boolean {
+  return data.length >= 5 && data[0] === 0x25 && data[1] === 0x50 && data[2] === 0x44 && data[3] === 0x46 && data[4] === 0x2d;
 }
 
 export function normalizeResumeText(text: string): string {

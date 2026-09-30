@@ -78,6 +78,7 @@ export type JobRow = {
   compensation_interval: string | null;
   content_hash: string;
   is_active: boolean;
+  experience_label: string | null;
   created_at: string;
   updated_at: string;
 };

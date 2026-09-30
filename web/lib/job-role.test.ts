@@ -37,3 +37,12 @@ test("buildJobRoleSql builds a role-specific SQL predicate", () => {
   assert.equal(params.some((value) => String(value).includes("sre")), true);
   assert.equal(params.length > 0, true);
 });
+
+test("buildJobRoleSql includes description patterns", () => {
+  const params: (string | number | boolean | string[])[] = [];
+  const sql = buildJobRoleSql(params, "frontend");
+
+  assert.match(sql, /COALESCE\(description/);
+  assert.equal(params.some((value) => String(value).includes("react")), true);
+  assert.equal(params.some((value) => String(value).includes("frontend")), true);
+});

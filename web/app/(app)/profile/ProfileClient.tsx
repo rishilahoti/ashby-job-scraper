@@ -103,6 +103,8 @@ function ProfileTab({ data, setData }: { data: ProfileData; setData: (data: Prof
         return;
       }
       setData(payload as ProfileData);
+    } catch {
+      setResumeError("Failed to upload resume");
     } finally {
       setResumeUploading(false);
     }

@@ -108,11 +108,6 @@ export function inferJobRolesFromText(text: string, limit = 3): JobRoleInference
     .slice(0, limit);
 }
 
-export function buildJobRoleCaseSql(params: SqlParam[]): string {
-  void params;
-  return "FALSE";
-}
-
 function buildPatternSql(expr: string, patterns: string[], params: SqlParam[]): string {
   return `(${patterns.map((pattern) => `${expr} ~* ${pushParam(params, makePattern(pattern))}`).join(" OR ")})`;
 }
@@ -121,12 +116,18 @@ export function buildJobRoleSql(params: SqlParam[], role: JobRole): string {
   const definition = ROLE_DEFINITIONS.find((entry) => entry.value === role);
   if (!definition) return "FALSE";
 
-  const expr = "LOWER(COALESCE(title, ''))";
-  const includePatterns = definition.titlePatterns;
-  const includeSql = buildPatternSql(expr, includePatterns, params);
+  const titleExpr = "LOWER(COALESCE(title, ''))";
+  const descriptionExpr = "LOWER(COALESCE(description, ''))";
+  const includeSql = [
+    buildPatternSql(titleExpr, definition.titlePatterns, params),
+    buildPatternSql(descriptionExpr, definition.descriptionPatterns, params),
+  ].join(" OR ");
   const excludePatterns = ROLE_EXCLUDE_PATTERNS[role] ?? [];
   if (excludePatterns.length === 0) return includeSql;
 
-  const excludeSql = buildPatternSql(expr, excludePatterns, params);
+  const excludeSql = [
+    buildPatternSql(titleExpr, excludePatterns, params),
+    buildPatternSql(descriptionExpr, excludePatterns, params),
+  ].join(" OR ");
   return `(${includeSql} AND NOT ${excludeSql})`;
 }

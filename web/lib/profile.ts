@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { query } from "./db";
 import { ensureUserResumeColumns, getResumeInsights } from "./resume-match";
 import type { ResumeJobMatch, ResumeRoleMatch } from "./resume-types";
@@ -14,6 +15,12 @@ export interface ProfileData {
   resumeMatchedRoles: ResumeRoleMatch[];
   resumeMatchedJobs: ResumeJobMatch[];
 }
+
+const getCachedResumeInsights = unstable_cache(
+  async (resumeText: string, profileRole: string | null) => getResumeInsights(resumeText, profileRole),
+  ["profile-resume-insights"],
+  { revalidate: 3600 }
+);
 
 export async function getProfileData(userId: string): Promise<ProfileData | null> {
   await ensureUserResumeColumns();
@@ -37,7 +44,7 @@ export async function getProfileData(userId: string): Promise<ProfileData | null
   const user = userRows[0];
   if (!user) return null;
 
-  const resumeInsights = user.resume_text ? await getResumeInsights(user.resume_text, user.role) : null;
+  const resumeInsights = user.resume_text ? await getCachedResumeInsights(user.resume_text, user.role) : null;
 
   return {
     name: user.name,

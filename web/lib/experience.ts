@@ -4,7 +4,6 @@ const EXPERIENCE_PATTERNS = [
   /(\d{1,2})\s*(?:\+|plus)?\s*(?:to|-|–)?\s*(\d{1,2})?\s*(?:years|year|yrs|yr)\s+of\s+(?:industry|professional|relevant)\s+experience/i,
   /minimum of\s+(\d{1,2})\s*(?:\+|plus)?\s*(?:to|-|–)?\s*(\d{1,2})?\s*(?:years|year|yrs|yr)/i,
   /at least\s+(\d{1,2})\s*(?:\+|plus)?\s*(?:years|year|yrs|yr)/i,
-  /(\d{1,2})\s*(?:\+|plus)?\s*(?:years|year|yrs|yr)\s+in/i,
   /\((\d{1,2})\s*(?:\+|plus)?\s*(?:years|year|yrs|yr)\)\s+of/i,
   /(\d{1,2})\s*(?:\+|plus)?\s*(?:years|year|yrs|yr)\s+of\s+(?:architecting|building|developing|engineering|operating|supporting|managing|working)/i,
   /(\d{1,2})\s*(?:\+|plus)?\s*(?:years|year|yrs|yr)\s+with\s+(?:aws|gcp|azure|kubernetes|terraform|python|typescript|java|go|distributed|systems|infrastructure|software)/i,
