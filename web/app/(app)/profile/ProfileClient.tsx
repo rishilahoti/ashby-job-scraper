@@ -56,18 +56,20 @@ function ProfileClientInner({ initialData }: { initialData: ProfileData }) {
         ))}
       </div>
 
-      {tab === "profile" && <ProfileTab data={data} />}
+      {tab === "profile" && <ProfileTab data={data} setData={setData} />}
       {tab === "jobs" && <JobsTab />}
       {tab === "integrations" && <IntegrationsTab data={data} setData={setData} />}
     </div>
   );
 }
 
-function ProfileTab({ data }: { data: ProfileData }) {
+function ProfileTab({ data, setData }: { data: ProfileData; setData: (data: ProfileData) => void }) {
   const [name, setName] = useState(data.name || "");
   const [role, setRole] = useState(data.role || "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [resumeUploading, setResumeUploading] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
 
   async function save() {
     setSaving(true);
@@ -77,9 +79,38 @@ function ProfileTab({ data }: { data: ProfileData }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, role }),
     });
+    setData({ ...data, name, role });
     setSaving(false);
     setSaved(true);
   }
+
+  async function uploadResume(file: File | null) {
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.set("resume", file);
+    setResumeUploading(true);
+    setResumeError(null);
+
+    try {
+      const response = await fetch("/api/profile/resume", {
+        method: "POST",
+        body: formData,
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        setResumeError(payload?.error || "Failed to upload resume");
+        return;
+      }
+      setData(payload as ProfileData);
+    } catch {
+      setResumeError("Failed to upload resume");
+    } finally {
+      setResumeUploading(false);
+    }
+  }
+
+  const uploadedDate = data.resumeUploadedAt ? new Date(data.resumeUploadedAt).toLocaleDateString() : null;
 
   return (
     <div className="space-y-5 max-w-sm">
@@ -131,6 +162,92 @@ function ProfileTab({ data }: { data: ProfileData }) {
           {saving ? "Saving..." : "Save"}
         </button>
         {saved && <span className="text-xs text-positive">Saved</span>}
+      </div>
+
+      <div className="pt-4 border-t border-edge space-y-3">
+        <div>
+          <p className="block text-xs font-medium text-ink-secondary mb-1.5 font-mono uppercase tracking-wider">
+            Resume PDF
+          </p>
+          <label className="flex items-center justify-center w-full min-h-24 px-4 py-5 text-sm text-center rounded-md border border-dashed border-edge bg-surface hover:border-edge-strong cursor-pointer transition-colors">
+            <input
+              type="file"
+              accept="application/pdf"
+              className="sr-only"
+              onChange={(event) => {
+                void uploadResume(event.target.files?.[0] || null);
+                event.currentTarget.value = "";
+              }}
+            />
+            {resumeUploading ? "Parsing and matching your resume..." : "Upload a PDF resume to see matching roles and jobs"}
+          </label>
+          {data.resumeFilename && (
+            <p className="mt-2 text-xs text-ink-muted">
+              Latest upload: {data.resumeFilename}{uploadedDate ? ` on ${uploadedDate}` : ""}
+            </p>
+          )}
+          {resumeError && <p className="mt-2 text-xs text-destructive">{resumeError}</p>}
+        </div>
+
+        {data.resumeMatchedRoles.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-ink-secondary mb-2 font-mono uppercase tracking-wider">
+              Matching roles
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {data.resumeMatchedRoles.map((match) => (
+                <span
+                  key={match.role}
+                  className="inline-flex items-center gap-1 rounded-full border border-edge px-2.5 py-1 text-xs bg-surface text-ink"
+                >
+                  {match.label}
+                  <span className="text-ink-muted">{match.score}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {data.resumeKeywords.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-ink-secondary mb-2 font-mono uppercase tracking-wider">
+              Resume keywords
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {data.resumeKeywords.map((keyword) => (
+                <span key={keyword} className="rounded-full bg-surface px-2.5 py-1 text-xs text-ink-secondary border border-edge">
+                  {keyword}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {data.resumeFilename && (
+          <div>
+            <p className="text-xs font-medium text-ink-secondary mb-2 font-mono uppercase tracking-wider">
+              Matching jobs
+            </p>
+            <div className="divide-y divide-edge rounded-md border border-edge overflow-hidden">
+              {data.resumeMatchedJobs.length === 0 && (
+                <p className="px-3 py-4 text-sm text-ink-muted">No strong job matches yet for this resume.</p>
+              )}
+              {data.resumeMatchedJobs.map((job) => (
+                <Link
+                  key={job.jobId}
+                  href={`/jobs/${job.jobId}`}
+                  className="block px-3 py-3 hover:bg-surface transition-colors"
+                >
+                  <p className="text-sm text-ink">{job.title}</p>
+                  <p className="text-xs text-ink-muted mt-1">{job.company}</p>
+                  <p className="text-[11px] text-ink-muted mt-1">
+                    Match {job.matchScore} · Feed score {job.score}{job.publishedAt ? ` · Posted ${new Date(job.publishedAt).toLocaleDateString()}` : ""}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

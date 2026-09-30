@@ -7,8 +7,10 @@ import {
 	getLocations,
 } from '@/lib/query';
 import { POSITIVE_TAG_OPTIONS } from '@/lib/scoring';
+import { JOB_ROLE_OPTIONS } from '@/lib/job-role';
 import { PROVIDERS } from '@/lib/providers';
 import type { JobFilters } from '@/lib/types';
+import type { JobRole } from '@/lib/job-role';
 import { parseLocationValues } from '@/lib/location-filter';
 
 const SOURCES = new Set<string>(PROVIDERS.map((p) => p.value));
@@ -19,6 +21,7 @@ const EMPLOYMENT_TYPES = new Set([
 	'PartTime',
 ]);
 const SORT_OPTIONS = new Set(['score', 'newest', 'oldest']);
+const ROLE_OPTIONS = new Set(JOB_ROLE_OPTIONS.map((role) => role.value));
 const MAX_SEARCH_LEN = 200;
 // Sanity ceiling only (bounds unstable_cache entries from bogus ?page=), far
 // above any real page count — 1000 used to strand pages past it (~1168 today).
@@ -108,6 +111,11 @@ export async function GET(request: NextRequest) {
 			}
 			filters.company = canonicalCompany;
 		}
+
+			const role = sp.get('role')?.trim() as JobRole | undefined;
+			if (role && ROLE_OPTIONS.has(role)) {
+				filters.role = role;
+			}
 
 		const sourceParam = sp.get('source');
 		if (sourceParam) {

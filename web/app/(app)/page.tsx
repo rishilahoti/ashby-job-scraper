@@ -1,11 +1,11 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import type { Metadata } from "next";
 import { getJobs, getCompanies, getStats, getDepartments, getLocations } from "@/lib/query";
 import { POSITIVE_TAG_OPTIONS } from "@/lib/scoring";
 import { PROVIDER_NAMES } from "@/lib/providers";
 import JobList from "@/components/JobList";
-import Filters from "@/components/Filters";
-import FeedResults from "@/components/FeedResults";
+import FeedPageShell from "@/components/FeedPageShell";
 
 export const revalidate = 300;
 
@@ -66,22 +66,18 @@ export default async function FeedPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
       />
       <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-1">
-        <h1 className="font-display text-xl font-bold tracking-tight whitespace-nowrap">Ashby Jobs</h1>
+        <Link
+          href="/"
+          className="font-display text-xl font-bold tracking-tight whitespace-nowrap hover:text-signal transition-colors"
+          aria-label="Reset job filters"
+        >
+          Ashby Jobs
+        </Link>
         <div className="flex gap-4">
           <Stat label="Jobs" value={stats.total} />
           <Stat label="Companies" value={stats.companies} />
         </div>
       </div>
-
-      <Suspense fallback={null}>
-        <Filters
-          companies={companies}
-          departments={departments}
-          locations={locations}
-          tagOptions={POSITIVE_TAG_OPTIONS}
-        />
-      </Suspense>
-
       {/* Fallback is the static HTML crawlers and first paint get. */}
       <Suspense
         fallback={
@@ -90,7 +86,13 @@ export default async function FeedPage() {
           </div>
         }
       >
-        <FeedResults initial={result} />
+        <FeedPageShell
+          initial={result}
+          companies={companies}
+          departments={departments}
+          locations={locations}
+          tagOptions={POSITIVE_TAG_OPTIONS}
+        />
       </Suspense>
     </div>
   );

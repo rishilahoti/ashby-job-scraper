@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PROVIDERS } from "@/lib/providers";
 import { parseLocationValues } from "@/lib/location-filter";
+import { JOB_ROLE_OPTIONS } from "@/lib/job-role";
 
 function ChecklistDropdown({
   label,
@@ -143,6 +144,7 @@ export default function Filters({
   const current = {
     search: searchParams.get("search") || "",
     company: searchParams.get("company") || "",
+    role: searchParams.get("role") || "",
     source: (searchParams.get("source") || "")
       .split(",")
       .map((s) => s.trim().toLowerCase())
@@ -161,6 +163,7 @@ export default function Filters({
   const hasAnyFilter =
     current.search ||
     current.company ||
+    current.role ||
     current.source.length > 0 ||
     current.remote ||
     current.employmentType ||
@@ -231,6 +234,18 @@ export default function Filters({
         }}
         className="h-8 px-3 text-sm bg-surface border border-edge rounded-md placeholder:text-ink-muted focus:outline-none focus:border-edge-strong focus:ring-1 focus:ring-edge-strong w-56 font-body"
       />
+
+      {/* Job Role */}
+      <select
+        value={current.role}
+        onChange={(e) => setParam("role", e.target.value)}
+        className="h-8 max-w-32.5 px-2 text-sm bg-surface border border-edge rounded-md text-ink-secondary focus:outline-none focus:border-edge-strong cursor-pointer"
+      >
+        <option value="">Job role</option>
+        {JOB_ROLE_OPTIONS.map((role) => (
+          <option key={role.value} value={role.value}>{role.label}</option>
+        ))}
+      </select>
 
       {/* Company */}
       <select

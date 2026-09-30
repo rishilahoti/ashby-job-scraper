@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS users
   -- events.linkAccount / events.createUser in web/auth.ts.
   avatar_source TEXT,
   role VARCHAR(255),
+  resume_text TEXT,
+  resume_filename TEXT,
+  resume_uploaded_at TIMESTAMPTZ,
 
   PRIMARY KEY (id),
   UNIQUE (email)

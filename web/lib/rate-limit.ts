@@ -1,5 +1,31 @@
 import { query } from "./db";
 
+let ensuredRateLimitCounters: Promise<void> | null = null;
+
+async function ensureRateLimitCounters(): Promise<void> {
+  if (!ensuredRateLimitCounters) {
+    ensuredRateLimitCounters = (async () => {
+      await query(`
+        CREATE TABLE IF NOT EXISTS rate_limit_counters (
+          bucket TEXT NOT NULL,
+          key TEXT NOT NULL,
+          window_start TIMESTAMPTZ NOT NULL,
+          hits INT NOT NULL DEFAULT 1,
+          PRIMARY KEY (bucket, key, window_start)
+        )
+      `);
+      await query(`CREATE INDEX IF NOT EXISTS idx_rate_limit_counters_window ON rate_limit_counters (window_start)`);
+    })()
+      .then(() => undefined)
+      .catch((error) => {
+        ensuredRateLimitCounters = null;
+        throw error;
+      });
+  }
+
+  return ensuredRateLimitCounters;
+}
+
 export function getClientIp(request: Request): string {
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) return forwarded.split(",")[0].trim();
@@ -19,6 +45,7 @@ export async function isRateLimited(
   max: number,
   windowMinutes: number
 ): Promise<boolean> {
+  await ensureRateLimitCounters();
   const { rows } = await query<{ limited: boolean }>(
     `WITH hit AS (
        INSERT INTO rate_limit_counters (bucket, key, window_start)

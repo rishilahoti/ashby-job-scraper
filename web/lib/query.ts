@@ -1,8 +1,10 @@
 import { unstable_cache } from "next/cache";
 import { query } from "./db";
+import { getExperienceLabel } from "./experience";
 import { scoreJob } from "./scoring";
 import rulesData from "../../src/config/rules.json";
 import { type SqlParam, pushParam, buildSearchSql, tsquerySql } from "./search-terms";
+import { buildJobRoleSql, type JobRole } from "./job-role";
 import type {
   Job,
   JobWithScore,
@@ -22,20 +24,61 @@ const SCORE_EXPR =
 
 type ScoredJobRow = JobRow & { base_score: number; matched_keywords: string[]; computed_score: string | number; search_rank?: number };
 
+function buildExperienceCase(column: string, pattern: string): string {
+  const match = `regexp_match(${column}, '${pattern}', 'i')`;
+  return `CASE
+    WHEN ${column} ~* '${pattern}' THEN (${match})[1] || CASE
+      WHEN (${match})[2] IS NOT NULL THEN '-' || (${match})[2] || ' yrs'
+      ELSE '+ yrs'
+    END
+    ELSE NULL
+  END`;
+}
+
+function buildExperienceLabelSql(column: string): string {
+  return `COALESCE(
+    ${buildExperienceCase(
+      column,
+      "([0-9]{1,2})\\s*(?:\\+|plus)?\\s*(?:to|-|–)?\\s*([0-9]{1,2})?\\s*(?:years|year|yrs|yr)\\s+of\\s+experience"
+    )},
+    ${buildExperienceCase(
+      column,
+      "([0-9]{1,2})\\s*(?:\\+|plus)?\\s*(?:to|-|–)?\\s*([0-9]{1,2})?\\s*(?:years|year|yrs|yr)\\s+experience"
+    )},
+    ${buildExperienceCase(
+      column,
+      "([0-9]{1,2})\\s*(?:\\+|plus)?\\s*(?:to|-|–)?\\s*([0-9]{1,2})?\\s*(?:years|year|yrs|yr)\\s+of\\s+(?:industry|professional|relevant)\\s+experience"
+    )},
+    ${buildExperienceCase(
+      column,
+      "minimum of\\s+([0-9]{1,2})\\s*(?:\\+|plus)?\\s*(?:to|-|–)?\\s*([0-9]{1,2})?\\s*(?:years|year|yrs|yr)"
+    )},
+    ${buildExperienceCase(column, "at least\\s+([0-9]{1,2})\\s*(?:\\+|plus)?\\s*(?:years|year|yrs|yr)")},
+    ${buildExperienceCase(column, "\\(([0-9]{1,2})\\s*(?:\\+|plus)?\\s*(?:years|year|yrs|yr)\\)\\s+of")},
+    ${buildExperienceCase(
+      column,
+      "([0-9]{1,2})\\s*(?:\\+|plus)?\\s*(?:years|year|yrs|yr)\\s+of\\s+(?:architecting|building|developing|engineering|operating|supporting|managing|working)"
+    )},
+    ${buildExperienceCase(
+      column,
+      "([0-9]{1,2})\\s*(?:\\+|plus)?\\s*(?:years|year|yrs|yr)\\s+with\\s+(?:aws|gcp|azure|kubernetes|terraform|python|typescript|java|go|distributed|systems|infrastructure|software)"
+    )}
+  )`;
+}
+
 const LIST_COLUMNS = `
   id, job_id, company, source, title, location, team, department,
-  employment_type, remote, description, apply_url, job_url,
+  employment_type, remote, description, ${buildExperienceLabelSql("jobs.description")} AS experience_label, apply_url, job_url,
   published_at, scraped_at, compensation_summary,
   compensation_min, compensation_max, compensation_currency, compensation_interval, content_hash,
   is_active, created_at, updated_at
 `;
 
-// No description in bulk queries — halves row size (~440 bytes vs ~940).
-// Description is stripped from list output by stripForList anyway.
-// Scoring still uses title/company/employment_type for keyword tags.
+// Bulk queries still strip description from the final payload, but we now keep
+// it long enough to derive JD-based experience labels for the list rows.
 const LIST_COLUMNS_BULK = `
   id, job_id, company, source, title, location, team, department,
-  employment_type, remote, ''::text AS description, apply_url, job_url,
+  employment_type, remote, ''::text AS description, ${buildExperienceLabelSql("jobs.description")} AS experience_label, apply_url, job_url,
   published_at, scraped_at, compensation_summary,
   compensation_min, compensation_max, compensation_currency, compensation_interval, content_hash,
   is_active, created_at, updated_at
@@ -69,6 +112,7 @@ function rowToJob(row: JobRow): Job {
     compensationInterval: row.compensation_interval,
     contentHash: row.content_hash,
     isActive: Boolean(row.is_active),
+    experienceLabel: row.experience_label ?? getExperienceLabel(row.title, row.description),
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : "",
     updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : "",
   };
@@ -186,6 +230,10 @@ const FILTER_SPECS: FilterSpec[] = [
     sql: (f, params) => `LOWER(TRIM(company)) = LOWER(TRIM(${pushParam(params, f.company!)}))`,
   },
   {
+    active: (f) => !!f.role,
+    sql: (f, params) => buildJobRoleSql(params, f.role as JobRole),
+  },
+  {
     active: (f) => !!f.source && f.source.length > 0,
     sql: (f, params) => `source = ANY(${pushParam(params, f.source!)}::text[])`,
   },
@@ -232,16 +280,11 @@ const FILTER_SPECS: FilterSpec[] = [
   },
 ];
 
-// Paginated/filtered result sets are small (<=100 stripped rows, well under
-// the 2MB data-cache limit) — shared across all Vercel instances like
-// the other lookups in this file, cutting DB round trips for repeat filter
-// combos against the fixed-capacity self-hosted Postgres box.
-const getCachedJobsPage = unstable_cache(
-  async (
-    filters: JobFilters,
-    page: number,
-    limit: number
-  ): Promise<PaginatedResult<JobWithScore>> => {
+async function queryJobsPage(
+  filters: JobFilters,
+  page: number,
+  limit: number
+): Promise<PaginatedResult<JobWithScore>> {
   const offset = (page - 1) * limit;
 
   const wheres: string[] = ["is_active = TRUE"];
@@ -253,73 +296,80 @@ const getCachedJobsPage = unstable_cache(
   const where = `WHERE ${wheres.join(" AND ")}`;
   const selectCols = `${LIST_COLUMNS_BULK}, base_score, matched_keywords, ${SCORE_EXPR} AS computed_score`;
 
-    if (filters.company) {
-      // Single-company result set is small and needs job_id dedup across name
-      // variants before pagination — fetch it whole (bounded, cheap) rather
-      // than pushing LIMIT/OFFSET.
-      const orderBy = `ORDER BY job_id, CASE WHEN TRIM(company) = TRIM($1) THEN 0 ELSE 1 END, published_at DESC NULLS LAST`;
-      // Search + default sort: relevance first, same as the general path below.
-      const rankBySearch = !!filters.search && filters.sort !== "newest" && filters.sort !== "oldest";
-      const rankCol = rankBySearch ? `, ${searchRankSql(params, filters.search!)} AS search_rank` : "";
-      const { rows: rawRows } = await query<ScoredJobRow>(
-        `SELECT ${selectCols}${rankCol} FROM jobs ${where} ${orderBy}`,
-        params
-      );
-      const canonicalRecord = await getCanonicalCompanyNamesRecord();
-      const displayName = canonicalRecord[filters.company.trim().toLowerCase()] ?? filters.company.trim();
-      const rows = dedupeRowsByJobId(rawRows, displayName);
-      const scored = rows.map(rowToJobWithScore);
-      applyCanonicalNames(scored, canonicalRecord);
-      sortInMemory(scored, filters.sort);
-      if (rankBySearch) {
-        const rank = new Map(rows.map((r) => [r.job_id, Number(r.search_rank)]));
-        // Stable sort: equally relevant jobs keep the score order from above.
-        scored.sort((a, b) => rank.get(b.jobId)! - rank.get(a.jobId)!);
-      }
-
-      const total = scored.length;
-      const paginated = scored.slice(offset, offset + limit).map(stripForList);
-      return { data: paginated, total, page, totalPages: Math.ceil(total / limit) };
-    }
-
-    // Own copy of params: the relevance rank adds one only the data query
-    // uses, and an unused param would break the COUNT query.
-    const dataParams: SqlParam[] = [...params];
-    let orderBy: string;
-    if (filters.sort === "newest") {
-      orderBy = "ORDER BY published_at DESC NULLS LAST, id DESC";
-    } else if (filters.sort === "oldest") {
-      orderBy = "ORDER BY published_at ASC NULLS LAST, id DESC";
-    } else {
-      // When searching, best text match first, then the usual score.
-      const rank = filters.search ? `${searchRankSql(dataParams, filters.search)} DESC, ` : "";
-      orderBy = `ORDER BY ${rank}${SCORE_EXPR} DESC, published_at DESC, id DESC`;
-    }
-
-    const [dataResult, countResult] = await Promise.all([
-      query<ScoredJobRow>(
-        `SELECT ${selectCols} FROM jobs ${where} ${orderBy} LIMIT ${pushParam(dataParams, limit)} OFFSET ${pushParam(dataParams, offset)}`,
-        dataParams
-      ),
-      query<{ count: string }>(`SELECT COUNT(*) FROM jobs ${where}`, params),
-    ]);
-
-    const total = Number(countResult.rows[0]?.count ?? 0);
-    const scored = dataResult.rows.map(rowToJobWithScore);
+  if (filters.company) {
+    // Single-company result set is small and needs job_id dedup across name
+    // variants before pagination — fetch it whole (bounded, cheap) rather
+    // than pushing LIMIT/OFFSET.
+    const orderBy = `ORDER BY job_id, CASE WHEN TRIM(company) = TRIM($1) THEN 0 ELSE 1 END, published_at DESC NULLS LAST`;
+    // Search + default sort: relevance first, same as the general path below.
+    const rankBySearch = !!filters.search && filters.sort !== "newest" && filters.sort !== "oldest";
+    const rankCol = rankBySearch ? `, ${searchRankSql(params, filters.search!)} AS search_rank` : "";
+    const { rows: rawRows } = await query<ScoredJobRow>(
+      `SELECT ${selectCols}${rankCol} FROM jobs ${where} ${orderBy}`,
+      params
+    );
     const canonicalRecord = await getCanonicalCompanyNamesRecord();
+    const displayName = canonicalRecord[filters.company.trim().toLowerCase()] ?? filters.company.trim();
+    const rows = dedupeRowsByJobId(rawRows, displayName);
+    const scored = rows.map(rowToJobWithScore);
     applyCanonicalNames(scored, canonicalRecord);
-    const paginated = scored.map(stripForList);
+    sortInMemory(scored, filters.sort);
+    if (rankBySearch) {
+      const rank = new Map(rows.map((r) => [r.job_id, Number(r.search_rank)]));
+      // Stable sort: equally relevant jobs keep the score order from above.
+      scored.sort((a, b) => rank.get(b.jobId)! - rank.get(a.jobId)!);
+    }
 
+    const total = scored.length;
+    const paginated = scored.slice(offset, offset + limit).map(stripForList);
     return { data: paginated, total, page, totalPages: Math.ceil(total / limit) };
-  },
-  // v5: C++/C#/IT fall back to a literal title match, dotted words (Node.js)
-  // are split on both sides, and partial title matches now rank — don't
-  // serve v4's stale result sets.
-  ["jobs-page-v5"],
+  }
+
+  // Own copy of params: the relevance rank adds one only the data query
+  // uses, and an unused param would break the COUNT query.
+  const dataParams: SqlParam[] = [...params];
+  let orderBy: string;
+  if (filters.sort === "newest") {
+    orderBy = "ORDER BY published_at DESC NULLS LAST, id DESC";
+  } else if (filters.sort === "oldest") {
+    orderBy = "ORDER BY published_at ASC NULLS LAST, id DESC";
+  } else {
+    // When searching, best text match first, then the usual score.
+    const rank = filters.search ? `${searchRankSql(dataParams, filters.search)} DESC, ` : "";
+    orderBy = `ORDER BY ${rank}${SCORE_EXPR} DESC, published_at DESC, id DESC`;
+  }
+
+  const [dataResult, countResult] = await Promise.all([
+    query<ScoredJobRow>(
+      `SELECT ${selectCols} FROM jobs ${where} ${orderBy} LIMIT ${pushParam(dataParams, limit)} OFFSET ${pushParam(dataParams, offset)}`,
+      dataParams
+    ),
+    query<{ count: string }>(`SELECT COUNT(*) FROM jobs ${where}`, params),
+  ]);
+
+  const total = Number(countResult.rows[0]?.count ?? 0);
+  const scored = dataResult.rows.map(rowToJobWithScore);
+  const canonicalRecord = await getCanonicalCompanyNamesRecord();
+  applyCanonicalNames(scored, canonicalRecord);
+  const paginated = scored.map(stripForList);
+
+  return { data: paginated, total, page, totalPages: Math.ceil(total / limit) };
+}
+
+// Paginated/filtered result sets are small (<=100 stripped rows, well under
+// the 2MB data-cache limit). Only the default feed uses the shared cache;
+// filtered requests run live to avoid serving stale combinations.
+const getCachedJobsPage = unstable_cache(
+  queryJobsPage,
+  ["jobs-page-v9"],
   // Not lower than the feed page's own revalidate: the shortest one wins, so
   // 60 here silently made the static "/" re-render every minute.
   { revalidate: 300 }
 );
+
+function canUseCachedJobsPage(filters: JobFilters): boolean {
+  return !filters.search;
+}
 
 export async function getJobs(
   filters: JobFilters = {}
@@ -327,7 +377,10 @@ export async function getJobs(
   const page = filters.page || 1;
   const limit = Math.min(filters.limit || 40, 100);
   try {
-    return await getCachedJobsPage(filters, page, limit);
+    if (canUseCachedJobsPage(filters)) {
+      return await getCachedJobsPage(filters, page, limit);
+    }
+    return await queryJobsPage(filters, page, limit);
   } catch {
     // DB unreachable — degrade to empty like the other lookups here. No
     // full-table in-memory fallback: loading + scoring every job cost seconds

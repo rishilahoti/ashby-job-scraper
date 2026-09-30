@@ -21,6 +21,7 @@ export interface Job {
   compensationInterval: string | null;
   contentHash: string;
   isActive: boolean;
+  experienceLabel: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -33,6 +34,7 @@ export interface JobWithScore extends Job {
 export interface JobFilters {
   search?: string;
   company?: string;
+  role?: string;
   source?: string[];
   remote?: boolean;
   minScore?: number;
@@ -76,6 +78,7 @@ export type JobRow = {
   compensation_interval: string | null;
   content_hash: string;
   is_active: boolean;
+  experience_label: string | null;
   created_at: string;
   updated_at: string;
 };
