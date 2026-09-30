@@ -34,6 +34,14 @@ export default function JobRow({ job, index }: { job: JobWithScore; index: numbe
           <span className="text-xs text-ink-muted">{job.location}</span>
           <Separator />
           <SourceTag source={job.source} />
+          <Separator />
+          <span className="text-xs text-ink-muted">Posted {formatDate(job.publishedAt)}</span>
+          {job.experienceLabel && (
+            <>
+              <Separator />
+              <span className="text-xs text-ink-muted font-mono">{job.experienceLabel}</span>
+            </>
+          )}
           {!job.isActive && (
             <>
               <Separator />
@@ -88,4 +96,19 @@ export default function JobRow({ job, index }: { job: JobWithScore; index: numbe
 
 function Separator() {
   return <span className="text-edge-strong select-none">&middot;</span>;
+}
+
+function formatDate(iso: string): string {
+  try {
+    if (!iso) return "—";
+    const parsed = new Date(iso);
+    if (Number.isNaN(parsed.getTime())) return "—";
+    return parsed.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
 }

@@ -1,8 +1,10 @@
 import { unstable_cache } from "next/cache";
 import { query } from "./db";
+import { getExperienceLabel } from "./experience";
 import { scoreJob } from "./scoring";
 import rulesData from "../../src/config/rules.json";
 import { type SqlParam, pushParam, buildSearchSql, tsquerySql } from "./search-terms";
+import { buildJobRoleSql, type JobRole } from "./job-role";
 import type {
   Job,
   JobWithScore,
@@ -30,12 +32,11 @@ const LIST_COLUMNS = `
   is_active, created_at, updated_at
 `;
 
-// No description in bulk queries — halves row size (~440 bytes vs ~940).
-// Description is stripped from list output by stripForList anyway.
-// Scoring still uses title/company/employment_type for keyword tags.
+// Bulk queries still strip description from the final payload, but we now keep
+// it long enough to derive JD-based experience labels for the list rows.
 const LIST_COLUMNS_BULK = `
   id, job_id, company, source, title, location, team, department,
-  employment_type, remote, ''::text AS description, apply_url, job_url,
+  employment_type, remote, description, apply_url, job_url,
   published_at, scraped_at, compensation_summary,
   compensation_min, compensation_max, compensation_currency, compensation_interval, content_hash,
   is_active, created_at, updated_at
@@ -69,6 +70,7 @@ function rowToJob(row: JobRow): Job {
     compensationInterval: row.compensation_interval,
     contentHash: row.content_hash,
     isActive: Boolean(row.is_active),
+    experienceLabel: getExperienceLabel(row.title, row.description),
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : "",
     updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : "",
   };
@@ -186,6 +188,10 @@ const FILTER_SPECS: FilterSpec[] = [
     sql: (f, params) => `LOWER(TRIM(company)) = LOWER(TRIM(${pushParam(params, f.company!)}))`,
   },
   {
+    active: (f) => !!f.role,
+    sql: (f, params) => buildJobRoleSql(params, f.role as JobRole),
+  },
+  {
     active: (f) => !!f.source && f.source.length > 0,
     sql: (f, params) => `source = ANY(${pushParam(params, f.source!)}::text[])`,
   },
@@ -232,16 +238,11 @@ const FILTER_SPECS: FilterSpec[] = [
   },
 ];
 
-// Paginated/filtered result sets are small (<=100 stripped rows, well under
-// the 2MB data-cache limit) — shared across all Vercel instances like
-// the other lookups in this file, cutting DB round trips for repeat filter
-// combos against the fixed-capacity self-hosted Postgres box.
-const getCachedJobsPage = unstable_cache(
-  async (
-    filters: JobFilters,
-    page: number,
-    limit: number
-  ): Promise<PaginatedResult<JobWithScore>> => {
+async function queryJobsPage(
+  filters: JobFilters,
+  page: number,
+  limit: number
+): Promise<PaginatedResult<JobWithScore>> {
   const offset = (page - 1) * limit;
 
   const wheres: string[] = ["is_active = TRUE"];
@@ -311,15 +312,35 @@ const getCachedJobsPage = unstable_cache(
     const paginated = scored.map(stripForList);
 
     return { data: paginated, total, page, totalPages: Math.ceil(total / limit) };
-  },
-  // v5: C++/C#/IT fall back to a literal title match, dotted words (Node.js)
-  // are split on both sides, and partial title matches now rank — don't
-  // serve v4's stale result sets.
-  ["jobs-page-v5"],
+}
+
+// Paginated/filtered result sets are small (<=100 stripped rows, well under
+// the 2MB data-cache limit). Only the default feed uses the shared cache;
+// filtered requests run live to avoid serving stale combinations.
+const getCachedJobsPage = unstable_cache(
+  queryJobsPage,
+  ["jobs-page-v9"],
   // Not lower than the feed page's own revalidate: the shortest one wins, so
   // 60 here silently made the static "/" re-render every minute.
   { revalidate: 300 }
 );
+
+function canUseCachedJobsPage(filters: JobFilters): boolean {
+  return !(
+    filters.company ||
+    filters.role ||
+    (filters.source && filters.source.length > 0) ||
+    filters.remote !== undefined ||
+    filters.employmentType ||
+    filters.department ||
+    filters.team ||
+    (filters.locations && filters.locations.length > 0) ||
+    filters.search ||
+    (filters.tags && filters.tags.length > 0) ||
+    filters.minScore !== undefined ||
+    filters.sort
+  );
+}
 
 export async function getJobs(
   filters: JobFilters = {}
@@ -327,7 +348,10 @@ export async function getJobs(
   const page = filters.page || 1;
   const limit = Math.min(filters.limit || 40, 100);
   try {
-    return await getCachedJobsPage(filters, page, limit);
+    if (canUseCachedJobsPage(filters)) {
+      return await getCachedJobsPage(filters, page, limit);
+    }
+    return await queryJobsPage(filters, page, limit);
   } catch {
     // DB unreachable — degrade to empty like the other lookups here. No
     // full-table in-memory fallback: loading + scoring every job cost seconds
