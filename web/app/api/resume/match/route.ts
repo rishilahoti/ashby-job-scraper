@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { extractResumeTextFromPdf, getResumeInsights } from "@/lib/resume-match";
+import { extractResumeTextFromPdf, getResumeInsights, requestWithinLimit } from "@/lib/resume-match";
 import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -11,19 +11,12 @@ const RESUME_MATCH_BUCKET = "resume-match";
 const RESUME_MATCH_LIMIT = 6;
 const RESUME_MATCH_WINDOW_MINUTES = 10;
 
-function requestWithinLimit(request: NextRequest): boolean {
-  const contentLength = request.headers.get("content-length");
-  if (!contentLength) return true;
-  const bytes = Number(contentLength);
-  return Number.isFinite(bytes) && bytes <= MAX_RESUME_REQUEST_BYTES;
-}
-
 function isPdfBytes(data: Uint8Array): boolean {
   return data.length >= 5 && data[0] === 0x25 && data[1] === 0x50 && data[2] === 0x44 && data[3] === 0x46 && data[4] === 0x2d;
 }
 
 export async function POST(request: NextRequest) {
-  if (!requestWithinLimit(request)) {
+  if (!requestWithinLimit(request, MAX_RESUME_REQUEST_BYTES)) {
     return NextResponse.json({ error: "Resume must be 5 MB or smaller" }, { status: 413 });
   }
 

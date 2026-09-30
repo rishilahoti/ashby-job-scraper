@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
 import { getProfileData } from "@/lib/profile";
-import { ensureUserResumeColumns, extractResumeTextFromPdf, isPdfBytes } from "@/lib/resume-match";
+import { ensureUserResumeColumns, extractResumeTextFromPdf, isPdfBytes, requestWithinLimit } from "@/lib/resume-match";
 
 export const runtime = "nodejs";
 
@@ -10,18 +10,11 @@ const MAX_RESUME_BYTES = 5 * 1024 * 1024;
 const MAX_RESUME_REQUEST_BYTES = MAX_RESUME_BYTES + 64 * 1024;
 const MAX_RESUME_TEXT_LENGTH = 100_000;
 
-function requestWithinLimit(request: NextRequest): boolean {
-  const contentLength = request.headers.get("content-length");
-  if (!contentLength) return true;
-  const bytes = Number(contentLength);
-  return Number.isFinite(bytes) && bytes <= MAX_RESUME_REQUEST_BYTES;
-}
-
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  if (!requestWithinLimit(request)) {
+  if (!requestWithinLimit(request, MAX_RESUME_REQUEST_BYTES)) {
     return NextResponse.json({ error: "Resume must be 5 MB or smaller" }, { status: 413 });
   }
 

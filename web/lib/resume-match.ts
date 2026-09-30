@@ -45,6 +45,13 @@ const RESUME_LIST_COLUMNS = `
 let ensuredResumeColumns: Promise<void> | null = null;
 let pdfWorkerConfigured: Promise<void> | null = null;
 
+export function requestWithinLimit(request: Request, maxBytes: number): boolean {
+  const contentLength = request.headers.get("content-length");
+  if (!contentLength) return false;
+  const bytes = Number(contentLength);
+  return Number.isFinite(bytes) && bytes > 0 && bytes <= maxBytes;
+}
+
 async function ensurePdfWorkerConfigured(): Promise<void> {
   if (!pdfWorkerConfigured) {
     pdfWorkerConfigured = import("pdfjs-dist/legacy/build/pdf.worker.mjs").then((workerModule) => {
