@@ -8,7 +8,8 @@ import styles from "./home.module.css";
 
 const providerList = `${PROVIDER_NAMES.slice(0, -1).join(", ")}, and ${PROVIDER_NAMES[PROVIDER_NAMES.length - 1]}`;
 
-export const revalidate = 300;
+// Same as the feed page: hourly, and CACHE_REVALIDATE must not be lower.
+export const revalidate = 3600;
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.vercel.app";
 

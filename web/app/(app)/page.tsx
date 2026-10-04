@@ -7,7 +7,10 @@ import JobList from "@/components/JobList";
 import Filters from "@/components/Filters";
 import FeedResults from "@/components/FeedResults";
 
-export const revalidate = 300;
+// Data only changes on the daily scrape. Each regeneration of this ~500KB page
+// is a paid ISR write (Hobby caps them), so hourly, not every 5 minutes.
+// lib/query.ts's CACHE_REVALIDATE must not be lower, or it wins.
+export const revalidate = 3600;
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.vercel.app";
 const providerList = PROVIDER_NAMES.join(", ");

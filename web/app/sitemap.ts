@@ -12,19 +12,22 @@ const staticUrls: MetadataRoute.Sitemap = [
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
-    const { rows } = await query<{ job_id: string; updated_at: string }>(
-      `SELECT job_id, updated_at
+    // created_at, not updated_at: the scraper bumps updated_at on every job
+    // nightly (touchJob), so all 5000 entries claimed "modified today" every
+    // day and invited crawlers to re-fetch (and re-render) them all.
+    const { rows } = await query<{ job_id: string; created_at: string }>(
+      `SELECT job_id, created_at
        FROM jobs
        WHERE is_active = TRUE
-       ORDER BY updated_at DESC
+       ORDER BY created_at DESC
        LIMIT 5000`
     );
 
     const jobUrls: MetadataRoute.Sitemap = rows
-      .filter((row) => row.job_id && row.updated_at)
+      .filter((row) => row.job_id && row.created_at)
       .map((row) => ({
         url: `${siteUrl}/jobs/${row.job_id}`,
-        lastModified: new Date(row.updated_at),
+        lastModified: new Date(row.created_at),
         changeFrequency: "weekly" as const,
         priority: 0.7,
       }));
