@@ -13,11 +13,14 @@ import type {
 
 // Freshness boost is time-decaying (published_at vs now), so it's computed inline in
 // SQL from an indexed column instead of being baked into the persisted base_score.
+// Counted from midnight, not NOW(): a rolling cutoff reshuffled the cached feed
+// page (/) every hour, and each changed regeneration is a paid ISR write. New
+// jobs keep the boost for 48-72h instead of exactly 48h.
 const FRESHNESS_HOURS = Number(rulesData.freshnessBoostHours) || 0;
 const FRESHNESS_BOOST = Number(rulesData.freshnessBoost) || 0;
 const SCORE_EXPR =
   FRESHNESS_HOURS && FRESHNESS_BOOST
-    ? `(base_score + CASE WHEN published_at >= NOW() - INTERVAL '${FRESHNESS_HOURS} hours' THEN ${FRESHNESS_BOOST} ELSE 0 END)`
+    ? `(base_score + CASE WHEN published_at >= date_trunc('day', NOW()) - INTERVAL '${FRESHNESS_HOURS} hours' THEN ${FRESHNESS_BOOST} ELSE 0 END)`
     : "base_score";
 
 type ScoredJobRow = JobRow & { base_score: number; matched_keywords: string[]; computed_score: string | number; search_rank?: number };
@@ -131,6 +134,11 @@ function withStaleFallback<T>(fn: () => Promise<T>, emptyFallback: T): () => Pro
 
 // --- Shared cache (unstable_cache = shared across all Vercel instances, unlike Map) ---
 
+// Every unstable_cache below uses this. An ISR page takes the shortest
+// revalidate of anything it reads, so this must stay >= the feed and home
+// pages' own revalidate — 300 here kept both re-rendering every 5 minutes.
+const CACHE_REVALIDATE = 3600;
+
 // Returns plain Record, not Map — unstable_cache requires JSON-serializable return values.
 const getCanonicalCompanyNamesRecord = withStaleFallback(unstable_cache(
   async (): Promise<Record<string, string>> => {
@@ -143,7 +151,7 @@ const getCanonicalCompanyNamesRecord = withStaleFallback(unstable_cache(
     return record;
   },
   ["canonical-company-names"],
-  { revalidate: 300 }
+  { revalidate: CACHE_REVALIDATE }
 ), {});
 
 // --- Public API ---
@@ -316,9 +324,7 @@ const getCachedJobsPage = unstable_cache(
   // are split on both sides, and partial title matches now rank — don't
   // serve v4's stale result sets.
   ["jobs-page-v5"],
-  // Not lower than the feed page's own revalidate: the shortest one wins, so
-  // 60 here silently made the static "/" re-render every minute.
-  { revalidate: 300 }
+  { revalidate: CACHE_REVALIDATE }
 );
 
 export async function getJobs(
@@ -389,7 +395,7 @@ export const getCompanies = withStaleFallback(unstable_cache(
     );
   },
   ["companies-list"],
-  { revalidate: 300 }
+  { revalidate: CACHE_REVALIDATE }
 ), []);
 
 export const getStats = withStaleFallback(unstable_cache(
@@ -402,7 +408,7 @@ export const getStats = withStaleFallback(unstable_cache(
     return rows[0] as { total: number; companies: number };
   },
   ["stats"],
-  { revalidate: 300 }
+  { revalidate: CACHE_REVALIDATE }
 ), { total: 0, companies: 0 });
 
 // Home page's Ashby-specific FAQ copy: getStats counts every platform (1061 vs
@@ -419,7 +425,7 @@ export const getAshbyCompanies = withStaleFallback(unstable_cache(
     return rows.map((r) => r.name);
   },
   ["ashby-companies"],
-  { revalidate: 300 }
+  { revalidate: CACHE_REVALIDATE }
 ), []);
 
 export const getUserCount = withStaleFallback(unstable_cache(
@@ -428,7 +434,7 @@ export const getUserCount = withStaleFallback(unstable_cache(
     return rows[0]?.count ?? 0;
   },
   ["user-count"],
-  { revalidate: 300 }
+  { revalidate: CACHE_REVALIDATE }
 ), 0);
 
 export const getDepartments = withStaleFallback(unstable_cache(
@@ -441,7 +447,7 @@ export const getDepartments = withStaleFallback(unstable_cache(
     return rows.map((r) => r.department);
   },
   ["departments-list"],
-  { revalidate: 300 }
+  { revalidate: CACHE_REVALIDATE }
 ), []);
 
 export const getLocations = withStaleFallback(unstable_cache(
@@ -461,5 +467,5 @@ export const getLocations = withStaleFallback(unstable_cache(
     return [...new Set(rows.map((r) => r.location.trim()))];
   },
   ["locations-list-v3"],
-  { revalidate: 300 }
+  { revalidate: CACHE_REVALIDATE }
 ), []);
