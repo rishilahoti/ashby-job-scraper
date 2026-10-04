@@ -13,11 +13,14 @@ import type {
 
 // Freshness boost is time-decaying (published_at vs now), so it's computed inline in
 // SQL from an indexed column instead of being baked into the persisted base_score.
+// Counted from midnight, not NOW(): a rolling cutoff reshuffled the cached feed
+// page (/) every hour, and each changed regeneration is a paid ISR write. New
+// jobs keep the boost for 48-72h instead of exactly 48h.
 const FRESHNESS_HOURS = Number(rulesData.freshnessBoostHours) || 0;
 const FRESHNESS_BOOST = Number(rulesData.freshnessBoost) || 0;
 const SCORE_EXPR =
   FRESHNESS_HOURS && FRESHNESS_BOOST
-    ? `(base_score + CASE WHEN published_at >= NOW() - INTERVAL '${FRESHNESS_HOURS} hours' THEN ${FRESHNESS_BOOST} ELSE 0 END)`
+    ? `(base_score + CASE WHEN published_at >= date_trunc('day', NOW()) - INTERVAL '${FRESHNESS_HOURS} hours' THEN ${FRESHNESS_BOOST} ELSE 0 END)`
     : "base_score";
 
 type ScoredJobRow = JobRow & { base_score: number; matched_keywords: string[]; computed_score: string | number; search_rank?: number };
