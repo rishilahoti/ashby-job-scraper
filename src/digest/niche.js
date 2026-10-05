@@ -45,7 +45,12 @@ const DEV_TITLE = /\b(software|developer|programmer|swe|sde|founding engineer|pr
 // Not software development even when the title says "engineer" or "AI"
 // (Sales Engineer, Hardware Engineer, AI Trainer, AI Product Manager).
 // ponytail: a hand-kept word list; misses rare titles, add words as they show up.
-const NON_DEV_TITLE = /\b(sales|accounts?|customer|support|success|solutions?|field|presales|partners?|partnerships|implementation|onboarding|consultant|marketing|recruit\w*|talent|people|hr|finance|legal|counsel|policy|operations|analyst|specialist|mechanical|electrical|civil|chemical|manufacturing|process|hardware|structural|biomedical|clinical|network|technician|designer|product manager|program manager|project manager|trainer|tutor|annotator|rater|writer|advocate|relations|evangelist)\b/i;
+const NON_DEV_TITLE = /\b(sales|accounts?|customer|support|success|solutions?|field|presales|partners?|partnerships|alliances|business|implementation|onboarding|consultant|marketing|recruit\w*|talent|people|hr|finance|legal|counsel|compliance|policy|officer|operations|analyst|specialist|mechanical|electrical|civil|chemical|manufacturing|process|hardware|structural|biomedical|clinical|network|technician|designer|product manager|program manager|project manager|trainer|tutor|annotator|rater|writer|advocate|relations|evangelist)\b/i;
+
+// A niche word alone isn't a role: "Strategic Foresight & AI Agents" interns,
+// "Cloud Alliances Manager" and "Security Officer" all contain one. The title
+// must also name a technical role.
+const ROLE_WORD = /\b(engineer|engineering|developer|programmer|scientist|researcher|architect|sre|devops|swe|sde|sdet|qa|tester)\b/i;
 
 function nicheIn(text) {
   for (const [niche, terms] of Object.entries(NICHES)) {
@@ -58,9 +63,10 @@ function nicheIn(text) {
 // isn't software development at all.
 function classifyNiche({ title, team, department }) {
   if (!title || NON_DEV_TITLE.test(title)) return null;
-  const fromTitle = nicheIn(title);
+  const devTitle = DEV_TITLE.test(title);
+  const fromTitle = devTitle || ROLE_WORD.test(title) ? nicheIn(title) : null;
   if (fromTitle) return fromTitle;
-  if (!DEV_TITLE.test(title)) return null;
+  if (!devTitle) return null;
   return nicheIn(`${team || ''} ${department || ''}`) || 'software';
 }
 

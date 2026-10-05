@@ -22,6 +22,13 @@ test('classifyNiche: narrow niches win, non-dev titles are out, generic titles f
     ['Founding Engineer', 'software'],
     ['Lighting and AV Engineer', null],
     ['QAQC Engineer', null],
+    ['Engineering Lead, AI Email App', 'ai'],
+    // Seen in production: a niche word without a technical role.
+    ['Security Officer Full-Time II (Crypto.com Arena)', null],
+    ['Senior Cloud Alliances Manager', null],
+    ['Praktikum - Strategic Foresight & AI Agents', null],
+    ['Senior Security Compliance (GRC) Manager', null],
+    ['System Administrator for T-Cloud Public', null],
     ['Sales Engineer', null],
     ['AI Trainer (Python)', null],
     ['Product Manager, AI', null],
