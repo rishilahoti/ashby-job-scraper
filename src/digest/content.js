@@ -83,7 +83,7 @@ const POST1_OPENERS = [
 function buildPost1(data, day) {
   const { run, newCompanies, totals, users, shipped, failures } = data;
   const { fresh } = splitFailures(data);
-  const lines = [POST1_OPENERS[day % POST1_OPENERS.length](day), '', "Last night's scrape:", `→ ${fmt(run.new)} new jobs`];
+  const lines = [POST1_OPENERS[day % POST1_OPENERS.length](day), '', 'Last 24 hours:', `→ ${fmt(run.new)} new jobs`];
   if (newCompanies.length) {
     const noun = newCompanies.length === 1 ? 'company' : 'companies';
     lines.push(`→ ${newCompanies.length} new ${noun} (${listNames(newCompanies.map((c) => c.name))})`);
