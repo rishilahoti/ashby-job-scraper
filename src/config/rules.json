@@ -20,6 +20,26 @@
     "director": -10,
     "manager": -3
   },
+  "niches": {
+    "ai": ["ai", "ml", "machine learning", "deep learning", "llm", "llms", "genai", "generative ai", "nlp", "computer vision", "mlops", "applied scientist", "research scientist", "research engineer"],
+    "fullstack": ["full stack", "full-stack", "fullstack"],
+    "mobile": ["mobile", "ios", "android", "react native", "flutter"],
+    "frontend": ["frontend", "front-end", "front end", "ui engineer", "web engineer", "design engineer", "react"],
+    "backend": ["backend", "back-end", "back end", "api engineer", "distributed systems"],
+    "data": ["data engineer", "data engineering", "analytics engineer", "data scientist", "data science", "data platform", "data infrastructure"],
+    "security": ["security", "appsec", "infosec", "cybersecurity", "devsecops"],
+    "devops": ["devops", "sre", "site reliability", "reliability", "infrastructure", "infra", "platform engineer", "platform engineering", "cloud", "kubernetes"],
+    "qa": ["qa", "quality assurance", "quality engineer", "sdet", "test engineer", "test automation"],
+    "embedded": ["embedded", "firmware"],
+    "web3": ["blockchain", "web3", "solidity", "smart contract", "smart contracts"]
+  },
+  "tags": [
+    "golang", "rust", "java", "kotlin", "scala", "ruby", "rails", "php", "elixir",
+    "next.js", "vue", "angular", "svelte", "django", "fastapi", "spring boot", "graphql",
+    "aws", "gcp", "azure", "kubernetes", "terraform", "docker",
+    "postgres", "kafka", "spark", "snowflake", "airflow",
+    "pytorch", "tensorflow", "llm", "solidity"
+  ],
   "locations": [
     "San Francisco",
     "New York",

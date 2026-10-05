@@ -161,6 +161,16 @@ async function migrateSchema(p) {
       ON scrape_runs (company, started_at DESC)
   `);
 
+  // Pipeline bookkeeping, e.g. which rules.json version the stored scores
+  // and tags were computed with (rescoreJobsIfRulesChanged).
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS app_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   // --- one-time migrations for existing deployments ---
 
   // drop description_html if it still exists (frees up ~50-80% storage per row)

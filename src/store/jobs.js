@@ -1,7 +1,8 @@
 const { getPool } = require('./db');
 const { logger } = require('../utils');
 const config = require('../config');
-const { computeStoredScore } = require('../intelligence/rules-engine');
+const crypto = require('crypto');
+const { computeStoredScore, TAGGING_VERSION } = require('../intelligence/rules-engine');
 
 const MAX_SNAPSHOTS_PER_JOB = 2;
 
@@ -223,6 +224,51 @@ async function completeScrapeRun(id, { status, jobsFetched, jobsInserted, jobsUp
   );
 }
 
+// Stored base_score and matched_keywords go stale when rules.json changes:
+// detectChanges only touches jobs whose content is unchanged, never re-scores
+// them. So once per rules version, re-score every active job. Batched by id
+// like canonicalizeJobLocations; the version is saved last, so a crash midway
+// just redoes the pass on the next run.
+async function rescoreJobsIfRulesChanged(rules) {
+  const pool = getPool();
+  const version = crypto.createHash('sha256').update(JSON.stringify({ rules, TAGGING_VERSION })).digest('hex');
+  const { rows: state } = await pool.query(`SELECT value FROM app_state WHERE key = 'rules_version'`);
+  if (state[0]?.value === version) return 0;
+
+  let lastId = 0;
+  let total = 0;
+  for (;;) {
+    const { rows } = await pool.query(
+      `SELECT id, title, description, location, remote, department, team
+       FROM jobs WHERE is_active = TRUE AND id > $1 ORDER BY id LIMIT 500`,
+      [lastId]
+    );
+    if (rows.length === 0) break;
+    lastId = rows[rows.length - 1].id;
+    const values = [];
+    const placeholders = rows.map((row, i) => {
+      const { baseScore, matchedKeywords } = computeStoredScore(row, rules);
+      values.push(row.id, baseScore, matchedKeywords);
+      return `($${i * 3 + 1}::int, $${i * 3 + 2}::int, $${i * 3 + 3}::text[])`;
+    });
+    await pool.query(
+      `UPDATE jobs SET base_score = v.base_score, matched_keywords = v.tags
+       FROM (VALUES ${placeholders.join(', ')}) AS v(id, base_score, tags)
+       WHERE jobs.id = v.id`,
+      values
+    );
+    total += rows.length;
+  }
+
+  await pool.query(
+    `INSERT INTO app_state (key, value) VALUES ('rules_version', $1)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [version]
+  );
+  logger.info(`Re-scored ${total} active jobs for the current rules`);
+  return total;
+}
+
 // Delete inactive jobs older than retentionDays to keep Neon storage under control.
 async function cleanupOldInactiveJobs(retentionDays = 30) {
   const pool = getPool();
@@ -249,5 +295,6 @@ module.exports = {
   getAllActiveJobs,
   startScrapeRun,
   completeScrapeRun,
+  rescoreJobsIfRulesChanged,
   cleanupOldInactiveJobs,
 };

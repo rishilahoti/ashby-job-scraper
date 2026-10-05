@@ -79,6 +79,8 @@ async function runPipeline({ digest = true } = {}) {
   }
 
   try {
+    await store.rescoreJobsIfRulesChanged(config.intelligence.rules);
+
     const allCompanies = await getEnabledCompaniesWithDb(pool);
     const lastScraped = await store.getAllCompaniesLastScraped();
     const companies = getDueCompanies(lastScraped, allCompanies);
