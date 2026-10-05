@@ -3,7 +3,7 @@
 ## Why
 
 ## Checklist
-- [ ] User-facing change? Added an entry to `web/lib/changelog.ts` (and pointed `ANNOUNCED_ENTRY_ID` at it if it deserves the toast)
+- [ ] User-facing change? Added an entry to `web/lib/changelog.ts` (and its id to `ANNOUNCED_IDS` there if it deserves a notification)
 
 ## Testing
 - [ ] `node index.js run` (backend)

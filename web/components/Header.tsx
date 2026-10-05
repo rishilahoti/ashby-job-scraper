@@ -7,6 +7,8 @@ import { useSession, signOut } from "next-auth/react";
 import { useStatuses } from "./StatusProvider";
 import { useTheme } from "./ThemeProvider";
 import AccountMenu from "./AccountMenu";
+import { SPONSOR_ID, SPONSOR_URL } from "@/lib/changelog";
+import { useDismissed } from "@/lib/notification-store";
 
 const GITHUB_REPO = "https://github.com/rishilahoti/ashbyhq-scraper";
 const GITHUB_API_REPO = "https://api.github.com/repos/rishilahoti/ashbyhq-scraper";
@@ -66,6 +68,7 @@ export default function Header() {
             <GitHubIcon className="w-6 h-6" />
           </a>
           <GitHubStars />
+          <SponsorButton />
         </div>
 
         {/* Desktop nav */}
@@ -205,6 +208,25 @@ function GitHubStars() {
     >
       <span className="text-amber-500 text-md" aria-hidden>★</span>
       <span className="font-mono text-xs tabular-nums inline-block min-w-[1.5em]">{stars !== null ? stars : "—"}</span>
+    </a>
+  );
+}
+
+// Where the sponsor notification lives once it's dismissed.
+function SponsorButton() {
+  const dismissed = useDismissed();
+  if (!dismissed?.has(SPONSOR_ID)) return null;
+  return (
+    <a
+      href={SPONSOR_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Sponsor Ashby Jobs on GitHub"
+      title="Sponsor on GitHub"
+      className="flex items-center gap-1 h-7 px-2 rounded-md border border-edge text-xs font-medium text-ink-secondary hover:text-ink hover:bg-surface transition-colors animate-menu-in"
+    >
+      <span className="text-pink-500" aria-hidden>♥</span>
+      <span className="hidden sm:inline">Sponsor</span>
     </a>
   );
 }

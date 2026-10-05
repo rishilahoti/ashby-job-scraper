@@ -1,5 +1,5 @@
-// Single source of truth for the "What's new" page and the announcement toast
-// (components/ChangelogToast.tsx) — newest first.
+// Single source of truth for the "What's new" page and the notification stack
+// (components/NotificationStack.tsx) — newest first.
 export interface ChangelogEntry {
   id: string;
   date: string; // YYYY-MM-DD
@@ -8,6 +8,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    id: "sponsors",
+    date: "2026-10-06",
+    title: "Ashby Jobs is on GitHub Sponsors",
+    description:
+      "The site is free, open source and ad-free. If it helped your job search, you can now support it on GitHub Sponsors.",
+  },
   {
     id: "role-and-tech-tags",
     date: "2026-10-05",
@@ -55,14 +62,60 @@ export const CHANGELOG: ChangelogEntry[] = [
   },
 ];
 
-// The entry the "what's new" toast currently announces — update this when a
-// new feature should replace it as the highlighted announcement.
-export const ANNOUNCED_ENTRY_ID = "role-and-tech-tags";
+export const SPONSOR_URL = "https://github.com/sponsors/rishilahoti";
+export const SPONSOR_ID = "sponsor";
 
-export const ANNOUNCED_ENTRY = CHANGELOG.find((e) => e.id === ANNOUNCED_ENTRY_ID)!;
+export interface AppNotification {
+  id: string;
+  kicker: string;
+  title: string;
+  description: string;
+  action: { label: string; href: string; external?: boolean };
+}
 
-// A viewer hasn't seen the current announcement if their stored id is missing
-// or stale (e.g. from a previous announced feature).
-export function shouldShowAnnouncement(lastSeenId: string | null): boolean {
-  return lastSeenId !== ANNOUNCED_ENTRY_ID;
+// Changelog entries that also get a notification, newest first. Not every
+// entry deserves one: add an id here when a feature should be announced.
+const ANNOUNCED_IDS = ["role-and-tech-tags", "auth"];
+
+const shortDate = (iso: string) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+// The notification stack, top first. The sponsor card goes last and never
+// fully disappears: once dismissed it lives on as the nav bar's Sponsor button.
+export const NOTIFICATIONS: AppNotification[] = [
+  ...ANNOUNCED_IDS.map((id) => {
+    const entry = CHANGELOG.find((e) => e.id === id)!;
+    return {
+      id,
+      kicker: `What's new · ${shortDate(entry.date)}`,
+      title: entry.title,
+      description: entry.description,
+      action: { label: "See what's new", href: "/changelog" },
+    };
+  }),
+  {
+    id: SPONSOR_ID,
+    kicker: "Free & open source",
+    title: "Like Ashby Jobs? Sponsor it",
+    description: "No ads, no paywall. Sponsors keep the daily scraper and the servers running.",
+    action: { label: "Sponsor ♥", href: SPONSOR_URL, external: true },
+  },
+];
+
+// Dismissed ids as stored in localStorage. legacySeenId is the old
+// single-toast "changelog-seen" value: whatever it announced counts as seen.
+export function parseDismissed(stored: string | null, legacySeenId: string | null): Set<string> {
+  let ids: unknown = [];
+  try {
+    ids = JSON.parse(stored ?? "[]");
+  } catch {
+    // Corrupt value: treat it as nothing dismissed.
+  }
+  const dismissed = new Set(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : []);
+  if (legacySeenId) dismissed.add(legacySeenId);
+  return dismissed;
+}
+
+export function visibleNotifications(dismissed: Set<string>): AppNotification[] {
+  return NOTIFICATIONS.filter((n) => !dismissed.has(n.id));
 }
