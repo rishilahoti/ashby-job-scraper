@@ -47,7 +47,7 @@ async function scrapeCompany(company) {
   }
 }
 
-async function runPipeline() {
+async function runPipeline({ digest = true } = {}) {
   const startTime = Date.now();
   logger.info('Pipeline run started');
 
@@ -120,13 +120,15 @@ async function runPipeline() {
     await store.cleanupOldInactiveJobs(30);
 
     // Best effort: an email problem must never fail the scrape.
-    try {
-      await runDigest(pool, {
-        since: new Date(startTime),
-        companiesSince: new Date(startTime - 24 * 60 * 60 * 1000),
-      });
-    } catch (err) {
-      logger.error(`Daily digest failed: ${err.message}`);
+    if (digest) {
+      try {
+        await runDigest(pool, {
+          since: new Date(startTime),
+          companiesSince: new Date(startTime - 24 * 60 * 60 * 1000),
+        });
+      } catch (err) {
+        logger.error(`Daily digest failed: ${err.message}`);
+      }
     }
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

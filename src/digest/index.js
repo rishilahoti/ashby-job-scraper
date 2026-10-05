@@ -120,7 +120,11 @@ function smtpTransport() {
   const pass = process.env.EMAIL_SERVER_PASSWORD;
   if (!host || !user || !pass) return null;
   const port = Number(process.env.EMAIL_SERVER_PORT || 587);
-  return nodemailer.createTransport({ host, port, secure: port === 465, auth: { user, pass } });
+  // Bounded waits: the scrape keeps its run lock until the digest is sent.
+  return nodemailer.createTransport({
+    host, port, secure: port === 465, auth: { user, pass },
+    connectionTimeout: 30000, greetingTimeout: 30000, socketTimeout: 60000,
+  });
 }
 
 async function runDigest(pool, { since, companiesSince = since, dryRun = false }) {

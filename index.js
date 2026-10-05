@@ -32,7 +32,9 @@ program
     const { startScheduler, runPipeline } = require('./src/scheduler');
     logger.info('Running initial scrape before starting scheduler...');
     try {
-      await runPipeline();
+      // No digest: this run happens on every container restart (each
+      // Watchtower redeploy), so it would send a second, partial one that day.
+      await runPipeline({ digest: false });
     } catch (err) {
       logger.error(`Initial run failed: ${err.message}`);
     }
