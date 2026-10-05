@@ -29,6 +29,7 @@ test('classifyNiche: narrow niches win, non-dev titles are out, generic titles f
     ['Praktikum - Strategic Foresight & AI Agents', null],
     ['Senior Security Compliance (GRC) Manager', null],
     ['System Administrator for T-Cloud Public', null],
+    ['Senior Resident Engineer - Bridge, Tunnel & Infrastructure', null],
     ['Sales Engineer', null],
     ['AI Trainer (Python)', null],
     ['Product Manager, AI', null],

@@ -45,7 +45,7 @@ const DEV_TITLE = /\b(software|developer|programmer|swe|sde|founding engineer|pr
 // Not software development even when the title says "engineer" or "AI"
 // (Sales Engineer, Hardware Engineer, AI Trainer, AI Product Manager).
 // ponytail: a hand-kept word list; misses rare titles, add words as they show up.
-const NON_DEV_TITLE = /\b(sales|accounts?|customer|support|success|solutions?|field|presales|partners?|partnerships|alliances|business|implementation|onboarding|consultant|marketing|recruit\w*|talent|people|hr|finance|legal|counsel|compliance|policy|officer|operations|analyst|specialist|mechanical|electrical|civil|chemical|manufacturing|process|hardware|structural|biomedical|clinical|network|technician|designer|product manager|program manager|project manager|trainer|tutor|annotator|rater|writer|advocate|relations|evangelist)\b/i;
+const NON_DEV_TITLE = /\b(sales|accounts?|customer|support|success|solutions?|field|presales|partners?|partnerships|alliances|business|implementation|onboarding|consultant|marketing|recruit\w*|talent|people|hr|finance|legal|counsel|compliance|policy|officer|operations|analyst|specialist|mechanical|electrical|civil|construction|bridges?|tunnels?|highways?|geotechnical|resident engineer|site engineer|chemical|manufacturing|process|hardware|structural|biomedical|clinical|network|technician|designer|product manager|program manager|project manager|trainer|tutor|annotator|rater|writer|advocate|relations|evangelist)\b/i;
 
 // A niche word alone isn't a role: "Strategic Foresight & AI Agents" interns,
 // "Cloud Alliances Manager" and "Security Officer" all contain one. The title
