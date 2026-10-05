@@ -251,13 +251,16 @@ async function rescoreJobsIfRulesChanged(rules) {
       values.push(row.id, baseScore, matchedKeywords);
       return `($${i * 3 + 1}::int, $${i * 3 + 2}::int, $${i * 3 + 3}::text[])`;
     });
-    await pool.query(
+    // Only rows whose score or tags change. Most jobs aren't dev roles and
+    // get no new tags; rewriting them would just bloat the table.
+    const { rowCount } = await pool.query(
       `UPDATE jobs SET base_score = v.base_score, matched_keywords = v.tags
        FROM (VALUES ${placeholders.join(', ')}) AS v(id, base_score, tags)
-       WHERE jobs.id = v.id`,
+       WHERE jobs.id = v.id
+         AND (jobs.base_score, jobs.matched_keywords) IS DISTINCT FROM (v.base_score, v.tags)`,
       values
     );
-    total += rows.length;
+    total += rowCount ?? 0;
   }
 
   await pool.query(
@@ -265,7 +268,7 @@ async function rescoreJobsIfRulesChanged(rules) {
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
     [version]
   );
-  logger.info(`Re-scored ${total} active jobs for the current rules`);
+  logger.info(`Rules changed: updated the score or tags of ${total} active jobs`);
   return total;
 }
 

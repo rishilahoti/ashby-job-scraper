@@ -79,7 +79,13 @@ async function runPipeline({ digest = true } = {}) {
   }
 
   try {
-    await store.rescoreJobsIfRulesChanged(config.intelligence.rules);
+    // Best effort, like the digest: a failed pass must not cost the scrape.
+    // The rules version is saved only after a full pass, so the next run retries.
+    try {
+      await store.rescoreJobsIfRulesChanged(config.intelligence.rules);
+    } catch (err) {
+      logger.error(`Re-scoring jobs for the current rules failed: ${err.message}`);
+    }
 
     const allCompanies = await getEnabledCompaniesWithDb(pool);
     const lastScraped = await store.getAllCompaniesLastScraped();
