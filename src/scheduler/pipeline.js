@@ -7,6 +7,7 @@ const store = require('../store');
 const { detectChanges } = require('../diff');
 const intelligence = require('../intelligence');
 const { printRunSummary, generateReport } = require('../notify');
+const { runDigest } = require('../digest');
 
 const CONCURRENCY = 16;
 
@@ -117,6 +118,16 @@ async function runPipeline() {
 
     // Remove inactive jobs older than 30 days to keep Neon storage under control.
     await store.cleanupOldInactiveJobs(30);
+
+    // Best effort: an email problem must never fail the scrape.
+    try {
+      await runDigest(pool, {
+        since: new Date(startTime),
+        companiesSince: new Date(startTime - 24 * 60 * 60 * 1000),
+      });
+    } catch (err) {
+      logger.error(`Daily digest failed: ${err.message}`);
+    }
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     logger.info(`Pipeline completed in ${elapsed}s — ${allChanges.length} total changes`);

@@ -22,6 +22,7 @@
     "cities.json": "^1.1.61",
     "commander": "^14.0.3",
     "node-cron": "^4.2.1",
+    "nodemailer": "^10.0.14",
     "pg": "^8.19.0",
     "sanitize-html": "^2.17.1"
   },
