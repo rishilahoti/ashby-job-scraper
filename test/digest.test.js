@@ -1,8 +1,23 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { classifyNiche } = require('../src/digest/niche');
+const rules = require('../src/config/rules.json');
+const { computeStoredScore } = require('../src/intelligence/rules-engine');
+const { classifyNiche, NICHE_LABELS } = require('../src/digest/niche');
 const { buildDigest, pickTopJobs } = require('../src/digest/content');
+
+test('every niche in rules.json has a display label', () => {
+  for (const niche of Object.keys(rules.niches)) assert.ok(NICHE_LABELS[niche], niche);
+});
+
+test('stored tags: niche first, then positive keywords, then tech tags; no tech tags on non-dev titles', () => {
+  const ios = computeStoredScore({ title: 'Senior iOS Engineer', description: 'We use React, Kubernetes and AWS.' }, rules);
+  assert.deepEqual(ios.matchedKeywords, ['mobile', 'react', 'aws', 'kubernetes']);
+  const web = computeStoredScore({ title: 'Frontend Engineer', description: 'Next.js and GraphQL.' }, rules);
+  assert.deepEqual(web.matchedKeywords, ['frontend', 'next.js', 'graphql']);
+  const recruiter = computeStoredScore({ title: 'Technical Recruiter', description: 'Hiring Golang and AWS engineers.' }, rules);
+  assert.deepEqual(recruiter.matchedKeywords, []);
+});
 
 test('classifyNiche: narrow niches win, non-dev titles are out, generic titles fall back', () => {
   const cases = [

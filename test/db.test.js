@@ -190,6 +190,30 @@ test('a scrape query survives the Node process stalling like production did', { 
   }
 });
 
+test('rescoreJobsIfRulesChanged re-tags stored jobs once per rules version', async () => {
+  await initDb();
+  const pool = getPool();
+  const { rescoreJobsIfRulesChanged } = require('../src/store/jobs');
+  await pool.query(`DELETE FROM jobs WHERE company = 'RescoreTestCo'`);
+  await pool.query(`DELETE FROM app_state WHERE key = 'rules_version'`);
+  // Scored under old rules: no tags. Unchanged content, so a scrape would only touch it.
+  await pool.query(
+    `INSERT INTO jobs (job_id, company, title, description, scraped_at, content_hash, base_score, matched_keywords)
+     VALUES ('rescore-1', 'RescoreTestCo', 'Senior iOS Engineer', 'We run Kubernetes.', NOW(), 'h', 0, '{}')`
+  );
+  try {
+    const rules = { keywords: { kubernetes: 2 }, niches: { mobile: ['ios'] }, tags: ['kubernetes'] };
+    assert.ok((await rescoreJobsIfRulesChanged(rules)) >= 1);
+    const { rows } = await pool.query(`SELECT base_score, matched_keywords FROM jobs WHERE company = 'RescoreTestCo'`);
+    assert.equal(rows[0].base_score, 2);
+    assert.deepEqual(rows[0].matched_keywords, ['mobile', 'kubernetes']);
+    assert.equal(await rescoreJobsIfRulesChanged(rules), 0, 'same rules: no second pass');
+  } finally {
+    await pool.query(`DELETE FROM jobs WHERE company = 'RescoreTestCo'`);
+    await pool.query(`DELETE FROM app_state WHERE key = 'rules_version'`);
+  }
+});
+
 test.after(async () => {
   await closeDb();
 });
