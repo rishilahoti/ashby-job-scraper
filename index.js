@@ -32,7 +32,9 @@ program
     const { startScheduler, runPipeline } = require('./src/scheduler');
     logger.info('Running initial scrape before starting scheduler...');
     try {
-      await runPipeline();
+      // No digest: this run happens on every container restart (each
+      // Watchtower redeploy), so it would send a second, partial one that day.
+      await runPipeline({ digest: false });
     } catch (err) {
       logger.error(`Initial run failed: ${err.message}`);
     }
@@ -52,6 +54,26 @@ program
       logger.info(`Report generated: ${reportPath}`);
     } catch (err) {
       logger.error(`Report generation failed: ${err.message}`);
+      process.exit(1);
+    } finally {
+      await store.closeDb();
+    }
+  });
+
+program
+  .command('digest')
+  .description('Email the daily digest for the last N hours now, or preview it with --dry-run')
+  .option('--hours <n>', 'look-back window in hours', (v) => parseInt(v, 10), 24)
+  .option('--dry-run', 'write the email to the reports folder instead of sending it')
+  .action(async (options) => {
+    const store = require('./src/store');
+    const { runDigest } = require('./src/digest');
+    try {
+      // No initDb: the digest only reads, so pointing it at any database is safe.
+      const since = new Date(Date.now() - options.hours * 60 * 60 * 1000);
+      await runDigest(store.getPool(), { since, dryRun: !!options.dryRun });
+    } catch (err) {
+      logger.error(`Digest failed: ${err.message}`);
       process.exit(1);
     } finally {
       await store.closeDb();
