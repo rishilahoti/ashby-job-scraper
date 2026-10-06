@@ -3,19 +3,26 @@ const assert = require('node:assert/strict');
 
 const { getPool, initDb, closeDb } = require('../src/store/db');
 const { upsertJob } = require('../src/store/jobs');
+const config = require('../src/config');
 
-test('getPool().query executes a simple query against the configured database', async () => {
+// These tests write to the database: test rows, a temporary trigger, and a
+// re-score of every active job with fake rules. CI points DATABASE_URL at a
+// throwaway postgres container, but a local .env points at production — run
+// there, this file once wiped the scores and tags of ~20K live jobs.
+const dbTest = /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(config.db.url) ? test : test.skip;
+
+dbTest('getPool().query executes a simple query against the configured database', async () => {
   const pool = getPool();
   const { rows } = await pool.query('SELECT 1 AS one');
   assert.equal(rows[0].one, 1);
 });
 
-test('getPool().query surfaces real SQL errors (does not swallow them as connection failures)', async () => {
+dbTest('getPool().query surfaces real SQL errors (does not swallow them as connection failures)', async () => {
   const pool = getPool();
   await assert.rejects(() => pool.query('SELECT * FROM this_table_does_not_exist'));
 });
 
-test('search_tsv: words match in any order, title hits rank first, unrelated updates keep it', async () => {
+dbTest('search_tsv: words match in any order, title hits rank first, unrelated updates keep it', async () => {
   await initDb();
   const pool = getPool();
   const insert = (jobId, title, description) =>
@@ -52,7 +59,7 @@ test('search_tsv: words match in any order, title hits rank first, unrelated upd
   await pool.query(`DELETE FROM jobs WHERE company = 'SearchTestCo'`);
 });
 
-test('search_tsv splits dotted compound words so a bare search still matches "Node.js"', async () => {
+dbTest('search_tsv splits dotted compound words so a bare search still matches "Node.js"', async () => {
   await initDb();
   const pool = getPool();
   await pool.query(`DELETE FROM jobs WHERE company = 'CompoundTestCo'`);
@@ -77,7 +84,7 @@ test('search_tsv splits dotted compound words so a bare search still matches "No
   await pool.query(`DELETE FROM jobs WHERE company = 'CompoundTestCo'`);
 });
 
-test('upsertJob reports insert vs. update correctly, not "unchanged" for every real update', async () => {
+dbTest('upsertJob reports insert vs. update correctly, not "unchanged" for every real update', async () => {
   await initDb();
   const pool = getPool();
   await pool.query(`DELETE FROM jobs WHERE company = 'UpsertTestCo'`);
@@ -102,7 +109,7 @@ test('upsertJob reports insert vs. update correctly, not "unchanged" for every r
   await pool.query(`DELETE FROM jobs WHERE company = 'UpsertTestCo'`);
 });
 
-test('initDb survives a schema statement that runs longer than the pool timeout', { timeout: 120000 }, async () => {
+dbTest('initDb survives a schema statement that runs longer than the pool timeout', { timeout: 120000 }, async () => {
   // Production incident: the search GIN index build ran for minutes and was
   // cancelled by the pool's 30s statement timeout, failing every pipeline run.
   // Reproduce a long-running (not lock-waiting) statement: make initDb's
@@ -137,7 +144,7 @@ test('initDb survives a schema statement that runs longer than the pool timeout'
   }
 });
 
-test('job_search_ids reaches rows only through the search index', async () => {
+dbTest('job_search_ids reaches rows only through the search index', async () => {
   // Evaluating search_tsv @@ on a row reads its ~2.6KB tsvector from TOAST;
   // the planner doesn't cost that, and in production chose seq/index-walk
   // plans doing it for all ~75k rows (7-15s searches).
@@ -171,7 +178,7 @@ test('job_search_ids reaches rows only through the search index', async () => {
   }
 });
 
-test('a scrape query survives the Node process stalling like production did', { timeout: 120000 }, async () => {
+dbTest('a scrape query survives the Node process stalling like production did', { timeout: 120000 }, async () => {
   // Production incident: the scraper's event loop stalled ~41s on CPU-heavy
   // parsing, and the pool's 30s client-side query_timeout (a wall-clock
   // timer) then failed queries the server had long since answered.
@@ -190,7 +197,7 @@ test('a scrape query survives the Node process stalling like production did', { 
   }
 });
 
-test('rescoreJobsIfRulesChanged re-tags stored jobs once per rules version', async () => {
+dbTest('rescoreJobsIfRulesChanged re-tags stored jobs once per rules version', async () => {
   await initDb();
   const pool = getPool();
   const { rescoreJobsIfRulesChanged } = require('../src/store/jobs');
