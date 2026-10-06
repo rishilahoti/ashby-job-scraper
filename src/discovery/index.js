@@ -1,18 +1,14 @@
 const { logger, delay } = require('../utils');
 const { fetchJobBoard } = require('../fetch');
-const { loadRegistry } = require('../sources');
+const { loadRegistry, isValidSlug } = require('../sources');
 const store = require('../store');
 
 // Domains here share one hosted job-board domain with a path-based company slug
-// (jobs.ashbyhq.com/{slug}), which is what fetchCandidateSlugs()'s path-segment
+// (jobs.ashbyhq.com/{slug}), which is what slugFromCrawledUrl()'s path-segment
 // extraction assumes — confirmed indexed by Common Crawl and CCBot-permitted in
 // robots.txt for all four. Lever explicitly blocks CCBot in robots.txt, so it has
 // no free crawl index to query and isn't supported here (use search-engine
-// `site:jobs.lever.co` queries for that one instead). Recruitee/Teamtailor/Pinpoint
-// use a per-company SUBDOMAIN instead of a path slug (company.recruitee.com) —
-// that needs hostname-based extraction, not the path-based logic below, so they
-// aren't wired into auto-discovery yet even though manual "+Add" already works
-// for them.
+// `site:jobs.lever.co` queries for that one instead).
 const CDX_DOMAINS = {
   ashby: 'jobs.ashbyhq.com',
   greenhouse: 'job-boards.greenhouse.io',
@@ -20,14 +16,25 @@ const CDX_DOMAINS = {
   smartrecruiters: 'jobs.smartrecruiters.com',
 };
 
+// These give each company its own subdomain (acme.recruitee.com) instead of a
+// path slug. Common Crawl indexes only 1-5 CDX pages per domain for them, so
+// every page is read — full coverage, unlike the single capped request the
+// path-based domains above get.
+const CDX_SUBDOMAIN_DOMAINS = {
+  recruitee: 'recruitee.com',
+  teamtailor: 'teamtailor.com',
+  pinpoint: 'pinpointhq.com',
+  workday: 'myworkdayjobs.com',
+};
+
+// Bounds the requests per run if one of those indexes ever balloons.
+const MAX_CDX_PAGES = 10;
+
+// The providers' own sites on those domains, not company boards.
+const RESERVED_SUBDOMAINS = new Set(['www', 'app', 'api', 'auth', 'blog', 'docs', 'help', 'jobs', 'status', 'support']);
+
 // Paths on jobs.ashbyhq.com that are Ashby app routes, not company slugs (see its robots.txt).
 const ASHBY_RESERVED_PATHS = new Set(['meeting', 'b', 'api']);
-
-// Same rule the registry itself enforces (src/sources/index.js isValidSlug) — real board
-// tokens are alphanumeric/hyphen/underscore only. Common Crawl URLs occasionally decode
-// into garbage (stray punctuation from a query string bleeding into the path); reject
-// those before ever hitting the live API with them.
-const SLUG_REGEX = /^[a-zA-Z0-9_-]+$/;
 
 // SmartRecruiters company identifiers are case-sensitive (e.g. "BMWDealerCareers") —
 // every other source's slug is lowercase-insensitive. Mirrors the same exception in
@@ -37,26 +44,99 @@ const CASE_SENSITIVE_SOURCES = new Set(['smartrecruiters']);
 const VERIFY_CONCURRENCY = 5;
 const VERIFY_DELAY_MS = 300;
 
+// Common Crawl's index server drops connections and returns 502s under load;
+// one flaky response shouldn't cost a source its whole run.
+async function fetchCdx(url) {
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) return await res.text();
+      lastError = new Error(`Common Crawl returned HTTP ${res.status}`);
+    } catch (err) {
+      lastError = err;
+    }
+    if (attempt < 3) await delay(5000 * attempt);
+  }
+  throw lastError;
+}
+
 async function getLatestCdxIndexId() {
-  const res = await fetch('https://index.commoncrawl.org/collinfo.json');
-  const data = await res.json();
+  const data = JSON.parse(await fetchCdx('https://index.commoncrawl.org/collinfo.json'));
   return data[0].id;
+}
+
+// The company identifier a crawled URL points at, in the form fetchJobBoard
+// expects, or null if it isn't a company board.
+function slugFromCrawledUrl(source, rawUrl) {
+  let url;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+
+  let slug;
+  const subdomainDomain = CDX_SUBDOMAIN_DOMAINS[source];
+  if (!subdomainDomain) {
+    slug = url.pathname.split('/').filter(Boolean)[0];
+  } else {
+    if (!url.hostname.endsWith(`.${subdomainDomain}`)) return null;
+    const labels = url.hostname.slice(0, -subdomainDomain.length - 1).split('.');
+    if (source === 'workday') {
+      // acme.wd5.myworkdayjobs.com/en-US/Careers/job/... — the site is the
+      // first path segment after an optional locale.
+      const segments = url.pathname.split('/').filter(Boolean);
+      const site = /^[a-z]{2}(-[a-z]{2})?$/i.test(segments[0] ?? '') ? segments[1] : segments[0];
+      if (labels.length !== 2 || !/^wd\d+$/.test(labels[1]) || !site) return null;
+      slug = `${labels[0]}/${labels[1]}/${site}`;
+    } else if (source === 'teamtailor' && labels.length === 2 && labels[1] === 'na') {
+      slug = labels.join('.');
+    } else {
+      if (labels.length !== 1 || RESERVED_SUBDOMAINS.has(labels[0])) return null;
+      slug = labels[0];
+    }
+  }
+
+  if (!slug) return null;
+  if (!CASE_SENSITIVE_SOURCES.has(source)) slug = slug.toLowerCase();
+  if (source === 'ashby' && ASHBY_RESERVED_PATHS.has(slug)) return null;
+  // Common Crawl URLs occasionally decode into garbage (stray punctuation from a
+  // query string bleeding into the path) — the registry's own slug rule rejects
+  // those before they ever hit the live API.
+  return isValidSlug(slug, source) ? slug : null;
 }
 
 // Common Crawl's CDX API returns newline-delimited JSON, one crawled URL per line.
 async function fetchCandidateSlugs(source, cdxLimit) {
-  const domain = CDX_DOMAINS[source];
   const indexId = await getLatestCdxIndexId();
+  const endpoint = `https://index.commoncrawl.org/${indexId}-index`;
+  const responses = [];
 
-  const url = new URL(`https://index.commoncrawl.org/${indexId}-index`);
-  url.searchParams.set('url', `${domain}/*`);
-  url.searchParams.set('output', 'json');
-  url.searchParams.set('limit', cdxLimit);
-  const res = await fetch(url);
-  const data = await res.text();
+  const subdomainDomain = CDX_SUBDOMAIN_DOMAINS[source];
+  if (subdomainDomain) {
+    const query = new URLSearchParams({ url: `*.${subdomainDomain}`, output: 'json', fl: 'url' });
+    const { pages } = JSON.parse(await fetchCdx(`${endpoint}?${query}&showNumPages=true`));
+    if (pages > MAX_CDX_PAGES) logger.warn(`Reading ${MAX_CDX_PAGES} of ${pages} Common Crawl pages for ${subdomainDomain}`);
+    for (let page = 0; page < Math.min(pages, MAX_CDX_PAGES); page++) {
+      // A page that still fails after retries (Workday's are several MB and
+      // time out) costs only its own candidates, not the whole run's.
+      try {
+        responses.push(await fetchCdx(`${endpoint}?${query}&page=${page}`));
+      } catch (err) {
+        logger.warn(`Skipping Common Crawl page ${page + 1}/${pages} for ${subdomainDomain}: ${err.message}`);
+      }
+    }
+  } else {
+    const url = new URL(endpoint);
+    url.searchParams.set('url', `${CDX_DOMAINS[source]}/*`);
+    url.searchParams.set('output', 'json');
+    url.searchParams.set('limit', cdxLimit);
+    responses.push(await fetchCdx(url));
+  }
 
   const slugs = new Set();
-  for (const line of data.split('\n')) {
+  for (const line of responses.join('\n').split('\n')) {
     if (!line.trim()) continue;
     let entry;
     try {
@@ -64,17 +144,8 @@ async function fetchCandidateSlugs(source, cdxLimit) {
     } catch {
       continue;
     }
-    let slug;
-    try {
-      slug = new URL(entry.url).pathname.split('/').filter(Boolean)[0];
-    } catch {
-      continue;
-    }
-    if (!slug) continue;
-    if (!CASE_SENSITIVE_SOURCES.has(source)) slug = slug.toLowerCase();
-    if (!SLUG_REGEX.test(slug)) continue;
-    if (source === 'ashby' && ASHBY_RESERVED_PATHS.has(slug)) continue;
-    slugs.add(slug);
+    const slug = slugFromCrawledUrl(source, entry.url);
+    if (slug) slugs.add(slug);
   }
   return [...slugs];
 }
@@ -92,8 +163,11 @@ async function getKnownSlugs(source) {
   return known;
 }
 
-function titleCase(slug) {
-  return slug.charAt(0).toUpperCase() + slug.slice(1);
+// The slug, capitalized — minus Workday's wdHost/site segments and
+// Teamtailor's region suffix, which aren't part of the company's name.
+function companyName(slug, source) {
+  const name = source === 'workday' ? slug.split('/')[0] : slug.replace(/\.na$/, '');
+  return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
 // Verifies each unverified slug against the live posting API and, if it has
@@ -120,7 +194,7 @@ async function verifyAndAdd(slugs, source, { dryRun }) {
       if (dryRun) {
         logger.info(`[dry-run] would add "${slug}" (${source}, ${jobCount} jobs)`);
       } else {
-        await store.upsertCompany(titleCase(slug), slug, source);
+        await store.upsertCompany(companyName(slug, source), slug, source);
         logger.info(`Added "${slug}" (${source}, ${jobCount} jobs)`);
       }
       added++;
@@ -133,11 +207,13 @@ async function verifyAndAdd(slugs, source, { dryRun }) {
 }
 
 async function discoverCompanies({ source, cdxLimit = 3000, verifyLimit = 300, dryRun = false }) {
-  if (!CDX_DOMAINS[source]) {
-    throw new Error(`Unsupported source "${source}" — must be one of: ${Object.keys(CDX_DOMAINS).join(', ')}`);
+  const crawled = CDX_DOMAINS[source] ?? (CDX_SUBDOMAIN_DOMAINS[source] && `*.${CDX_SUBDOMAIN_DOMAINS[source]}`);
+  if (!crawled) {
+    const supported = [...Object.keys(CDX_DOMAINS), ...Object.keys(CDX_SUBDOMAIN_DOMAINS)];
+    throw new Error(`Unsupported source "${source}" — must be one of: ${supported.join(', ')}`);
   }
 
-  logger.info(`Fetching crawled URLs for ${CDX_DOMAINS[source]} from Common Crawl...`);
+  logger.info(`Fetching crawled URLs for ${crawled} from Common Crawl...`);
   const candidates = await fetchCandidateSlugs(source, cdxLimit);
   logger.info(`${candidates.length} unique candidate slugs found`);
 
@@ -153,4 +229,4 @@ async function discoverCompanies({ source, cdxLimit = 3000, verifyLimit = 300, d
   return { candidates: candidates.length, unknown: unknown.length, checked, added };
 }
 
-module.exports = { discoverCompanies };
+module.exports = { discoverCompanies, slugFromCrawledUrl };

@@ -13,7 +13,7 @@ permissions:
 jobs:
     discover:
         runs-on: ubuntu-latest
-        timeout-minutes: 30
+        timeout-minutes: 45
         environment: Production
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,5 +43,32 @@ jobs:
             - name: Discover SmartRecruiters companies
               continue-on-error: true
               run: node index.js discover --source smartrecruiters
+              env:
+                  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+            - name: Discover Recruitee companies
+              continue-on-error: true
+              run: node index.js discover --source recruitee
+              env:
+                  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+            - name: Discover Teamtailor companies
+              continue-on-error: true
+              run: node index.js discover --source teamtailor
+              env:
+                  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+            - name: Discover Pinpoint companies
+              continue-on-error: true
+              run: node index.js discover --source pinpoint
+              env:
+                  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+            # Workday boards average ~90 jobs (capped at 200), so a few hundred of
+            # them would double the jobs table on the 1 GB VM. 25 checks a day
+            # grows it gradually; raise this once the VM has room.
+            - name: Discover Workday companies
+              continue-on-error: true
+              run: node index.js discover --source workday --verify-limit 25
               env:
                   DATABASE_URL: ${{ secrets.DATABASE_URL }}
