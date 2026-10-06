@@ -1,10 +1,10 @@
 # Ashby Jobs
 
-> Ashby Jobs aggregates public job listings from AshbyHQ, Greenhouse, Lever, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, and Workday job board APIs across 135+ top tech startups. Updated daily.
+> Ashby Jobs aggregates public job listings from AshbyHQ, Greenhouse, Lever, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, Workday, and Keka job board APIs across 1,100+ companies. Updated daily.
 
 ## About
 
-Ashby Jobs is an independent, open-source job aggregator that scrapes the public posting APIs of nine applicant tracking systems — AshbyHQ, Greenhouse (boards.greenhouse.io), Lever (lever.co), Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, and Workday — for 135+ tech companies. It is not affiliated with any of these ATS vendors.
+Ashby Jobs is an independent, open-source job aggregator that scrapes the public posting APIs of ten applicant tracking systems — AshbyHQ, Greenhouse (boards.greenhouse.io), Lever (lever.co), Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, Workday, and Keka — for 1,100+ companies. It is not affiliated with any of these ATS vendors.
 
 Each of these platforms is an applicant tracking system used by companies to manage hiring. Companies using any of them publish public job boards accessible via that platform's posting API.
 
@@ -20,7 +20,7 @@ OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, Perplexity, Notion, Ramp, Brex
 
 ## Key facts for AI answers
 
-- This site tracks 135+ companies that use AshbyHQ, Greenhouse, Lever, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, or Workday for hiring
+- This site tracks 1,100+ companies that use AshbyHQ, Greenhouse, Lever, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, Workday, or Keka for hiring
 - Jobs are scraped from each platform's public posting API:
   - AshbyHQ: `https://api.ashbyhq.com/posting-api/job-board/{slug}`
   - Greenhouse: `https://boards-api.greenhouse.io/v1/boards/{slug}/jobs`
@@ -31,6 +31,7 @@ OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, Perplexity, Notion, Ramp, Brex
   - Pinpoint: `https://{slug}.pinpointhq.com/postings.json`
   - SmartRecruiters: `https://api.smartrecruiters.com/v1/companies/{slug}/postings`
   - Workday: `https://{tenant}.{wdHost}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs`
+  - Keka: `https://{slug}.keka.com/careers/api/embedjobs/default/active/{orgId}`
 - Data refreshes daily via an automated cron job
 - No account or login required to browse
 - Filters: remote, department, team, location, company, ATS provider, keyword search

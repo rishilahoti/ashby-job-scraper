@@ -25,6 +25,7 @@ const CDX_SUBDOMAIN_DOMAINS = {
   teamtailor: 'teamtailor.com',
   pinpoint: 'pinpointhq.com',
   workday: 'myworkdayjobs.com',
+  keka: 'keka.com',
 };
 
 // Bounds the requests per run if one of those indexes ever balloons.
@@ -94,6 +95,8 @@ function slugFromCrawledUrl(source, rawUrl) {
       slug = labels.join('.');
     } else {
       if (labels.length !== 1 || RESERVED_SUBDOMAINS.has(labels[0])) return null;
+      // Every Keka customer has acme.keka.com (its HR app); only /careers is a job board.
+      if (source === 'keka' && !url.pathname.toLowerCase().startsWith('/careers')) return null;
       slug = labels[0];
     }
   }

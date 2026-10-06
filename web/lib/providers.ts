@@ -11,6 +11,7 @@ export const PROVIDERS = [
   { value: "pinpoint", label: "Pinpoint" },
   { value: "smartrecruiters", label: "SmartRecruiters" },
   { value: "workday", label: "Workday" },
+  { value: "keka", label: "Keka" },
 ] as const;
 
 export const PROVIDER_NAMES = PROVIDERS.map((p) => p.label);

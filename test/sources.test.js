@@ -14,6 +14,7 @@ test('all implemented ATS providers can be registered', () => {
     'pinpoint',
     'smartrecruiters',
     'workday',
+    'keka',
   ]);
 });
 

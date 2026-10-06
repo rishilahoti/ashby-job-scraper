@@ -118,7 +118,7 @@ program
 program
   .command('discover')
   .description('Crawl Common Crawl for new company boards, verify against the live API, and add them')
-  .requiredOption('-s, --source <source>', 'ashby, greenhouse, workable, smartrecruiters, recruitee, teamtailor, pinpoint, or workday (Lever blocks Common Crawl\'s bot, so it isn\'t supported here)')
+  .requiredOption('-s, --source <source>', 'ashby, greenhouse, workable, smartrecruiters, recruitee, teamtailor, pinpoint, workday, or keka (Lever blocks Common Crawl\'s bot, so it isn\'t supported here)')
   .option('--cdx-limit <n>', 'max Common Crawl URLs to scan (path-based sources; subdomain sources read every page)', (v) => parseInt(v, 10), 3000)
   .option('--verify-limit <n>', 'max new candidates to verify against the live API', (v) => parseInt(v, 10), 300)
   .option('--dry-run', 'print what would be added without writing to the database')

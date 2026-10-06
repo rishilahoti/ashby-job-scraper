@@ -72,3 +72,9 @@ jobs:
               run: node index.js discover --source workday --verify-limit 25
               env:
                   DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+            - name: Discover Keka companies
+              continue-on-error: true
+              run: node index.js discover --source keka
+              env:
+                  DATABASE_URL: ${{ secrets.DATABASE_URL }}
