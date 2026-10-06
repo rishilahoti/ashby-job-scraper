@@ -34,6 +34,14 @@ test('Workday slugs are tenant/wdHost/site, skipping a locale segment', () => {
   assert.equal(slugFromCrawledUrl('workday', 'https://www.myworkdayjobs.com/en-US/Careers'), null);
 });
 
+test('Keka boards are only the /careers pages of a company subdomain', () => {
+  assert.equal(slugFromCrawledUrl('keka', 'https://advantum.keka.com/careers/jobdetails/127554'), 'advantum');
+  assert.equal(slugFromCrawledUrl('keka', 'https://acaindia.keka.com/careers/'), 'acaindia');
+  // The same subdomain's HR app and the vendor's own site aren't job boards.
+  assert.equal(slugFromCrawledUrl('keka', 'https://advantum.keka.com/robots.txt'), null);
+  assert.equal(slugFromCrawledUrl('keka', 'https://www.keka.com/careers'), null);
+});
+
 test('path-based sources still take the first path segment', () => {
   assert.equal(slugFromCrawledUrl('ashby', 'https://jobs.ashbyhq.com/Notion/abc'), 'notion');
   assert.equal(slugFromCrawledUrl('ashby', 'https://jobs.ashbyhq.com/api/non-user-graphql'), null);

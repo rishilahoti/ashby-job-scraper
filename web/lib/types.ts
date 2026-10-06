@@ -37,7 +37,7 @@ export interface JobFilters {
   remote?: boolean;
   minScore?: number;
   employmentType?: string;
-  department?: string;
+  departments?: string[];
   team?: string;
   locations?: string[];
   tags?: string[];

@@ -7,6 +7,7 @@ import { ADAPTERS } from "../../../../src/normalize";
 // jobs added here got base_score 0 and no matched_keywords until their content
 // next changed and the scraper's own upsertJob happened to recompute them.
 import { computeStoredScore } from "../../../../src/intelligence/rules-engine";
+import { departmentGroup } from "../../../../src/normalize/departments";
 import rules from "../../../../src/config/rules.json";
 import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 
@@ -49,13 +50,15 @@ const URL_PATTERNS: Record<Source, RegExp> = {
   greenhouse: /(?:https?:\/\/)?(?:job-boards|boards)\.greenhouse\.io\/([a-zA-Z0-9_-]+)/,
   workable: /(?:https?:\/\/)?apply\.workable\.com\/([a-zA-Z0-9_-]+)/,
   recruitee: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.recruitee\.com/,
-  teamtailor: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.teamtailor\.com/,
+  // North American boards live on acme.na.teamtailor.com; keep ".na" in the slug.
+  teamtailor: /(?:https?:\/\/)?([a-zA-Z0-9_-]+(?:\.na)?)\.teamtailor\.com/,
   pinpoint: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.pinpointhq\.com/,
   smartrecruiters: /(?:https?:\/\/)?jobs\.smartrecruiters\.com\/([a-zA-Z0-9_-]+)/,
   // Only ATS spread across per-tenant subdomains AND a numbered host (wd1-wd12)
   // AND an arbitrary site path — the 3 capture groups get joined into one
   // "tenant/wdHost/site" slug below, unlike every other source's single group.
   workday: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.(wd\d+)\.myworkdayjobs\.com\/(?:[a-zA-Z]{2}-[a-zA-Z]{2}\/)?([a-zA-Z0-9_-]+)/,
+  keka: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.keka\.com/,
 };
 
 // SmartRecruiters/Workday identifiers are case-sensitive (e.g. "BMWDealerCareers",
@@ -232,6 +235,25 @@ async function fetchWorkday(slug: string): Promise<FetchResult> {
   return { ok: true, jobs, companyName };
 }
 
+// Keka's careers page is an HTML shell; its jobs come from a JSON endpoint
+// keyed by the organization's id, which only appears in that page.
+async function fetchKeka(slug: string): Promise<FetchResult> {
+  const boardUrl = `https://${slug}.keka.com/careers/`;
+  const page = await fetch(boardUrl, { headers: { ...HEADERS, Accept: "text/html" }, signal: AbortSignal.timeout(15000) });
+  if (!page.ok) return { ok: false, status: page.status };
+  const orgId = (await page.text()).match(/\/ats\/documents\/([0-9a-f-]{36})\//i)?.[1];
+  if (!orgId) return { ok: false, status: 404 };
+  const res = await fetch(`${boardUrl}api/embedjobs/default/active/${orgId}`, {
+    headers: HEADERS,
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) return { ok: false, status: res.status };
+  const data = await res.json();
+  if (!Array.isArray(data)) return { ok: false, status: 502 };
+  // Postings carry only an id; the adapter builds their URLs from this.
+  return { ok: true, jobs: data.map((job) => ({ ...job, _boardUrl: boardUrl })), companyName: null };
+}
+
 const SOURCE_CONFIG: Record<
   Source,
   {
@@ -278,6 +300,10 @@ const SOURCE_CONFIG: Record<
       return `https://${tenant}.${wdHost}.myworkdayjobs.com/${site}`;
     },
   },
+  keka: {
+    fetch: fetchKeka,
+    boardUrl: (slug) => `https://${slug}.keka.com/careers/`,
+  },
 };
 
 // Unauthenticated and, per job board, does up to WORKDAY_MAX_PAGES fetches
@@ -300,7 +326,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Invalid input. Provide a job board URL (Ashby, Lever, Greenhouse, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, or Workday) or a slug.",
+            "Invalid input. Provide a job board URL (Ashby, Lever, Greenhouse, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, Workday, or Keka) or a slug.",
         },
         { status: 400 }
       );
@@ -382,7 +408,11 @@ export async function POST(request: NextRequest) {
     // ponytail: whole board in one statement; chunk it if a board ever gets
     // big enough for the payload or the trigger's tsvector work to matter.
     if (byId.size > 0) {
-      const payload = [...byId.values()].map((job) => ({ ...job, ...computeStoredScore(job, rules) }));
+      const payload = [...byId.values()].map((job) => ({
+        ...job,
+        ...computeStoredScore(job, rules),
+        departmentGroup: departmentGroup(job.department, job.team, job.title),
+      }));
       await query(
         `INSERT INTO jobs (
            job_id, company, source, title, location, team, department,
@@ -390,21 +420,21 @@ export async function POST(request: NextRequest) {
            apply_url, job_url, published_at, scraped_at,
            compensation_summary, compensation_min, compensation_max,
            compensation_currency, compensation_interval, content_hash, is_active,
-           base_score, matched_keywords
+           base_score, matched_keywords, department_group
          )
          SELECT "jobId", $2, $3, title, location, team, department,
                 "employmentType", remote, description,
                 "applyUrl", "jobUrl", "publishedAt", NOW(),
                 "compensationSummary", "compensationMin", "compensationMax",
                 "compensationCurrency", "compensationInterval", "contentHash", TRUE,
-                "baseScore", "matchedKeywords"
+                "baseScore", "matchedKeywords", "departmentGroup"
          FROM jsonb_to_recordset($1::jsonb) AS r(
            "jobId" text, title text, location text, team text, department text,
            "employmentType" text, remote boolean, description text,
            "applyUrl" text, "jobUrl" text, "publishedAt" timestamptz,
            "compensationSummary" text, "compensationMin" numeric, "compensationMax" numeric,
            "compensationCurrency" text, "compensationInterval" text, "contentHash" text,
-           "baseScore" int, "matchedKeywords" text[]
+           "baseScore" int, "matchedKeywords" text[], "departmentGroup" text
          )
          ON CONFLICT (company, job_id) DO UPDATE SET
            source            = EXCLUDED.source,
@@ -428,6 +458,7 @@ export async function POST(request: NextRequest) {
            is_active         = TRUE,
            base_score        = EXCLUDED.base_score,
            matched_keywords  = EXCLUDED.matched_keywords,
+           department_group  = EXCLUDED.department_group,
            updated_at        = NOW()`,
         [JSON.stringify(payload), companyNameForJobs, source]
       );

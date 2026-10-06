@@ -178,8 +178,38 @@ async function fetchWorkdayJobBoard(slug, source) {
   return { jobs };
 }
 
+// Keka's careers page is an HTML shell that loads its jobs from a JSON
+// endpoint keyed by the organization's id, and that id only appears in the
+// page. So two requests per board: the page, then the jobs.
+async function fetchKekaJobBoard(slug, source) {
+  const boardUrl = `https://${slug}.keka.com/careers/`;
+  let html;
+  try {
+    const res = await fetch(boardUrl, {
+      headers: { ...DEFAULT_HEADERS, Accept: 'text/html' },
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!res.ok) throw new FetchError(`Fetch failed for ${slug} (${source}): HTTP ${res.status}`, slug, res.status, false);
+    html = await res.text();
+  } catch (err) {
+    if (err instanceof FetchError) throw err;
+    throw new FetchError(`Fetch failed for ${slug} (${source}): ${err.message}`, slug, null, true);
+  }
+  const orgId = html.match(/\/ats\/documents\/([0-9a-f-]{36})\//i)?.[1];
+  if (!orgId) throw new FetchError(`No Keka careers portal for ${slug}`, slug, null, false);
+
+  const jobs = await fetchOnce(
+    new URL(`${boardUrl}api/embedjobs/default/active/${orgId}`), {}, slug, source,
+    (data) => (Array.isArray(data) ? data : null)
+  );
+  logger.info(`Fetched ${jobs.length} jobs from ${slug} (${source})`);
+  // Postings carry only an id; the adapter builds their URLs from this.
+  return { jobs: jobs.map((job) => ({ ...job, _boardUrl: boardUrl })) };
+}
+
 async function fetchJobBoard(slug, source = 'ashby') {
   if (source === 'workday') return fetchWorkdayJobBoard(slug, source);
+  if (source === 'keka') return fetchKekaJobBoard(slug, source);
 
   const sourceConfig = SOURCE_REQUESTS[source];
   if (!sourceConfig) {

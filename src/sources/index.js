@@ -13,6 +13,7 @@ const SUPPORTED_SOURCES = [
   'pinpoint',
   'smartrecruiters',
   'workday',
+  'keka',
 ];
 const VALID_SOURCES = new Set(SUPPORTED_SOURCES);
 

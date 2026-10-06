@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, type FormEvent } from "react";
 import Link from "next/link";
 
 type Phase = "idle" | "validating" | "scraping" | "success" | "error";
-type Source = "ashby" | "lever" | "greenhouse" | "workable" | "recruitee" | "teamtailor" | "pinpoint" | "smartrecruiters" | "workday";
+type Source = "ashby" | "lever" | "greenhouse" | "workable" | "recruitee" | "teamtailor" | "pinpoint" | "smartrecruiters" | "workday" | "keka";
 
 interface Result {
   company: string;
@@ -24,6 +24,7 @@ const SOURCE_META: Record<Source, { label: string; domain: string; placeholder: 
   pinpoint: { label: "Pinpoint", domain: "pinpointhq.com", placeholder: "https://company.pinpointhq.com  or  company-slug" },
   smartrecruiters: { label: "SmartRecruiters", domain: "jobs.smartrecruiters.com", placeholder: "https://jobs.smartrecruiters.com/Company  or  Company (case-sensitive)" },
   workday: { label: "Workday", domain: "myworkdayjobs.com", placeholder: "https://company.wd5.myworkdayjobs.com/en-US/Site" },
+  keka: { label: "Keka", domain: "keka.com", placeholder: "https://company.keka.com/careers  or  company-slug" },
 };
 
 const URL_PATTERNS: Record<Source, RegExp> = {
@@ -32,12 +33,13 @@ const URL_PATTERNS: Record<Source, RegExp> = {
   greenhouse: /(?:https?:\/\/)?(?:job-boards|boards)\.greenhouse\.io\/([a-zA-Z0-9_-]+)/,
   workable: /(?:https?:\/\/)?apply\.workable\.com\/([a-zA-Z0-9_-]+)/,
   recruitee: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.recruitee\.com/,
-  teamtailor: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.teamtailor\.com/,
+  teamtailor: /(?:https?:\/\/)?([a-zA-Z0-9_-]+(?:\.na)?)\.teamtailor\.com/,
   pinpoint: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.pinpointhq\.com/,
   smartrecruiters: /(?:https?:\/\/)?jobs\.smartrecruiters\.com\/([a-zA-Z0-9_-]+)/,
   // Only ATS here spread across per-tenant subdomains AND a numbered host (wd1-wd12)
   // AND an arbitrary site path — 3 capture groups joined into one slug below.
   workday: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.(wd\d+)\.myworkdayjobs\.com\/(?:[a-zA-Z]{2}-[a-zA-Z]{2}\/)?([a-zA-Z0-9_-]+)/,
+  keka: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.keka\.com/,
 };
 
 export default function AddCompanyForm() {

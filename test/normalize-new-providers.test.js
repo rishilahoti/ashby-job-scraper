@@ -7,6 +7,7 @@ const teamtailor = require('../src/normalize/adapters/teamtailor');
 const pinpoint = require('../src/normalize/adapters/pinpoint');
 const smartrecruiters = require('../src/normalize/adapters/smartrecruiters');
 const workday = require('../src/normalize/adapters/workday');
+const keka = require('../src/normalize/adapters/keka');
 
 test('workable.normalizeJob maps a real widget response shape', () => {
   const job = workable.normalizeJob({
@@ -196,4 +197,52 @@ test('workday.normalizeJob detects remoteType containing "Remote"', () => {
     _boardUrl: 'https://acme.wd1.myworkdayjobs.com/Acme',
   }, 'Acme');
   assert.equal(job.remote, true);
+});
+
+// Shape from a live board (advantum.keka.com), trimmed.
+const KEKA_JOB = {
+  id: 143633,
+  title: 'Coder - Professional',
+  description: '<div>Strong experience in denial coding</div>',
+  departmentName: 'CODINGOP',
+  jobLocations: [{ id: 2688, name: 'Hyderabad', city: 'Hyderabad', state: 'TG', countryCode: 'IN', countryName: 'India' }],
+  jobType: 2,
+  salaryRange: { minimum: 50000, maximum: 80000, currency: 'INR', salaryPeriod: 4, cultureInfo: 'en-IN' },
+  salaryRangeFormat: 'INR 50,000.00 - 80,000.00',
+  publishedOn: '2026-10-06T07:41:37.493Z',
+  _boardUrl: 'https://advantum.keka.com/careers/',
+};
+
+test('keka.normalizeJob maps a live posting', () => {
+  const job = keka.normalizeJob(KEKA_JOB, 'Advantum');
+  assert.equal(job.jobId, '143633');
+  assert.equal(job.source, 'keka');
+  assert.equal(job.location, 'Hyderabad');
+  assert.equal(job.employmentType, 'FullTime');
+  assert.equal(job.department, 'CODINGOP');
+  assert.equal(job.description, 'Strong experience in denial coding');
+  assert.equal(job.jobUrl, 'https://advantum.keka.com/careers/jobdetails/143633');
+  assert.equal(job.applyUrl, job.jobUrl);
+  assert.equal(job.publishedAt, '2026-10-06T07:41:37.493Z');
+  assert.equal(job.compensationSummary, 'INR 50,000.00 - 80,000.00');
+  assert.equal(job.compensationMax, 80000);
+  assert.equal(job.compensationInterval, 'YEAR');
+  assert.ok(job.contentHash);
+});
+
+test('keka.normalizeJob leaves pay empty when no maximum is set', () => {
+  const job = keka.normalizeJob({ ...KEKA_JOB, salaryRange: { currency: 'INR', salaryPeriod: 0 }, salaryRangeFormat: '' }, 'Advantum');
+  assert.equal(job.compensationSummary, null);
+  assert.equal(job.compensationMin, null);
+  assert.equal(job.compensationInterval, null);
+});
+
+test('keka.normalizeJob handles a posting with no location or job type', () => {
+  const job = keka.normalizeJob({ ...KEKA_JOB, jobLocations: [], jobType: 9 }, 'Advantum');
+  assert.equal(job.location, 'Unknown');
+  assert.equal(job.employmentType, null);
+});
+
+test('keka.filterRaw drops postings without an id or title', () => {
+  assert.equal(keka.filterRaw([KEKA_JOB, { id: 1 }, { title: 'No id' }, null]).length, 1);
 });

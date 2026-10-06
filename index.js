@@ -82,13 +82,16 @@ program
 
 program
   .command('migrate')
-  .description('Run one-time database backfills that don\'t run automatically on startup (currently: canonicalize existing job locations, resplit compound search terms)')
+  .description('Run one-time database backfills that don\'t run automatically on startup (currently: canonicalize existing job locations, resplit compound search terms), then re-score and regroup jobs if the rules changed')
   .action(async () => {
     const store = require('./src/store');
     try {
       await store.initDb();
       await store.canonicalizeJobLocations();
       await store.resplitCompoundSearchTerms();
+      // The scraper does this on its next run too; doing it here fills new
+      // columns (e.g. department_group) before a web deploy starts reading them.
+      await store.rescoreJobsIfRulesChanged(config.intelligence.rules);
     } catch (err) {
       logger.error(`Migration failed: ${err.message}`);
       process.exit(1);
@@ -115,7 +118,7 @@ program
 program
   .command('discover')
   .description('Crawl Common Crawl for new company boards, verify against the live API, and add them')
-  .requiredOption('-s, --source <source>', 'ashby, greenhouse, workable, smartrecruiters, recruitee, teamtailor, pinpoint, or workday (Lever blocks Common Crawl\'s bot, so it isn\'t supported here)')
+  .requiredOption('-s, --source <source>', 'ashby, greenhouse, workable, smartrecruiters, recruitee, teamtailor, pinpoint, workday, or keka (Lever blocks Common Crawl\'s bot, so it isn\'t supported here)')
   .option('--cdx-limit <n>', 'max Common Crawl URLs to scan (path-based sources; subdomain sources read every page)', (v) => parseInt(v, 10), 3000)
   .option('--verify-limit <n>', 'max new candidates to verify against the live API', (v) => parseInt(v, 10), 300)
   .option('--dry-run', 'print what would be added without writing to the database')

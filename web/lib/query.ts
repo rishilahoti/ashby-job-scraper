@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { query } from "./db";
 import { scoreJob } from "./scoring";
 import rulesData from "../../src/config/rules.json";
+import { DEPARTMENT_GROUPS } from "../../src/normalize/departments";
 import { type SqlParam, pushParam, buildSearchSql, tsquerySql } from "./search-terms";
 import type {
   Job,
@@ -206,8 +207,8 @@ const FILTER_SPECS: FilterSpec[] = [
     sql: (f, params) => `employment_type = ${pushParam(params, f.employmentType!)}`,
   },
   {
-    active: (f) => !!f.department,
-    sql: (f, params) => `department ILIKE ${pushParam(params, `%${f.department}%`)}`,
+    active: (f) => !!f.departments && f.departments.length > 0,
+    sql: (f, params) => `department_group = ANY(${pushParam(params, f.departments!)}::text[])`,
   },
   {
     active: (f) => !!f.team,
@@ -437,18 +438,11 @@ export const getUserCount = withStaleFallback(unstable_cache(
   { revalidate: CACHE_REVALIDATE }
 ), 0);
 
-export const getDepartments = withStaleFallback(unstable_cache(
-  async (): Promise<string[]> => {
-    const { rows } = await query<{ department: string }>(
-      `SELECT DISTINCT department FROM jobs
-       WHERE is_active = TRUE AND department IS NOT NULL AND department != ''
-       ORDER BY department`
-    );
-    return rows.map((r) => r.department);
-  },
-  ["departments-list"],
-  { revalidate: CACHE_REVALIDATE }
-), []);
+// The fixed groups jobs are sorted into (src/normalize/departments.js), not
+// the thousands of raw department names — so no query.
+export async function getDepartments(): Promise<string[]> {
+  return DEPARTMENT_GROUPS;
+}
 
 export const getLocations = withStaleFallback(unstable_cache(
   async (): Promise<string[]> => {

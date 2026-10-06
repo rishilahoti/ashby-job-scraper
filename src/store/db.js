@@ -214,6 +214,9 @@ async function migrateSchema(p) {
   // pagination into Postgres instead of loading + scoring the whole table per request
   await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS base_score INT NOT NULL DEFAULT 0`);
   await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS matched_keywords TEXT[] NOT NULL DEFAULT '{}'`);
+  // src/normalize/departments.js's group, for the feed's department filter.
+  // Filled by upsertJob and, for jobs already stored, rescoreJobsIfRulesChanged.
+  await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS department_group TEXT`);
 
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_published ON jobs (published_at DESC) WHERE is_active = TRUE`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_score ON jobs (base_score DESC) WHERE is_active = TRUE`);
@@ -333,7 +336,7 @@ async function canonicalizeJobLocations() {
     )
   `);
   const locationMigration = await p.query(
-    `SELECT 1 FROM schema_migrations WHERE name = 'canonical-job-locations-v3'`
+    `SELECT 1 FROM schema_migrations WHERE name = 'canonical-job-locations-v4'`
   );
   if (locationMigration.rowCount > 0) {
     logger.info('Job locations already canonicalized — nothing to do');
@@ -396,7 +399,7 @@ async function canonicalizeJobLocations() {
         logger.info(`Canonicalizing job locations: scanned up to id ${lastId}, ${totalUpdated} updated so far`);
       }
       await client.query(
-        `INSERT INTO schema_migrations (name) VALUES ('canonical-job-locations-v3')`
+        `INSERT INTO schema_migrations (name) VALUES ('canonical-job-locations-v4')`
       );
       logger.info(`Canonicalized ${totalUpdated} existing job locations`);
     } finally {

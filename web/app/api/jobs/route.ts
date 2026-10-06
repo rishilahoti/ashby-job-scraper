@@ -132,8 +132,16 @@ export async function GET(request: NextRequest) {
 			filters.employmentType = employmentType;
 		}
 
-		const department = sp.get('department')?.trim();
-		if (department) filters.department = department.slice(0, 100);
+		// Comma list of department groups, like location. Unknown names (old
+		// links to a raw department) are dropped instead of failing the request.
+		const departmentRaw = sp.get('department');
+		if (departmentRaw) {
+			const groups = await getDepartments();
+			const departments = parseLocationValues(departmentRaw)
+				.map((d) => groups.find((g) => g.toLowerCase() === d.toLowerCase()))
+				.filter((g): g is string => Boolean(g));
+			if (departments.length > 0) filters.departments = departments;
+		}
 
 		const team = sp.get('team')?.trim();
 		if (team) filters.team = team.slice(0, 100);
