@@ -82,13 +82,16 @@ program
 
 program
   .command('migrate')
-  .description('Run one-time database backfills that don\'t run automatically on startup (currently: canonicalize existing job locations, resplit compound search terms)')
+  .description('Run one-time database backfills that don\'t run automatically on startup (currently: canonicalize existing job locations, resplit compound search terms), then re-score and regroup jobs if the rules changed')
   .action(async () => {
     const store = require('./src/store');
     try {
       await store.initDb();
       await store.canonicalizeJobLocations();
       await store.resplitCompoundSearchTerms();
+      // The scraper does this on its next run too; doing it here fills new
+      // columns (e.g. department_group) before a web deploy starts reading them.
+      await store.rescoreJobsIfRulesChanged(config.intelligence.rules);
     } catch (err) {
       logger.error(`Migration failed: ${err.message}`);
       process.exit(1);

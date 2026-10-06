@@ -7,6 +7,7 @@ import { ADAPTERS } from "../../../../src/normalize";
 // jobs added here got base_score 0 and no matched_keywords until their content
 // next changed and the scraper's own upsertJob happened to recompute them.
 import { computeStoredScore } from "../../../../src/intelligence/rules-engine";
+import { departmentGroup } from "../../../../src/normalize/departments";
 import rules from "../../../../src/config/rules.json";
 import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 
@@ -382,7 +383,11 @@ export async function POST(request: NextRequest) {
     // ponytail: whole board in one statement; chunk it if a board ever gets
     // big enough for the payload or the trigger's tsvector work to matter.
     if (byId.size > 0) {
-      const payload = [...byId.values()].map((job) => ({ ...job, ...computeStoredScore(job, rules) }));
+      const payload = [...byId.values()].map((job) => ({
+        ...job,
+        ...computeStoredScore(job, rules),
+        departmentGroup: departmentGroup(job.department, job.team, job.title),
+      }));
       await query(
         `INSERT INTO jobs (
            job_id, company, source, title, location, team, department,
@@ -390,21 +395,21 @@ export async function POST(request: NextRequest) {
            apply_url, job_url, published_at, scraped_at,
            compensation_summary, compensation_min, compensation_max,
            compensation_currency, compensation_interval, content_hash, is_active,
-           base_score, matched_keywords
+           base_score, matched_keywords, department_group
          )
          SELECT "jobId", $2, $3, title, location, team, department,
                 "employmentType", remote, description,
                 "applyUrl", "jobUrl", "publishedAt", NOW(),
                 "compensationSummary", "compensationMin", "compensationMax",
                 "compensationCurrency", "compensationInterval", "contentHash", TRUE,
-                "baseScore", "matchedKeywords"
+                "baseScore", "matchedKeywords", "departmentGroup"
          FROM jsonb_to_recordset($1::jsonb) AS r(
            "jobId" text, title text, location text, team text, department text,
            "employmentType" text, remote boolean, description text,
            "applyUrl" text, "jobUrl" text, "publishedAt" timestamptz,
            "compensationSummary" text, "compensationMin" numeric, "compensationMax" numeric,
            "compensationCurrency" text, "compensationInterval" text, "contentHash" text,
-           "baseScore" int, "matchedKeywords" text[]
+           "baseScore" int, "matchedKeywords" text[], "departmentGroup" text
          )
          ON CONFLICT (company, job_id) DO UPDATE SET
            source            = EXCLUDED.source,
@@ -428,6 +433,7 @@ export async function POST(request: NextRequest) {
            is_active         = TRUE,
            base_score        = EXCLUDED.base_score,
            matched_keywords  = EXCLUDED.matched_keywords,
+           department_group  = EXCLUDED.department_group,
            updated_at        = NOW()`,
         [JSON.stringify(payload), companyNameForJobs, source]
       );

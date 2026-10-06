@@ -170,7 +170,9 @@ function cleanLocationText(value) {
   return String(value || '')
     .replace(/\([^)]*\bremote\b[^)]*\)/gi, ' ')
     .replace(/\b(remote|hybrid|work from home|work-from-home|wfh)\b/gi, ' ')
-    .replace(/\s*[/|]\s*/g, ', ')
+    // Parentheses separate parts too: "Remote (Canada)" was left as "(Canada)",
+    // which canonicalCity then cased as "(canada)".
+    .replace(/\s*[/|()]\s*/g, ', ')
     .replace(/\s*-\s*/g, ', ')
     .replace(/\s+/g, ' ')
     .replace(/^(,\s*)+|(,\s*)+$/g, '')
