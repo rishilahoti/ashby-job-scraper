@@ -71,13 +71,17 @@ async function getEnabledCompaniesWithDb(pool) {
 const SLUG_MAX_LEN = 128;
 const SLUG_REGEX = /^[a-zA-Z0-9_-]+$/;
 const WORKDAY_SLUG_REGEX = /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+$/;
+// North American Teamtailor boards only answer on acme.na.teamtailor.com
+// (acme.teamtailor.com 404s), so the region stays in the slug.
+const TEAMTAILOR_SLUG_REGEX = /^[a-zA-Z0-9_-]+(\.na)?$/;
+const SLUG_REGEX_BY_SOURCE = { workday: WORKDAY_SLUG_REGEX, teamtailor: TEAMTAILOR_SLUG_REGEX };
 
 function isValidSlug(slug, source = 'ashby') {
   return (
     typeof slug === 'string' &&
     slug.length > 0 &&
     slug.length <= SLUG_MAX_LEN &&
-    (source === 'workday' ? WORKDAY_SLUG_REGEX.test(slug) : SLUG_REGEX.test(slug))
+    (SLUG_REGEX_BY_SOURCE[source] || SLUG_REGEX).test(slug)
   );
 }
 
@@ -136,5 +140,6 @@ module.exports = {
   getEnabledCompaniesWithDb,
   addCompany,
   getDueCompanies,
+  isValidSlug,
   SUPPORTED_SOURCES,
 };
