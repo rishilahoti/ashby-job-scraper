@@ -139,6 +139,8 @@ export default function Filters({
   );
 
   const currentLocations = parseLocationValues(searchParams.get("location"));
+  // Same comma-list format as location.
+  const currentDepartments = parseLocationValues(searchParams.get("department"));
 
   const current = {
     search: searchParams.get("search") || "",
@@ -149,7 +151,7 @@ export default function Filters({
       .filter(Boolean),
     remote: searchParams.get("remote") || "",
     employmentType: searchParams.get("employmentType") || "",
-    department: searchParams.get("department") || "",
+    departments: currentDepartments,
     locations: currentLocations,
     tags: (searchParams.get("tags") || "")
       .split(",")
@@ -164,7 +166,7 @@ export default function Filters({
     current.source.length > 0 ||
     current.remote ||
     current.employmentType ||
-    current.department ||
+    current.departments.length > 0 ||
     current.locations.length > 0 ||
     current.tags.length > 0 ||
     current.sort !== "score";
@@ -252,17 +254,13 @@ export default function Filters({
         onChange={setSources}
       />
 
-      {/* Department */}
-      <select
-        value={current.department}
-        onChange={(e) => setParam("department", e.target.value)}
-        className="h-8 max-w-32.5 px-2 text-sm bg-surface border border-edge rounded-md text-ink-secondary focus:outline-none focus:border-edge-strong cursor-pointer"
-      >
-        <option value="">All departments</option>
-        {departments.map((d) => (
-          <option key={d} value={d}>{d}</option>
-        ))}
-      </select>
+      {/* Department — searchable checklist */}
+      <ChecklistDropdown
+        label="All departments"
+        options={departments.map((department) => ({ value: department, label: department }))}
+        selected={current.departments}
+        onChange={(next) => setParam("department", next.join(","))}
+      />
 
       {/* Location — searchable checklist */}
       <ChecklistDropdown

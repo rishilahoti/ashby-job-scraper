@@ -43,6 +43,17 @@ const CASES = [
   ['R&D', null, 'Head of Things', 'Engineering'],
   [null, 'Growth', 'Lead', 'Marketing'],
   [null, null, 'Software Engineer, Growth', 'Engineering'],
+  // Found in "Other" when sampling real boards.
+  [null, null, 'Abuse Investigator - Scams & Fraud', 'Legal & Compliance'],
+  [null, null, 'US Congressional Lead', 'Legal & Compliance'],
+  [null, null, 'Red Team Specialist - Cyber', 'Security'],
+  [null, null, 'Associate Renewals Manager', 'Sales'],
+  [null, null, 'Senior Engagement Manager - Germany', 'Customer Success & Support'],
+  [null, null, 'Manager, Strategic Programs', 'Operations'],
+  // Phrases, not bare words, so these keep their real group.
+  [null, null, 'Motion Capture Artist', 'Other'],
+  [null, null, 'CRM Developer', 'Engineering'],
+  [null, null, 'Developer Enablement Engineer', 'Engineering'],
   // "Talent Pool" is a general application, not an HR job.
   ['Talent Pool', null, 'General Application', 'Other'],
   [null, null, null, 'Other'],

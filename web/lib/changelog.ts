@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "department-groups",
+    date: "2026-10-06",
+    title: "Pick several departments at once",
+    description:
+      "The department filter now has 16 clear groups, like Engineering, Data & AI, Product, Design and Sales, instead of thousands of raw names. You can search it and select more than one. Locations like \"(canada)\" are cleaned up too.",
+  },
+  {
     id: "sponsors",
     date: "2026-10-06",
     title: "Ashby Jobs is on GitHub Sponsors",
@@ -75,7 +82,7 @@ export interface AppNotification {
 
 // Changelog entries that also get a notification, newest first. Not every
 // entry deserves one: add an id here when a feature should be announced.
-const ANNOUNCED_IDS = ["role-and-tech-tags", "auth"];
+const ANNOUNCED_IDS = ["department-groups", "role-and-tech-tags", "auth"];
 
 const shortDate = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
