@@ -2,9 +2,12 @@ name: Discover Companies
 
 on:
     schedule:
-        - cron: '0 3 * * *' # daily, 03:00 UTC — Common Crawl snapshots refresh ~monthly, but
+        - cron: '37 14 * * *' # daily, 14:37 UTC — Common Crawl snapshots refresh ~monthly, but
           # re-runs are cheap since already-tracked slugs are skipped, so daily just catches
-          # newly-listed companies sooner.
+          # newly-listed companies sooner. GitHub starts these runs hours late (03:00 ran at
+          # 08:50-09:58), which landed after the scraper's 00:00 UTC run; an afternoon slot
+          # off the top of the hour still finishes before it, so new companies get scraped
+          # the same night.
     workflow_dispatch: # manual trigger button
 
 permissions:

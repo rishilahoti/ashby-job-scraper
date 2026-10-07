@@ -109,36 +109,43 @@ async function runPipeline({ digest = true } = {}) {
       }
     }
 
-    const activeRows = await store.getAllActiveJobs();
-    const allActiveJobs = activeRows.map(row => ({
-      jobId: row.job_id,
-      company: row.company,
-      source: row.source,
-      title: row.title,
-      location: row.location,
-      team: row.team,
-      department: row.department,
-      employmentType: row.employment_type,
-      remote: Boolean(row.remote),
-      description: row.description,
-      applyUrl: row.apply_url,
-      jobUrl: row.job_url,
-      publishedAt: row.published_at,
-      compensationSummary: row.compensation_summary,
-      compensationMin: row.compensation_min,
-      compensationMax: row.compensation_max,
-      compensationCurrency: row.compensation_currency,
-      compensationInterval: row.compensation_interval,
-    }));
+    // Best effort, like the re-scoring pass and the digest: this summary loads
+    // every active job, and when that query timed out (2026-10-07, while
+    // autovacuum was busy on jobs) the error also cost the cleanup and the digest.
+    try {
+      const activeRows = await store.getAllActiveJobs();
+      const allActiveJobs = activeRows.map(row => ({
+        jobId: row.job_id,
+        company: row.company,
+        source: row.source,
+        title: row.title,
+        location: row.location,
+        team: row.team,
+        department: row.department,
+        employmentType: row.employment_type,
+        remote: Boolean(row.remote),
+        description: row.description,
+        applyUrl: row.apply_url,
+        jobUrl: row.job_url,
+        publishedAt: row.published_at,
+        compensationSummary: row.compensation_summary,
+        compensationMin: row.compensation_min,
+        compensationMax: row.compensation_max,
+        compensationCurrency: row.compensation_currency,
+        compensationInterval: row.compensation_interval,
+      }));
 
-    const { filtered } = intelligence.filterAndRank(allActiveJobs);
+      const { filtered } = intelligence.filterAndRank(allActiveJobs);
 
-    if (config.notify.cli) {
-      printRunSummary(allChanges, filtered);
-    }
+      if (config.notify.cli) {
+        printRunSummary(allChanges, filtered);
+      }
 
-    if (config.notify.markdown && allChanges.length > 0) {
-      generateReport(allChanges, filtered);
+      if (config.notify.markdown && allChanges.length > 0) {
+        generateReport(allChanges, filtered);
+      }
+    } catch (err) {
+      logger.error(`Run summary failed: ${err.message}`);
     }
 
     // Remove inactive jobs older than 30 days to keep Neon storage under control.
