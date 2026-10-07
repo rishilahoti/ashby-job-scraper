@@ -30,6 +30,9 @@ function normalizeJob(raw, company) {
     /remote/i.test(raw.workplace_type_text || raw.workplace_type || '')
   );
   const description = sanitizeDescription(raw.description);
+  // An object ({ id, name }), not a string: passed through as-is it crashed
+  // scoring's .toLowerCase() and failed every Pinpoint board.
+  const department = raw.job?.department?.name || null;
   // No explicit remote boolean — Pinpoint expresses it via workplace_type_text.
 
   return {
@@ -39,7 +42,7 @@ function normalizeJob(raw, company) {
     title: raw.title || 'Untitled',
     location: normalizedLocation.location,
     team: null,
-    department: raw.job?.department || null,
+    department,
     employmentType: raw.employment_type_text || raw.employment_type || null,
     remote: normalizedLocation.remote,
     description,
@@ -60,7 +63,7 @@ function normalizeJob(raw, company) {
       description,
       raw.employment_type,
       String(normalizedLocation.remote),
-      raw.job?.department
+      department
     ),
   };
 }
