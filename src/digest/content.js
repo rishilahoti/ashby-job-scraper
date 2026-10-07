@@ -168,7 +168,9 @@ function buildDigest(data) {
   ];
   const noJobsNote = picked.length ? '' : 'No new software jobs in this window, so skip the jobs posts today.';
   const jobLines = picked.map((j, i) => `${i + 1}. [${j.score}] ${NICHE_LABELS[j.niche].name} · ${j.title} at ${j.company}${where(j) ? ` · ${where(j)}` : ''} · ${jobUrl(j)}`);
-  const companyLines = newCompanies.map((c) => `${c.name} (${c.source}, ${fmt(c.jobs)} live jobs)`);
+  // Discovery can add hundreds of companies in one day; list the biggest.
+  const companyLines = newCompanies.slice(0, 20).map((c) => `${c.name} (${c.source}, ${fmt(c.jobs)} live jobs)`);
+  if (newCompanies.length > 20) companyLines.push(`…and ${fmt(newCompanies.length - 20)} more`);
   const shippedLines = shipped.map((p) => `#${p.number} ${p.title} · ${p.url}`);
   const failureLines = [
     ...fresh.map((f) => `${f.company}: ${f.error_message || 'unknown error'}`),

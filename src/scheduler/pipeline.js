@@ -47,17 +47,13 @@ async function scrapeCompany(company) {
   }
 }
 
-// The last 23 hours, not just this run: a container restart (every merge to
-// main) can do the day's scrape hours before the nightly run, which then
-// finds nothing due. 23, not 24, so it never reaches back into the previous
-// nightly run (cron at 00:00 plus jitter, a few minutes long).
-// ponytail: a fixed window, not "since the last digest": a restart run in the
-// hour after a nightly run lands in neither digest. Store the last send time
-// if that ever matters.
+// Everything since the last digest (runDigest keeps track), not just this
+// run: a container restart (every merge to main) can do the day's scrape
+// hours before the nightly run, which then finds nothing due.
 async function sendDailyDigest(pool) {
   // Best effort: an email problem must never fail the scrape.
   try {
-    await runDigest(pool, { since: new Date(Date.now() - 23 * 60 * 60 * 1000) });
+    await runDigest(pool);
   } catch (err) {
     logger.error(`Daily digest failed: ${err.message}`);
   }

@@ -62,15 +62,15 @@ program
 
 program
   .command('digest')
-  .description('Email the daily digest for the last N hours now, or preview it with --dry-run')
-  .option('--hours <n>', 'look-back window in hours', (v) => parseInt(v, 10), 24)
+  .description('Email the daily digest now (everything since the last one), or preview it with --dry-run')
+  .option('--hours <n>', 'look back N hours instead of to the last digest', (v) => parseInt(v, 10))
   .option('--dry-run', 'write the email to the reports folder instead of sending it')
   .action(async (options) => {
     const store = require('./src/store');
     const { runDigest } = require('./src/digest');
     try {
-      // No initDb: the digest only reads, so pointing it at any database is safe.
-      const since = new Date(Date.now() - options.hours * 60 * 60 * 1000);
+      // No initDb: the digest only reads, apart from recording when it was sent.
+      const since = options.hours ? new Date(Date.now() - options.hours * 60 * 60 * 1000) : undefined;
       await runDigest(store.getPool(), { since, dryRun: !!options.dryRun });
     } catch (err) {
       logger.error(`Digest failed: ${err.message}`);

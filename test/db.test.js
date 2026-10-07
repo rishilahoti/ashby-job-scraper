@@ -221,6 +221,51 @@ dbTest('rescoreJobsIfRulesChanged re-tags stored jobs once per rules version', a
   }
 });
 
+dbTest('digest jobs: only fresh postings on boards tracked before the window', async () => {
+  await initDb();
+  const pool = getPool();
+  const { collectDigestData } = require('../src/digest');
+  const cleanup = async () => {
+    await pool.query(`DELETE FROM jobs WHERE company IN ('DigestOldCo', 'DigestNewCo')`);
+    await pool.query(`DELETE FROM companies WHERE name IN ('DigestOldCo', 'DigestNewCo')`);
+    await pool.query(`DELETE FROM scrape_runs WHERE company IN ('DigestOldCo', 'DigestNewCo')`);
+  };
+  await cleanup();
+  await pool.query(
+    `INSERT INTO companies (name, slug, source, created_at) VALUES
+       ('DigestOldCo', 'digestoldco', 'ashby', NOW() - INTERVAL '2 days'),
+       ('DigestNewCo', 'digestnewco', 'workday', NOW())`
+  );
+  const job = (jobId, company, created, published) => pool.query(
+    `INSERT INTO jobs (job_id, company, title, scraped_at, content_hash, created_at, published_at)
+     VALUES ($1, $2, 'Engineer', NOW(), 'h', NOW() - $3::interval, NOW() - $4::interval)`,
+    [jobId, company, created, published]
+  );
+  try {
+    await job('dg-fresh', 'DigestOldCo', '0 hours', '0 hours');
+    // A board discovered in this window: its backlog, stamped with the scrape time.
+    await job('dg-backlog', 'DigestNewCo', '0 hours', '0 hours');
+    // New to us, but posted days ago.
+    await job('dg-stale', 'DigestOldCo', '0 hours', '5 days');
+    // In an earlier digest already.
+    await job('dg-seen', 'DigestOldCo', '2 days', '2 days');
+    await pool.query(
+      `INSERT INTO scrape_runs (company, status, jobs_inserted, jobs_updated, jobs_removed) VALUES
+         ('DigestOldCo', 'success', 2, 0, 0), ('DigestNewCo', 'success', 50, 0, 0)`
+    );
+    const since = new Date(Date.now() - 60 * 60 * 1000);
+    const data = await collectDigestData(pool, { since, companiesSince: since });
+    const ours = data.candidates.filter((c) => c.company.startsWith('Digest')).map((c) => c.jobId);
+    assert.deepEqual(ours, ['dg-fresh']);
+    // The new board's 50-job backlog isn't counted as new jobs (CI's database
+    // has no other scrape runs).
+    assert.equal(data.run.new, 2);
+    assert.ok(data.newCompanies.some((c) => c.name === 'DigestNewCo'), 'the new board is still listed as a new company');
+  } finally {
+    await cleanup();
+  }
+});
+
 test.after(async () => {
   await closeDb();
 });

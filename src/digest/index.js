@@ -26,9 +26,9 @@ async function fetchShipped(since) {
   }
 }
 
-// `since` scopes this scrape cycle (its scrape_runs rows and the jobs it
-// inserted). `companiesSince` is wider: discovery adds companies at 03:00 UTC,
-// hours before the nightly scrape.
+// `since` scopes this digest's window (its scrape_runs rows and the jobs
+// inserted). `companiesSince` can be set wider for companies and shipped PRs;
+// runDigest uses the same window for both.
 async function collectDigestData(pool, { since, companiesSince }) {
   // Same score as web/lib/query.ts SCORE_EXPR, so "highest score" means what the feed shows.
   const { freshnessBoostHours, freshnessBoost } = config.intelligence.rules;
@@ -39,23 +39,32 @@ async function collectDigestData(pool, { since, companiesSince }) {
     : 'base_score';
 
   const [candidates, run, failures, newCompanies, totals, users, shipped] = await Promise.all([
-    // A company added today also brings its months-old postings, which are
-    // new to us but not to job seekers.
+    // Only jobs that newly appeared on a board we already tracked. A company
+    // added in this window brings its whole backlog, months-old postings that
+    // are new to us but not to job seekers, and Workday and Pinpoint give no
+    // posting date (the adapters stamp the scrape time), so the date check
+    // alone can't catch those. Day-truncated because several ATSs give only a
+    // posting date, which lands on midnight UTC.
     pool.query(
       `SELECT job_id, company, title, location, remote, team, department, (${score})::int AS score
        FROM jobs
        WHERE is_active = TRUE AND created_at >= $1
-         AND (published_at IS NULL OR published_at >= $1::timestamptz - INTERVAL '3 days')
+         AND (published_at IS NULL OR published_at >= date_trunc('day', $1::timestamptz))
+         AND NOT EXISTS (SELECT 1 FROM companies c WHERE c.name = jobs.company AND c.created_at >= $1)
        ORDER BY score DESC, published_at DESC NULLS LAST
        LIMIT 500`,
       [since]
     ),
     // A window can hold several runs (each scraper restart runs one), so
     // companies are counted once. Job counts can be summed: each change
-    // happens in exactly one run.
+    // happens in exactly one run. "New" skips boards added in this window,
+    // for the same backlog reason as above: the posts call these jobs "posted
+    // yesterday".
     pool.query(
       `SELECT COUNT(DISTINCT company)::int AS scraped,
-              COALESCE(SUM(jobs_inserted), 0)::int AS new,
+              COALESCE(SUM(jobs_inserted) FILTER (WHERE NOT EXISTS (
+                SELECT 1 FROM companies c WHERE c.name = scrape_runs.company AND c.created_at >= $1
+              )), 0)::int AS new,
               COALESCE(SUM(jobs_updated), 0)::int AS updated,
               COALESCE(SUM(jobs_removed), 0)::int AS removed
        FROM scrape_runs WHERE started_at >= $1`,
@@ -127,8 +136,18 @@ function smtpTransport() {
   });
 }
 
-async function runDigest(pool, { since, companiesSince = since, dryRun = false }) {
-  const email = buildDigest(await collectDigestData(pool, { since, companiesSince }));
+const SENT_KEY = 'digest_sent_at';
+
+// Each digest covers everything since the previous one was sent: nothing
+// shows up twice, and jobs a restart run found during the day aren't missed.
+// Without a previous send, it covers the last 23 hours.
+async function runDigest(pool, { since, dryRun = false } = {}) {
+  const until = new Date();
+  if (!since) {
+    const { rows } = await pool.query('SELECT value FROM app_state WHERE key = $1', [SENT_KEY]);
+    since = rows[0] ? new Date(rows[0].value) : new Date(until - 23 * 60 * 60 * 1000);
+  }
+  const email = buildDigest(await collectDigestData(pool, { since, companiesSince: since }));
 
   if (dryRun) {
     fs.mkdirSync(config.notify.reportsDir, { recursive: true });
@@ -148,7 +167,14 @@ async function runDigest(pool, { since, companiesSince = since, dryRun = false }
   const to = process.env.DIGEST_EMAIL_TO || 'rishilahoti99@gmail.com';
   await transport.sendMail({ from: `Ashby Jobs <${from}>`, to, subject: email.subject, text: email.text, html: email.html });
   logger.info(`Daily digest sent to ${to}`);
+  // Where the next digest starts. `until` is when this one began collecting,
+  // so nothing that arrived while it was being built is skipped.
+  await pool.query(
+    `INSERT INTO app_state (key, value) VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [SENT_KEY, until.toISOString()]
+  );
   return email;
 }
 
-module.exports = { runDigest };
+module.exports = { runDigest, collectDigestData };
