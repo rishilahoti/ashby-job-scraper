@@ -8,6 +8,8 @@ const pinpoint = require('../src/normalize/adapters/pinpoint');
 const smartrecruiters = require('../src/normalize/adapters/smartrecruiters');
 const workday = require('../src/normalize/adapters/workday');
 const keka = require('../src/normalize/adapters/keka');
+const rules = require('../src/config/rules.json');
+const { computeStoredScore } = require('../src/intelligence/rules-engine');
 
 test('workable.normalizeJob maps a real widget response shape', () => {
   const job = workable.normalizeJob({
@@ -109,7 +111,8 @@ test('pinpoint.normalizeJob maps a real postings.json response shape', () => {
     workplace_type_text: 'Fully remote',
     description: '<p>Legal stuff</p>',
     url: 'https://workwithus.pinpointhq.com/en/postings/abc',
-    job: { department: 'Legal' },
+    // The real shape: an object, not a string (the old fixture hid a crash).
+    job: { id: '535660', department: { id: '44464', name: 'Legal' } },
     compensation_minimum: 90000,
     compensation_maximum: 120000,
     compensation_currency: 'GBP',
@@ -121,6 +124,8 @@ test('pinpoint.normalizeJob maps a real postings.json response shape', () => {
   assert.equal(job.remote, true);
   assert.equal(job.department, 'Legal');
   assert.equal(job.compensationInterval, 'YEAR');
+  // Scoring is where the object department crashed every Pinpoint board.
+  assert.doesNotThrow(() => computeStoredScore(job, rules));
 });
 
 test('pinpoint.normalizeJob returns null when id is missing', () => {
