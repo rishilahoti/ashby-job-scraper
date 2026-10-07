@@ -45,19 +45,29 @@ const CASE_SENSITIVE_SOURCES = new Set(['smartrecruiters']);
 const VERIFY_CONCURRENCY = 5;
 const VERIFY_DELAY_MS = 300;
 
-// Common Crawl's index server drops connections and returns 502s under load;
-// one flaky response shouldn't cost a source its whole run.
+// Common Crawl's index server sheds load with 502/503/504s and dropped
+// connections. From a GitHub runner it started refusing every request after
+// about 8 in two minutes (2026-10-07), and 5-10s retries all failed. It wants
+// clients to slow down, so wait 15s, 30s, then 60s, or as long as Retry-After asks.
+const CDX_ATTEMPTS = 4;
+
 async function fetchCdx(url) {
   let lastError;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= CDX_ATTEMPTS; attempt++) {
+    let waitMs = 15000 * 2 ** (attempt - 1);
     try {
       const res = await fetch(url);
       if (res.ok) return await res.text();
       lastError = new Error(`Common Crawl returned HTTP ${res.status}`);
+      const retryAfter = Number(res.headers.get('retry-after'));
+      if (retryAfter > 0) waitMs = Math.min(retryAfter, 120) * 1000;
     } catch (err) {
       lastError = err;
     }
-    if (attempt < 3) await delay(5000 * attempt);
+    if (attempt < CDX_ATTEMPTS) {
+      logger.warn(`Common Crawl request failed (${lastError.message}); retrying in ${waitMs / 1000}s`);
+      await delay(waitMs);
+    }
   }
   throw lastError;
 }

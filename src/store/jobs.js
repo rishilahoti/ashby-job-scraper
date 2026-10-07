@@ -192,9 +192,10 @@ async function getAllActiveJobs() {
        apply_url, job_url, published_at, compensation_summary,
        compensation_min, compensation_max, compensation_currency, compensation_interval
      FROM jobs
-     WHERE is_active = TRUE
-     ORDER BY company, published_at DESC`
+     WHERE is_active = TRUE`
   );
+  // No ORDER BY: both callers re-sort by score (filterAndRank), and sorting
+  // ~50K rows with their description snippets spilled to disk on the 1 GB VM.
   return rows;
 }
 
