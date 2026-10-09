@@ -115,6 +115,26 @@ test('fetchJobBoard throws when the response shape is invalid', async () => {
   );
 });
 
+// 2026-10-09: one board's fetch never settled, abort signal or not, and the
+// nightly run, its cleanup and the digest waited on it for three hours.
+test('fetchJobBoard gives up on a response that never settles', { timeout: 5000 }, async () => {
+  const originalFetch = global.fetch;
+  const { timeoutMs, retryBaseMs } = config.fetch;
+  let attempts = 0;
+  global.fetch = async () => {
+    attempts++;
+    return { ok: true, status: 200, json: () => new Promise(() => {}) };
+  };
+  Object.assign(config.fetch, { timeoutMs: 20, retryBaseMs: 1 });
+  try {
+    await assert.rejects(() => fetchJobBoard('acme', 'ashby'), /no response within/);
+    assert.equal(attempts, config.fetch.maxRetries);
+  } finally {
+    global.fetch = originalFetch;
+    Object.assign(config.fetch, { timeoutMs, retryBaseMs });
+  }
+});
+
 test('fetchJobBoard throws FetchError for an unknown source', async () => {
   await assert.rejects(() => fetchJobBoard('acme', 'bogus'), FetchError);
 });

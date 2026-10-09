@@ -1,5 +1,5 @@
 const config = require('../config');
-const { logger, delay } = require('../utils');
+const { logger, delay, timeLimit } = require('../utils');
 
 const DEFAULT_HEADERS = {
   'User-Agent': config.fetch.userAgent,
@@ -89,11 +89,12 @@ async function fetchOnce(url, options, slug, source, extractJobs) {
   for (let attempt = 1; attempt <= config.fetch.maxRetries; attempt++) {
     try {
       logger.debug(`Fetching ${slug} (${source}, attempt ${attempt}/${config.fetch.maxRetries})`);
-      const response = await fetch(url, {
+      const { timeoutMs } = config.fetch;
+      const response = await timeLimit(fetch(url, {
         headers: DEFAULT_HEADERS,
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(timeoutMs),
         ...options,
-      });
+      }), timeoutMs);
 
       if (!response.ok) {
         const retryable = response.status >= 500 || response.status === 429;
@@ -103,7 +104,7 @@ async function fetchOnce(url, options, slug, source, extractJobs) {
         );
       }
 
-      const data = await response.json();
+      const data = await timeLimit(response.json(), timeoutMs);
       const jobs = extractJobs(data);
       if (jobs === null) {
         throw new FetchError(
@@ -185,12 +186,13 @@ async function fetchKekaJobBoard(slug, source) {
   const boardUrl = `https://${slug}.keka.com/careers/`;
   let html;
   try {
-    const res = await fetch(boardUrl, {
+    const { timeoutMs } = config.fetch;
+    const res = await timeLimit(fetch(boardUrl, {
       headers: { ...DEFAULT_HEADERS, Accept: 'text/html' },
-      signal: AbortSignal.timeout(30000),
-    });
+      signal: AbortSignal.timeout(timeoutMs),
+    }), timeoutMs);
     if (!res.ok) throw new FetchError(`Fetch failed for ${slug} (${source}): HTTP ${res.status}`, slug, res.status, false);
-    html = await res.text();
+    html = await timeLimit(res.text(), timeoutMs);
   } catch (err) {
     if (err instanceof FetchError) throw err;
     throw new FetchError(`Fetch failed for ${slug} (${source}): ${err.message}`, slug, null, true);

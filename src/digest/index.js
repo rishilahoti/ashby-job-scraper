@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const nodemailer = require('nodemailer');
 const config = require('../config');
-const { logger } = require('../utils');
+const { logger, timeLimit } = require('../utils');
 const { buildDigest } = require('./content');
 
 const REPO = 'rishilahoti/ashby-job-scraper';
@@ -11,12 +11,12 @@ const REPO = 'rishilahoti/ashby-job-scraper';
 // dependabot bumps aren't news. Best effort: the digest goes out without it.
 async function fetchShipped(since) {
   try {
-    const res = await fetch(
+    const res = await timeLimit(fetch(
       `https://api.github.com/repos/${REPO}/pulls?state=closed&base=main&sort=updated&direction=desc&per_page=30`,
       { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'ashby-jobs-digest' }, signal: AbortSignal.timeout(10000) }
-    );
+    ), 10000);
     if (!res.ok) throw new Error(`GitHub API ${res.status}`);
-    const pulls = await res.json();
+    const pulls = await timeLimit(res.json(), 10000);
     return pulls
       .filter((p) => p.merged_at && new Date(p.merged_at) >= since && !p.user?.login?.endsWith('[bot]'))
       .map((p) => ({ number: p.number, title: p.title, url: p.html_url }));
@@ -138,15 +138,18 @@ function smtpTransport() {
 
 const SENT_KEY = 'digest_sent_at';
 
+// When the previous digest went out, or null before the first one.
+async function lastDigestAt(pool) {
+  const { rows } = await pool.query('SELECT value FROM app_state WHERE key = $1', [SENT_KEY]);
+  return rows[0] ? new Date(rows[0].value) : null;
+}
+
 // Each digest covers everything since the previous one was sent: nothing
 // shows up twice, and jobs a restart run found during the day aren't missed.
 // Without a previous send, it covers the last 23 hours.
 async function runDigest(pool, { since, dryRun = false } = {}) {
   const until = new Date();
-  if (!since) {
-    const { rows } = await pool.query('SELECT value FROM app_state WHERE key = $1', [SENT_KEY]);
-    since = rows[0] ? new Date(rows[0].value) : new Date(until - 23 * 60 * 60 * 1000);
-  }
+  if (!since) since = (await lastDigestAt(pool)) || new Date(until - 23 * 60 * 60 * 1000);
   const email = buildDigest(await collectDigestData(pool, { since, companiesSince: since }));
 
   if (dryRun) {
@@ -177,4 +180,4 @@ async function runDigest(pool, { since, dryRun = false } = {}) {
   return email;
 }
 
-module.exports = { runDigest, collectDigestData };
+module.exports = { runDigest, collectDigestData, lastDigestAt };
