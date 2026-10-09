@@ -171,6 +171,20 @@ async function migrateSchema(p) {
     )
   `);
 
+  // LinkedIn posts the digest queued (src/linkedin): published when post_at
+  // comes, then marked with posted_at or the error.
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS linkedin_posts (
+      id SERIAL PRIMARY KEY,
+      text TEXT NOT NULL,
+      post_at TIMESTAMPTZ NOT NULL,
+      posted_at TIMESTAMPTZ,
+      post_urn TEXT,
+      error TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   // --- one-time migrations for existing deployments ---
 
   // drop description_html if it still exists (frees up ~50-80% storage per row)

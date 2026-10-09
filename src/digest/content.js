@@ -10,8 +10,20 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const SOURCE_NAMES = {
   ashby: 'Ashby', greenhouse: 'Greenhouse', lever: 'Lever', workable: 'Workable', recruitee: 'Recruitee',
-  teamtailor: 'Teamtailor', pinpoint: 'Pinpoint', smartrecruiters: 'SmartRecruiters', workday: 'Workday',
+  teamtailor: 'Teamtailor', pinpoint: 'Pinpoint', smartrecruiters: 'SmartRecruiters', workday: 'Workday', keka: 'Keka',
 };
+
+// CamelCase so screen readers say each word. Post 1 is for builders; the job
+// posts pair tags job seekers follow with the day's own niches.
+const BUILD_TAGS = '#BuildInPublic #IndieHackers #SideProject #WebScraping #JobSearch';
+
+function jobTags(picked) {
+  const count = {};
+  for (const j of picked) if (j.niche !== 'software') count[j.niche] = (count[j.niche] || 0) + 1;
+  const topical = Object.keys(count).sort((a, b) => count[b] - count[a]).map((n) => NICHE_LABELS[n].tag);
+  if (picked.some((j) => j.remote)) topical.splice(1, 0, '#RemoteJobs');
+  return ['#Hiring', '#OpenToWork', '#TechJobs', ...(topical.length ? topical : ['#SoftwareEngineering']).slice(0, 2)].join(' ');
+}
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-US');
 const jobUrl = (job) => `${SITE_URL}/jobs/${encodeURIComponent(job.jobId)}`;
@@ -37,7 +49,7 @@ function where(job) {
 
 function listNames(names, max = 3) {
   const shown = names.slice(0, max).join(', ');
-  return names.length > max ? `${shown} +${names.length - max} more` : shown;
+  return names.length > max ? `${shown} +${fmt(names.length - max)} more` : shown;
 }
 
 function joinAnd(items) {
@@ -74,33 +86,39 @@ function pickTopJobs(candidates, limit = 10, perNiche = 3) {
   return picked.sort((a, b) => b.score - a.score);
 }
 
-const POST1_OPENERS = [
-  (day) => `Day ${day} of building Ashby Jobs in public 🛠️`,
-  (day) => `Ashby Jobs, day ${day}. Here's what the scraper did overnight 🤖`,
-  (day) => `Build-in-public update, day ${day} 📈`,
-];
+// The hook when Groq's copy isn't available: still the day's sharpest fact.
+function templateHook({ run }) {
+  return run.removed > run.new
+    ? `${fmt(run.removed)} jobs closed since yesterday. ${fmt(run.new)} new ones opened.`
+    : `${fmt(run.new)} new jobs since yesterday, straight from company career pages.`;
+}
 
+// `copy` is Groq's wording (writer.js) and only ever words: every number
+// here comes from the data.
 function buildPost1(data, day) {
-  const { run, newCompanies, totals, users, shipped, failures } = data;
+  const { run, newCompanies, totals, users, shipped, failures, copy } = data;
   const { fresh } = splitFailures(data);
-  const lines = [POST1_OPENERS[day % POST1_OPENERS.length](day), '', 'Last 24 hours:', `→ ${fmt(run.new)} new jobs`];
+  const lines = copy ? [copy.hook, ...(copy.hookLine2 ? [copy.hookLine2] : [])] : [templateHook(data)];
+  lines.push('', `Day ${day} of building Ashby Jobs in public. Last 24 hours:`, `→ ${fmt(run.new)} new jobs`);
   if (newCompanies.length) {
     const noun = newCompanies.length === 1 ? 'company' : 'companies';
-    lines.push(`→ ${newCompanies.length} new ${noun} (${listNames(newCompanies.map((c) => c.name))})`);
+    lines.push(`→ ${fmt(newCompanies.length)} new ${noun} (${listNames(newCompanies.map((c) => c.name))})`);
   }
   if (run.removed) lines.push(`→ ${fmt(run.removed)} jobs closed or filled`);
   if (run.updated) lines.push(`→ ${fmt(run.updated)} listings updated`);
   lines.push('', `Now tracking ${fmt(totals.jobs)} live jobs from ${fmt(totals.companies)} companies across ${platforms(totals.sources)}.`);
   if (users) lines.push(`${fmt(users)} job seekers have signed up so far.`);
-  if (shipped.length) lines.push('', 'Shipped:', ...shipped.map((p) => `→ ${p.title}`));
+  // Groq returns '' for changes no job seeker would notice.
+  const shippedLines = copy ? copy.shipped.filter(Boolean) : shipped.map((p) => p.title);
+  if (shippedLines.length) lines.push('', 'Shipped:', ...shippedLines.map((s) => `→ ${s}`));
   lines.push('', 'What broke:');
   if (fresh.length) {
     const noun = fresh.length === 1 ? 'company job board' : 'company job boards';
-    lines.push(`→ ${fresh.length} ${noun} stopped loading (${listNames(fresh.map((f) => f.company))}). On it.`);
+    lines.push(`→ ${copy?.broke || `${fresh.length} ${noun} stopped loading: ${listNames(fresh.map((f) => f.company))}.`}`);
   } else {
     lines.push(failures.length ? '→ Nothing new. Every board that worked yesterday still works ✅' : '→ Nothing. Every job board loaded ✅');
   }
-  lines.push('', `Free, no sign-up: ${SITE_URL}`, '', '#buildinpublic #indiehackers #jobsearch');
+  lines.push('', ...(copy ? [copy.closer] : []), `Free, no sign-up: ${SITE_URL}`, '', BUILD_TAGS);
   return lines.join('\n');
 }
 
@@ -126,12 +144,15 @@ function buildJobPosts(data, picked, day) {
     ...picked.map((j, i) => `${i + 1}. ${NICHE_LABELS[j.niche].emoji} ${j.title} at ${j.company}${where(j) ? ` (${where(j)})` : ''}`),
     '',
     `${fmt(data.run.new)} new jobs landed in the last 24 hours, straight from company career pages.`,
-    'Apply links in the first comment 👇',
+    // LinkedIn's self-serve API can post but not comment, so a post that goes
+    // out on its own carries the link itself.
+    data.postAt ? `Apply free, no sign-up: ${SITE_URL}` : 'Apply links in the first comment 👇',
     '',
-    '#hiring #softwareengineering #techjobs #jobsearch',
+    jobTags(picked),
   ].join('\n');
   // 3 is coprime with the pool size (8), so the three hooks are always distinct.
-  return [0, 1, 2].map((k) => `${HOOKS[(day + k * 3) % HOOKS.length](ctx)}\n\n${body}`);
+  const hooks = data.copy?.jobHooks || [0, 1, 2].map((k) => HOOKS[(day + k * 3) % HOOKS.length](ctx));
+  return hooks.map((hook) => `${hook}\n\n${body}`);
 }
 
 function buildFirstComment(picked) {
@@ -161,10 +182,16 @@ function buildDigest(data) {
     ['Boards scraped', `${fmt(run.scraped)} (${fresh.length} newly broken, ${stale.length} failing for 2+ days)`],
     ...(users ? [['Signed-up users', fmt(users)]] : []),
   ];
+  // IST: the one person reading this is in India.
+  const ist = (d) => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
+  const when = (i) => (data.postAt ? ` · posts itself at ${ist(data.postAt[i])} IST` : '');
+  const intro = data.postAt
+    ? `these post themselves on LinkedIn at ${joinAnd(data.postAt.slice(0, 1 + jobPosts.length).map(ist))} IST`
+    : 'posts below are ready to copy into LinkedIn';
   const posts = [
-    ['Post 1: platform update', post1],
-    ...jobPosts.map((p, i) => [`Post ${i + 2}: today's jobs (hook ${'ABC'[i]})`, p]),
-    ...(firstComment ? [['First comment for posts 2-4', firstComment]] : []),
+    [`Post 1: platform update${when(0)}`, post1],
+    ...jobPosts.map((p, i) => [`Post ${i + 2}: today's jobs (hook ${'ABC'[i]})${when(i + 1)}`, p]),
+    ...(firstComment ? [[data.postAt ? 'Optional first comment with direct apply links' : 'First comment for posts 2-4', firstComment]] : []),
   ];
   const noJobsNote = picked.length ? '' : 'No new software jobs in this window, so skip the jobs posts today.';
   const jobLines = picked.map((j, i) => `${i + 1}. [${j.score}] ${NICHE_LABELS[j.niche].name} · ${j.title} at ${j.company}${where(j) ? ` · ${where(j)}` : ''} · ${jobUrl(j)}`);
@@ -177,11 +204,16 @@ function buildDigest(data) {
     ...(stale.length
       ? [`${stale.length} boards failing for 2+ days (a 404 usually means the company moved job platforms; remove or re-add them): ${listNames(stale.map((f) => f.company), 40)}`]
       : []),
+    // LinkedIn tokens last 60 days; a 401 means it's time for a new one.
+    ...(data.linkedinErrors || []).map((e) => `LinkedIn post due ${ist(new Date(e.post_at))} IST: ${e.error}${/HTTP 401/.test(e.error)
+      ? ' (the token expired: make a new one at https://www.linkedin.com/developers/tools/oauth/token-generator and set LINKEDIN_ACCESS_TOKEN in the VM\'s .env)'
+      : ''}`),
   ];
 
   const textSection = (title, lines) => (lines.length ? [`== ${title} ==`, ...lines, ''] : []);
   const text = [
     `Ashby Jobs daily digest · ${dateLabel} · day ${day}`,
+    `${intro[0].toUpperCase()}${intro.slice(1)}. ${data.copyNote || ''}`.trim(),
     '',
     ...textSection('Numbers', numbers.map(([k, v]) => `${k}: ${v}`)),
     ...(noJobsNote ? [noJobsNote, ''] : []),
@@ -199,7 +231,7 @@ function buildDigest(data) {
     : '');
   const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:640px;margin:0 auto;color:#292524;font-size:14px;line-height:1.5">
   <h1 style="font-size:20px;margin:0 0 4px">Ashby Jobs daily · ${escapeHtml(dateLabel)}</h1>
-  <p style="margin:0 0 16px;color:#78716C">Day ${day} · posts below are ready to copy into LinkedIn</p>
+  <p style="margin:0 0 16px;color:#78716C">Day ${day} · ${escapeHtml(intro)}${data.copyNote ? `<br>${escapeHtml(data.copyNote)}` : ''}</p>
   <table style="border-collapse:collapse;width:100%">${numbers.map(([k, v]) => `<tr><td style="padding:4px 12px 4px 0;color:#78716C;white-space:nowrap">${escapeHtml(k)}</td><td style="padding:4px 0;font-weight:600">${escapeHtml(v)}</td></tr>`).join('')}</table>
   ${noJobsNote ? `<p style="margin:16px 0;color:#B45309">${escapeHtml(noJobsNote)}</p>` : ''}
   ${posts.map(([title, body]) => `${h2(title)}<pre style="white-space:pre-wrap;font-family:inherit;font-size:14px;background:#F5F5F4;border-radius:8px;padding:12px;margin:0">${escapeHtml(body)}</pre>`).join('\n  ')}
@@ -210,7 +242,35 @@ function buildDigest(data) {
   <p style="margin:28px 0 0;font-size:12px;color:#A8A29E"><a href="${escapeHtml(SITE_URL)}" style="color:#473bce">${escapeHtml(SITE_URL)}</a></p>
 </div>`;
 
-  return { subject, text, html };
+  return { subject, text, html, posts: [post1, ...jobPosts] };
 }
 
-module.exports = { buildDigest, pickTopJobs };
+// What Groq may write about (writer.js): every number in its copy has to
+// appear in here.
+function copyFacts(data) {
+  const picked = pickTopJobs(data.candidates);
+  const { fresh } = splitFailures(data);
+  const { run, newCompanies, totals, users, shipped } = data;
+  return {
+    window: 'last 24 hours',
+    newJobs: run.new,
+    closedJobs: run.removed,
+    moreJobsClosedThanOpened: run.removed > run.new,
+    updatedListings: run.updated,
+    newCompanies: newCompanies.length,
+    newCompanyExamples: newCompanies.slice(0, 3).map((c) => c.name),
+    liveJobs: totals.jobs,
+    companies: totals.companies,
+    platforms: totals.sources.map((s) => SOURCE_NAMES[s] || s),
+    signedUpUsers: users,
+    shipped: shipped.map((p) => p.title),
+    broke: { boards: fresh.length, companies: fresh.slice(0, 3).map((f) => f.company) },
+    jobsPost: {
+      count: picked.length,
+      niches: [...new Set(picked.map((j) => NICHE_LABELS[j.niche].name))],
+      jobs: picked.map((j) => `${j.title} at ${j.company}${where(j) ? ` (${where(j)})` : ''}`),
+    },
+  };
+}
+
+module.exports = { buildDigest, pickTopJobs, copyFacts };
