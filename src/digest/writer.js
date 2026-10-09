@@ -35,6 +35,25 @@ Rules:
 const BANNED = /\b(on it|stay tuned|thrilled|excited|game[- ]changer|revolutionary|unlock|delve|leverage|journey|seamless)\b|🚀/i;
 const numbersIn = (s) => (s.match(/\d[\d,]*/g) || []).map((n) => n.replace(/,/g, ''));
 
+// The facts a number may be, from the words after it: "321 new jobs" can't
+// borrow the signed-up-user count. Null when it counts something else (hours,
+// "new ones"), which may be any number in the facts.
+function claimedFacts(words, f) {
+  if (/^(\S+ ){0,1}(job seekers?|users?|people)\b/i.test(words)) return [f.signedUpUsers];
+  if (/^(\S+ ){0,2}boards?\b/i.test(words)) return [f.broke.boards, f.companies, f.newCompanies];
+  const job = words.match(/^((?:\S+ ){0,2})(?:jobs?|roles?|openings?|positions?|listings?)\b\W*(\S*)/i);
+  if (job) {
+    const [, before, next] = job;
+    if (/clos|vanish|disappear|fill|gone/i.test(next)) return [f.closedJobs];
+    if (/updat/i.test(next)) return [f.updatedListings];
+    if (/live/i.test(before)) return [f.liveJobs];
+    if (/new|fresh/i.test(before)) return [f.newJobs, f.jobsPost.count];
+    return [f.newJobs, f.closedJobs, f.updatedListings, f.liveJobs, f.jobsPost.count];
+  }
+  if (/^(new )?compan/i.test(words)) return [f.newCompanies, f.companies];
+  return null;
+}
+
 // Why a draft can't go out, or null when it can.
 function checkCopy(copy, facts) {
   if (!copy || typeof copy !== 'object') return 'not a JSON object';
@@ -45,6 +64,8 @@ function checkCopy(copy, facts) {
   if (lines.some((l) => typeof l !== 'string')) return 'a field isn\'t text';
   if (!hook || !closer || jobHooks.some((h) => !h) || new Set(jobHooks).size !== 2) return 'empty or repeated lines';
   if (facts.broke.boards && !facts.broke.companies.every((c) => broke.includes(c))) return 'broke line leaves out a company';
+  // A company name alone ("JustBrokeCo is hiring") isn't the failure.
+  if (facts.broke.boards && !/stopped loading/i.test(broke)) return 'broke line doesn\'t say the boards stopped loading';
   const allowed = new Set(numbersIn(JSON.stringify(facts)));
   for (const line of lines) {
     if (line.length > 160 || line.includes('\n')) return `too long: "${line.slice(0, 60)}…"`;
@@ -52,6 +73,12 @@ function checkCopy(copy, facts) {
     if (BANNED.test(line)) return `banned phrase: "${line}"`;
     const invented = numbersIn(line).find((n) => !allowed.has(n));
     if (invented) return `${invented} isn't in the facts: "${line}"`;
+    for (const m of line.matchAll(/\d[\d,]*/g)) {
+      const n = Number(m[0].replace(/,/g, ''));
+      const words = line.slice(m.index + m[0].length).trim().split(/\s+/).slice(0, 4).join(' ');
+      const claimed = claimedFacts(words, facts);
+      if (claimed && !claimed.includes(n)) return `${n} doesn't match what it counts: "${line}"`;
+    }
   }
   return null;
 }

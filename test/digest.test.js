@@ -6,7 +6,7 @@ const { computeStoredScore } = require('../src/intelligence/rules-engine');
 const { classifyNiche, NICHE_LABELS } = require('../src/digest/niche');
 const { buildDigest, pickTopJobs, copyFacts } = require('../src/digest/content');
 const { checkCopy } = require('../src/digest/writer');
-const { postSlots } = require('../src/linkedin');
+const { postSlots, littleText } = require('../src/linkedin');
 
 test('every niche in rules.json has a display label', () => {
   for (const niche of Object.keys(rules.niches)) assert.ok(NICHE_LABELS[niche], niche);
@@ -150,7 +150,16 @@ test('checkCopy: takes a clean draft, rejects invented numbers, hashtags, questi
 
   const broken = copyFacts(baseData({ failures: [{ company: 'JustBrokeCo', error_message: 'HTTP 500', last_ok: new Date('2026-10-04T00:05:00Z') }] }));
   assert.match(checkCopy(goodCopy(), broken), /leaves out a company/);
+  assert.match(checkCopy({ ...goodCopy(), broke: 'JustBrokeCo is hiring.' }, broken), /doesn't say the boards stopped loading/);
   assert.equal(checkCopy({ ...goodCopy(), broke: 'JustBrokeCo\'s job board stopped loading.' }, broken), null);
+});
+
+test('checkCopy: a number must be the fact it counts, not just any number in the facts', () => {
+  const facts = copyFacts(baseData());
+  // 321 is the signed-up-user count, not the 1,234 new jobs.
+  assert.match(checkCopy({ ...goodCopy(), hook: '321 new jobs since yesterday.' }, facts), /321 doesn't match what it counts/);
+  assert.match(checkCopy({ ...goodCopy(), hook: '1,061 job seekers signed up.' }, facts), /1061 doesn't match/);
+  assert.equal(checkCopy({ ...goodCopy(), hook: '78 jobs closed, 46,000 live roles, 321 job seekers.' }, facts), null);
 });
 
 test('buildDigest: Groq copy around the exact numbers, tags from the day\'s niches', () => {
@@ -176,9 +185,20 @@ test('job posts: score after the number, link right under each job, no first com
 test('job posts: long titles are cut and the list shrinks to fit LinkedIn\'s 3,000 characters', () => {
   const long = Array.from({ length: 10 }, (_, i) => job(i, `Frontend Engineer ${'x'.repeat(200)}`, 40 - i, `Company${i}${'y'.repeat(150)}`));
   const { posts } = buildDigest(baseData({ candidates: long }));
-  assert.ok(posts[1].length <= 2800, String(posts[1].length));
+  // Escaped as it's sent, with room for the longest hook Groq may write.
+  for (const post of posts.slice(1)) assert.ok(littleText(post).length <= 3000 - 320, String(littleText(post).length));
   assert.ok(posts[1].match(/^Link: /gm).length < 10);
   assert.match(posts[1], /^1\. \[40\] 🎨 Frontend Engineer x+… at Company0/m);
+  const crowded = Array.from({ length: 10 }, (_, i) => job(i, `Frontend (${'['.repeat(60)}) Engineer`, 40 - i, `Co*${'_'.repeat(150)}`));
+  assert.ok(littleText(buildDigest(baseData({ candidates: crowded })).posts[1]).length <= 3000 - 320, 'escapes count too');
+});
+
+test('post 1: a busy day\'s shipped list gives way so the post fits LinkedIn', () => {
+  const shipped = Array.from({ length: 30 }, (_, i) => ({ number: i, title: `Pull request ${i}: ${'x'.repeat(120)}`, url: 'u' }));
+  const [post1] = buildDigest(baseData({ shipped })).posts;
+  assert.ok(littleText(post1).length <= 3000, String(littleText(post1).length));
+  assert.match(post1, /\n→ …and \d+ more\n/);
+  assert.match(post1, /\nWhat broke:\n.*\n\nFree, no sign-up: .*\n\n#BuildInPublic/);
 });
 
 test('buildDigest: the email says when each post goes out', () => {

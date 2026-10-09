@@ -16,12 +16,13 @@ const MAX_LATE_MS = 60 * 60 * 1000;
 
 const enabled = () => Boolean(process.env.LINKEDIN_ACCESS_TOKEN);
 
-// The day's first slot, or now when the digest is later than that.
+// Today's fixed slots still ahead of `now`, at most `count`. A late digest
+// keeps the times and drops the posts that missed theirs, last ones first
+// (the second jobs post is a repeat).
 function postSlots(count, now = new Date()) {
   const first = new Date(now);
   first.setUTCHours(FIRST_SLOT_UTC[0], FIRST_SLOT_UTC[1], 0, 0);
-  const start = Math.max(first.getTime(), now.getTime());
-  return Array.from({ length: count }, (_, i) => new Date(start + i * GAP_MS));
+  return Array.from({ length: count }, (_, i) => new Date(first.getTime() + i * GAP_MS)).filter((slot) => slot >= now);
 }
 
 // Post text is LinkedIn's "little" format, where these characters only show
@@ -32,16 +33,33 @@ function littleText(text) {
 }
 
 // One set of posts per UTC day, so a second digest (a manual send) can't
-// double-post.
+// double-post. All or nothing: the set goes in as one transaction, and the
+// (day, position) key makes a concurrent digest wait, then find the day taken.
+// Queues one post per slot; false when the day's posts are already queued.
 async function schedulePosts(pool, texts, slots) {
-  const { rows } = await pool.query(
-    `SELECT 1 FROM linkedin_posts WHERE created_at >= date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' LIMIT 1`
-  );
-  if (rows.length) return false;
-  for (const [i, text] of texts.entries()) {
-    await pool.query('INSERT INTO linkedin_posts (text, post_at) VALUES ($1, $2)', [text, slots[i]]);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const [i, text] of texts.slice(0, slots.length).entries()) {
+      const { rowCount } = await client.query(
+        `INSERT INTO linkedin_posts (day, position, text, post_at)
+         VALUES ((NOW() AT TIME ZONE 'UTC')::date, $1, $2, $3)
+         ON CONFLICT (day, position) DO NOTHING`,
+        [i, text, slots[i]]
+      );
+      if (!rowCount) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+    }
+    await client.query('COMMIT');
+    return true;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
   }
-  return true;
 }
 
 async function request(path, body) {
@@ -76,10 +94,14 @@ async function publish(text) {
 // ponytail: no retries; a duplicate post on someone's profile is worse than a
 // missed one, and the next digest lists the failure.
 async function postDue(pool) {
+  // Claimed before publishing: if the result can't be recorded, the post keeps
+  // this error, so it's never published twice and the next digest lists it.
   const { rows } = await pool.query(
-    `SELECT id, text, post_at FROM linkedin_posts
-     WHERE posted_at IS NULL AND error IS NULL AND post_at <= NOW()
-     ORDER BY post_at LIMIT 1`
+    `UPDATE linkedin_posts SET error = 'publishing, result not recorded: check LinkedIn before posting it again'
+     WHERE id = (SELECT id FROM linkedin_posts
+                 WHERE posted_at IS NULL AND error IS NULL AND post_at <= NOW()
+                 ORDER BY post_at LIMIT 1)
+     RETURNING id, text, post_at`
   );
   const post = rows[0];
   if (!post) return;
@@ -87,14 +109,16 @@ async function postDue(pool) {
     await pool.query('UPDATE linkedin_posts SET error = $2 WHERE id = $1', [post.id, 'skipped: more than an hour late (the scraper was down)']);
     return;
   }
+  let urn;
   try {
-    const urn = await publish(post.text);
-    await pool.query('UPDATE linkedin_posts SET posted_at = NOW(), post_urn = $2 WHERE id = $1', [post.id, urn]);
-    logger.info(`Posted to LinkedIn: ${urn}`);
+    urn = await publish(post.text);
   } catch (err) {
     await pool.query('UPDATE linkedin_posts SET error = $2 WHERE id = $1', [post.id, err.message]);
     logger.error(`LinkedIn post ${post.id} failed: ${err.message}`);
+    return;
   }
+  await pool.query('UPDATE linkedin_posts SET posted_at = NOW(), post_urn = $2, error = NULL WHERE id = $1', [post.id, urn]);
+  logger.info(`Posted to LinkedIn: ${urn}`);
 }
 
 module.exports = { enabled, postSlots, littleText, schedulePosts, postDue };

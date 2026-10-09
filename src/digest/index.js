@@ -159,9 +159,10 @@ async function runDigest(pool, { since, dryRun = false } = {}) {
   const data = await collectDigestData(pool, { since, companiesSince: since });
   const { copy, note } = await writeCopy(copyFacts(data));
   // The update, then the jobs post twice; a day without new software jobs
-  // uses only the first slot.
-  const postAt = linkedin.enabled() ? linkedin.postSlots(3) : null;
-  const email = buildDigest({ ...data, copy, copyNote: note, postAt });
+  // uses only the first slot, and a late digest only the slots still ahead.
+  const slots = linkedin.enabled() ? linkedin.postSlots(3) : [];
+  const late = linkedin.enabled() && !slots.length ? ' LinkedIn: today\'s posting times have passed, so nothing posts itself.' : '';
+  let email = buildDigest({ ...data, copy, copyNote: note + late, postAt: slots.length ? slots : null });
 
   if (dryRun) {
     fs.mkdirSync(config.notify.reportsDir, { recursive: true });
@@ -179,16 +180,21 @@ async function runDigest(pool, { since, dryRun = false } = {}) {
   }
   const from = process.env.EMAIL_FROM || process.env.EMAIL_SERVER_USER;
   const to = process.env.DIGEST_EMAIL_TO || 'rishilahoti99@gmail.com';
-  await transport.sendMail({ from: `Ashby Jobs <${from}>`, to, subject: email.subject, text: email.text, html: email.html });
-  logger.info(`Daily digest sent to ${to}`);
-  // Best effort: the email already has every post to copy by hand.
-  if (postAt) {
+  // Queued before the email goes out, so the email says what actually
+  // happened. Best effort: when nothing is queued, it has the posts to copy.
+  if (slots.length) {
+    let problem = null;
     try {
-      if (await linkedin.schedulePosts(pool, email.posts, postAt)) logger.info(`Queued ${email.posts.length} LinkedIn posts`);
+      if (await linkedin.schedulePosts(pool, email.posts, slots)) logger.info(`Queued ${Math.min(email.posts.length, slots.length)} LinkedIn posts`);
+      else problem = 'an earlier digest already queued today\'s posts';
     } catch (err) {
+      problem = `queueing them failed (${err.message})`;
       logger.error(`Queueing LinkedIn posts failed: ${err.message}`);
     }
+    if (problem) email = buildDigest({ ...data, copy, copyNote: `${note} LinkedIn: ${problem}, so nothing posts itself.`, postAt: null });
   }
+  await transport.sendMail({ from: `Ashby Jobs <${from}>`, to, subject: email.subject, text: email.text, html: email.html });
+  logger.info(`Daily digest sent to ${to}`);
   // Where the next digest starts. `until` is when this one began collecting,
   // so nothing that arrived while it was being built is skipped.
   await pool.query(

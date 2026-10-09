@@ -2,6 +2,7 @@
 // test/digest.test.js can call them directly. src/digest/index.js gathers the
 // data and sends the result.
 const { classifyNiche, NICHE_LABELS } = require('./niche');
+const { littleText } = require('../linkedin');
 
 const SITE_URL = (process.env.SITE_URL || 'https://ashbyhq-scraper.vercel.app').replace(/\/+$/, '');
 // First commit and Vercel project: day 1 of the build-in-public counter.
@@ -26,9 +27,7 @@ function jobTags(jobs) {
   return [...new Set([...JOB_TAGS, ...remote, ...niches.slice(0, 6)])].join(' ');
 }
 
-// Each job with its link right under it. Titles are capped, and jobs come off
-// the bottom until the list fits 2,200 characters: LinkedIn rejects posts over
-// 3,000, and the hook, totals line, hashtags and escapes need the rest.
+// Each job with its link right under it. Titles are capped.
 function jobList(jobs) {
   return jobs.flatMap((j, i) => {
     const title = j.title.length > 70 ? `${j.title.slice(0, 69)}…` : j.title;
@@ -36,9 +35,22 @@ function jobList(jobs) {
   });
 }
 
-function topJobs(candidates) {
-  let jobs = pickTopJobs(candidates);
-  while (jobs.length > 1 && jobList(jobs).join('\n').length > 2200) jobs = jobs.slice(0, -1);
+// Everything in a jobs post below its hook.
+function jobsBody(data, jobs) {
+  return [...jobList(jobs), `${fmt(data.run.new)} new jobs landed in the last 24 hours, straight from company career pages.`, '', jobTags(jobs)].join('\n');
+}
+
+// LinkedIn rejects posts over 3,000 characters, counted here after escaping.
+const MAX_POST = 3000;
+// The hooks are written after the jobs are picked: checkCopy caps a line at
+// 160 characters, and escaping can at most double it.
+const HOOK_ROOM = 2 * 160;
+
+// Jobs come off the bottom until the whole escaped post fits with the longest
+// possible hook. Always at least one.
+function topJobs(data) {
+  let jobs = pickTopJobs(data.candidates);
+  while (jobs.length > 1 && littleText(`${'x'.repeat(HOOK_ROOM)}\n\n${jobsBody(data, jobs)}`).length > MAX_POST) jobs = jobs.slice(0, -1);
   return jobs;
 }
 
@@ -127,7 +139,7 @@ function buildPost1(data, day) {
   if (users) lines.push(`${fmt(users)} job seekers have signed up so far.`);
   // Groq returns '' for changes no job seeker would notice.
   const shippedLines = copy ? copy.shipped.filter(Boolean) : shipped.map((p) => p.title);
-  if (shippedLines.length) lines.push('', 'Shipped:', ...shippedLines.map((s) => `→ ${s}`));
+  const shippedAt = lines.length;
   lines.push('', 'What broke:');
   if (fresh.length) {
     const noun = fresh.length === 1 ? 'company job board' : 'company job boards';
@@ -136,7 +148,16 @@ function buildPost1(data, day) {
     lines.push(failures.length ? '→ Nothing new. Every board that worked yesterday still works ✅' : '→ Nothing. Every job board loaded ✅');
   }
   lines.push('', ...(copy ? [copy.closer] : []), `Free, no sign-up: ${SITE_URL}`, '', BUILD_TAGS);
-  return lines.join('\n');
+  // Up to 30 merged PRs can make the post too long for LinkedIn: the shipped
+  // list gives way first, from the bottom.
+  for (let n = shippedLines.length; ; n--) {
+    const more = shippedLines.length - n;
+    const shippedPart = shippedLines.length
+      ? ['', 'Shipped:', ...shippedLines.slice(0, n).map((s) => `→ ${s}`), ...(more ? [`→ …and ${more} more`] : [])]
+      : [];
+    const post = [...lines.slice(0, shippedAt), ...shippedPart, ...lines.slice(shippedAt)].join('\n');
+    if (!n || littleText(post).length <= MAX_POST) return post;
+  }
 }
 
 // Posts 2 and 3 are the same list under different hooks, rotating through the
@@ -157,12 +178,7 @@ function buildJobPosts(data, picked, day) {
   // "Software" is the catch-all label, not a niche worth naming in a hook.
   const niches = joinAnd([...new Set(picked.filter((j) => j.niche !== 'software').map((j) => NICHE_LABELS[j.niche].name))].slice(0, 4));
   const ctx = { n: picked.length, total: fmt(data.run.new), niches };
-  const body = [
-    ...jobList(picked),
-    `${fmt(data.run.new)} new jobs landed in the last 24 hours, straight from company career pages.`,
-    '',
-    jobTags(picked),
-  ].join('\n');
+  const body = jobsBody(data, picked);
   // Two posts, 6 hours apart. 3 is coprime with the pool size (8), so their
   // hooks are always distinct.
   const hooks = data.copy?.jobHooks || [0, 1].map((k) => HOOKS[(day + k * 3) % HOOKS.length](ctx));
@@ -173,7 +189,7 @@ const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&a
 
 function buildDigest(data) {
   const day = dayNumber(data.date);
-  const picked = topJobs(data.candidates);
+  const picked = topJobs(data);
   const post1 = buildPost1(data, day);
   const jobPosts = buildJobPosts(data, picked, day);
   const { run, totals, newCompanies, shipped, users } = data;
@@ -193,7 +209,8 @@ function buildDigest(data) {
   ];
   // IST: the one person reading this is in India.
   const ist = (d) => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
-  const when = (i) => (data.postAt ? ` · posts itself at ${ist(data.postAt[i])} IST` : '');
+  // A late digest gets fewer slots than posts (postSlots).
+  const when = (i) => (data.postAt ? (data.postAt[i] ? ` · posts itself at ${ist(data.postAt[i])} IST` : ' · not posted: its time today has passed') : '');
   const intro = data.postAt
     ? `these post themselves on LinkedIn at ${joinAnd(data.postAt.slice(0, 1 + jobPosts.length).map(ist))} IST`
     : 'posts below are ready to copy into LinkedIn';
@@ -256,7 +273,7 @@ function buildDigest(data) {
 // What Groq may write about (writer.js): every number in its copy has to
 // appear in here.
 function copyFacts(data) {
-  const picked = topJobs(data.candidates);
+  const picked = topJobs(data);
   const { fresh } = splitFailures(data);
   const { run, newCompanies, totals, users, shipped } = data;
   return {
