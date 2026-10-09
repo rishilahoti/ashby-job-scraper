@@ -3,7 +3,9 @@ const path = require('path');
 const nodemailer = require('nodemailer');
 const config = require('../config');
 const { logger, timeLimit } = require('../utils');
-const { buildDigest } = require('./content');
+const { buildDigest, copyFacts } = require('./content');
+const { writeCopy } = require('./writer');
+const linkedin = require('../linkedin');
 
 const REPO = 'rishilahoti/ashby-job-scraper';
 
@@ -38,7 +40,7 @@ async function collectDigestData(pool, { since, companiesSince }) {
     ? `base_score + CASE WHEN published_at >= date_trunc('day', NOW()) - INTERVAL '${hours} hours' THEN ${boost} ELSE 0 END`
     : 'base_score';
 
-  const [candidates, run, failures, newCompanies, totals, users, shipped] = await Promise.all([
+  const [candidates, run, failures, newCompanies, totals, users, shipped, linkedinErrors] = await Promise.all([
     // Only jobs that newly appeared on a board we already tracked. A company
     // added in this window brings its whole backlog, months-old postings that
     // are new to us but not to job seekers, and Workday and Pinpoint give no
@@ -99,6 +101,9 @@ async function collectDigestData(pool, { since, companiesSince }) {
     // The web app's auth table; absent in a scraper-only database.
     pool.query('SELECT COUNT(*)::int AS count FROM users').then((r) => r.rows[0].count, () => null),
     fetchShipped(companiesSince),
+    // Posts that failed or were skipped since the last digest (src/linkedin).
+    pool.query('SELECT post_at, error FROM linkedin_posts WHERE error IS NOT NULL AND post_at >= $1 ORDER BY post_at', [since])
+      .then((r) => r.rows, () => []),
   ]);
 
   return {
@@ -109,6 +114,7 @@ async function collectDigestData(pool, { since, companiesSince }) {
     totals: totals.rows[0],
     users,
     shipped,
+    linkedinErrors,
     candidates: candidates.rows.map((r) => ({
       jobId: r.job_id,
       company: r.company,
@@ -150,7 +156,13 @@ async function lastDigestAt(pool) {
 async function runDigest(pool, { since, dryRun = false } = {}) {
   const until = new Date();
   if (!since) since = (await lastDigestAt(pool)) || new Date(until - 23 * 60 * 60 * 1000);
-  const email = buildDigest(await collectDigestData(pool, { since, companiesSince: since }));
+  const data = await collectDigestData(pool, { since, companiesSince: since });
+  const { copy, note } = await writeCopy(copyFacts(data));
+  // The update, then the jobs post twice; a day without new software jobs
+  // uses only the first slot, and a late digest only the slots still ahead.
+  const slots = linkedin.enabled() ? linkedin.postSlots(3) : [];
+  const late = linkedin.enabled() && !slots.length ? ' LinkedIn: today\'s posting times have passed, so nothing posts itself.' : '';
+  let email = buildDigest({ ...data, copy, copyNote: note + late, postAt: slots.length ? slots : null });
 
   if (dryRun) {
     fs.mkdirSync(config.notify.reportsDir, { recursive: true });
@@ -168,6 +180,19 @@ async function runDigest(pool, { since, dryRun = false } = {}) {
   }
   const from = process.env.EMAIL_FROM || process.env.EMAIL_SERVER_USER;
   const to = process.env.DIGEST_EMAIL_TO || 'rishilahoti99@gmail.com';
+  // Queued before the email goes out, so the email says what actually
+  // happened. Best effort: when nothing is queued, it has the posts to copy.
+  if (slots.length) {
+    let problem = null;
+    try {
+      if (await linkedin.schedulePosts(pool, email.posts, slots)) logger.info(`Queued ${Math.min(email.posts.length, slots.length)} LinkedIn posts`);
+      else problem = 'an earlier digest already queued today\'s posts';
+    } catch (err) {
+      problem = `queueing them failed (${err.message})`;
+      logger.error(`Queueing LinkedIn posts failed: ${err.message}`);
+    }
+    if (problem) email = buildDigest({ ...data, copy, copyNote: `${note} LinkedIn: ${problem}, so nothing posts itself.`, postAt: null });
+  }
   await transport.sendMail({ from: `Ashby Jobs <${from}>`, to, subject: email.subject, text: email.text, html: email.html });
   logger.info(`Daily digest sent to ${to}`);
   // Where the next digest starts. `until` is when this one began collecting,

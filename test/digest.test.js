@@ -4,7 +4,9 @@ const assert = require('node:assert/strict');
 const rules = require('../src/config/rules.json');
 const { computeStoredScore } = require('../src/intelligence/rules-engine');
 const { classifyNiche, NICHE_LABELS } = require('../src/digest/niche');
-const { buildDigest, pickTopJobs } = require('../src/digest/content');
+const { buildDigest, pickTopJobs, copyFacts } = require('../src/digest/content');
+const { checkCopy } = require('../src/digest/writer');
+const { postSlots, littleText } = require('../src/linkedin');
 
 test('every niche in rules.json has a display label', () => {
   for (const niche of Object.keys(rules.niches)) assert.ok(NICHE_LABELS[niche], niche);
@@ -87,16 +89,13 @@ const baseData = (overrides = {}) => ({
   ...overrides,
 });
 
-test('buildDigest: subject numbers, 3 distinct hooks on the same list, links in the first comment', () => {
+test('buildDigest: subject numbers, 2 distinct hooks on the same list', () => {
   const { subject, text, html } = buildDigest(baseData());
   assert.match(subject, /\+1,234 jobs · \+1 companies/);
 
-  const hooks = [...text.matchAll(/^== Post [234]: today's jobs \(hook [ABC]\) .*\n-+\n(.*)$/gm)].map((m) => m[1]);
-  assert.equal(hooks.length, 3);
-  assert.equal(new Set(hooks).size, 3);
-
-  const links = text.match(/^\d+\. https:\/\/ashbyhq-scraper\.vercel\.app\/jobs\/j\d+$/gm);
-  assert.equal(links.length, 10);
+  const hooks = [...text.matchAll(/^== Post [23]: today's jobs \(hook [AB]\) .*\n-+\n(.*)$/gm)].map((m) => m[1]);
+  assert.equal(hooks.length, 2);
+  assert.equal(new Set(hooks).size, 2);
   assert.match(text, /Day 220 of building|day 220/);
   assert.match(text, /across Ashby, Greenhouse and Lever\./);
   assert.match(text, /Shipped:\n→ Daily digest email/);
@@ -119,12 +118,95 @@ test('buildDigest: only newly broken boards go in the post; long-dead ones only 
     { company: 'NeverLoadedCo', error_message: 'HTTP 404', last_ok: null },
   ];
   const { text } = buildDigest(baseData({ run: { scraped: 10, failed: 3, new: 1, updated: 0, removed: 0 }, failures }));
-  assert.match(text, /→ 1 company job board stopped loading \(JustBrokeCo\)\. On it\./);
+  assert.match(text, /→ 1 company job board stopped loading: JustBrokeCo\.\n/);
   assert.match(text, /JustBrokeCo: HTTP 500/);
   assert.match(text, /2 boards failing for 2\+ days .*: MovedCo, NeverLoadedCo/);
 
   const onlyDead = buildDigest(baseData({ run: { scraped: 10, failed: 1, new: 1, updated: 0, removed: 0 }, failures: failures.slice(1, 2) }));
   assert.match(onlyDead.text, /→ Nothing new\. Every board that worked yesterday still works/);
+});
+
+// A draft for baseData() as Groq returns it.
+const goodCopy = () => ({
+  hook: '1,234 new jobs since yesterday, from 1,061 companies.',
+  hookLine2: '',
+  shipped: ['A daily email with the best new roles'],
+  broke: '',
+  closer: 'Every role straight from the company, the day it opens.',
+  jobHooks: [
+    'These 10 roles opened yesterday. Apply before the crowd does.',
+    'Frontend, ML and iOS roles, all under a day old.',
+  ],
+});
+
+test('checkCopy: takes a clean draft, rejects invented numbers, hashtags, questions, "on it" and missing names', () => {
+  const facts = copyFacts(baseData());
+  assert.equal(checkCopy(goodCopy(), facts), null);
+  assert.match(checkCopy({ ...goodCopy(), hook: '2,000 new jobs since yesterday.' }, facts), /2000 isn't in the facts/);
+  assert.match(checkCopy({ ...goodCopy(), closer: 'Try it today #jobs' }, facts), /hashtag/);
+  assert.match(checkCopy({ ...goodCopy(), closer: 'Which one is yours?' }, facts), /question/);
+  assert.match(checkCopy({ ...goodCopy(), closer: 'Two boards broke, on it.' }, facts), /banned/);
+  assert.match(checkCopy({ ...goodCopy(), shipped: [] }, facts), /shipped/);
+
+  const broken = copyFacts(baseData({ failures: [{ company: 'JustBrokeCo', error_message: 'HTTP 500', last_ok: new Date('2026-10-04T00:05:00Z') }] }));
+  assert.match(checkCopy(goodCopy(), broken), /leaves out a company/);
+  assert.match(checkCopy({ ...goodCopy(), broke: 'JustBrokeCo is hiring.' }, broken), /doesn't say the boards stopped loading/);
+  assert.equal(checkCopy({ ...goodCopy(), broke: 'JustBrokeCo\'s job board stopped loading.' }, broken), null);
+});
+
+test('checkCopy: a number must be the fact it counts, not just any number in the facts', () => {
+  const facts = copyFacts(baseData());
+  // 321 is the signed-up-user count, not the 1,234 new jobs.
+  assert.match(checkCopy({ ...goodCopy(), hook: '321 new jobs since yesterday.' }, facts), /321 doesn't match what it counts/);
+  assert.match(checkCopy({ ...goodCopy(), hook: '1,061 job seekers signed up.' }, facts), /1061 doesn't match/);
+  assert.equal(checkCopy({ ...goodCopy(), hook: '78 jobs closed, 46,000 live roles, 321 job seekers.' }, facts), null);
+});
+
+test('buildDigest: Groq copy around the exact numbers, tags from the day\'s niches', () => {
+  const { text, posts } = buildDigest({ ...baseData(), copy: goodCopy(), copyNote: 'Wording by Groq.' });
+  assert.ok(posts[0].startsWith('1,234 new jobs since yesterday, from 1,061 companies.\n\nDay 220 of building'));
+  assert.match(posts[0], /\n→ 1,234 new jobs\n/);
+  assert.match(posts[0], /Shipped:\n→ A daily email with the best new roles\n/);
+  assert.match(posts[0], /the day it opens\.\nFree, no sign-up: https:\/\/ashbyhq-scraper\.vercel\.app\n\n#BuildInPublic/);
+  assert.deepEqual(posts.slice(1).map((p) => p.split('\n')[0]), goodCopy().jobHooks);
+  assert.ok(posts[1].endsWith('\n#Hiring #NowHiring #JobOpenings #JobAlert #TechJobs #SoftwareJobs #SoftwareEngineering #SoftwareDeveloper'
+    + ' #OpenToWork #JobSearch #Frontend #WebDevelopment #Backend #APIs #AI #MachineLearning'));
+  assert.match(text, /Wording by Groq\./);
+});
+
+test('job posts: score after the number, link right under each job, no first comment', () => {
+  const { text, posts } = buildDigest(baseData());
+  assert.equal(posts.length, 3);
+  assert.ok(posts[1].includes('\n\n1. [40] 🎨 Frontend Engineer at Co0 (Berlin)\nLink: https://ashbyhq-scraper.vercel.app/jobs/j0\n\n2. [39] ⚙️ Backend Engineer at Co1'));
+  assert.equal(posts[1].match(/^Link: /gm).length, 10);
+  assert.ok(!/first comment/i.test(text));
+});
+
+test('job posts: long titles are cut and the list shrinks to fit LinkedIn\'s 3,000 characters', () => {
+  const long = Array.from({ length: 10 }, (_, i) => job(i, `Frontend Engineer ${'x'.repeat(200)}`, 40 - i, `Company${i}${'y'.repeat(150)}`));
+  const { posts } = buildDigest(baseData({ candidates: long }));
+  // Escaped as it's sent, with room for the longest hook Groq may write.
+  for (const post of posts.slice(1)) assert.ok(littleText(post).length <= 3000 - 320, String(littleText(post).length));
+  assert.ok(posts[1].match(/^Link: /gm).length < 10);
+  assert.match(posts[1], /^1\. \[40\] 🎨 Frontend Engineer x+… at Company0/m);
+  const crowded = Array.from({ length: 10 }, (_, i) => job(i, `Frontend (${'['.repeat(60)}) Engineer`, 40 - i, `Co*${'_'.repeat(150)}`));
+  assert.ok(littleText(buildDigest(baseData({ candidates: crowded })).posts[1]).length <= 3000 - 320, 'escapes count too');
+});
+
+test('post 1: a busy day\'s shipped list gives way so the post fits LinkedIn', () => {
+  const shipped = Array.from({ length: 30 }, (_, i) => ({ number: i, title: `Pull request ${i}: ${'x'.repeat(120)}`, url: 'u' }));
+  const [post1] = buildDigest(baseData({ shipped })).posts;
+  assert.ok(littleText(post1).length <= 3000, String(littleText(post1).length));
+  assert.match(post1, /\n→ …and \d+ more\n/);
+  assert.match(post1, /\nWhat broke:\n.*\n\nFree, no sign-up: .*\n\n#BuildInPublic/);
+});
+
+test('buildDigest: the email says when each post goes out', () => {
+  const postAt = postSlots(3, new Date('2026-10-05T00:10:00Z'));
+  const { text, posts } = buildDigest({ ...baseData(), postAt });
+  assert.match(text, /These post themselves on LinkedIn at 09:00, 15:00 and 21:00 IST\./);
+  assert.match(text, /== Post 3: today's jobs \(hook B\) · posts itself at 21:00 IST/);
+  assert.equal(posts.length, 3);
 });
 
 test('buildDigest: no new software jobs means no jobs posts, and says so', () => {
