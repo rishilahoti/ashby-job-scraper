@@ -36,6 +36,7 @@ const config = {
     includeCompensation: true,
     maxRetries: 3,
     retryBaseMs: 1000,
+    timeoutMs: 30000,
     delayBetweenCompaniesMin: 2000,
     delayBetweenCompaniesMax: 10000,
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',

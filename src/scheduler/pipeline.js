@@ -7,7 +7,7 @@ const store = require('../store');
 const { detectChanges } = require('../diff');
 const intelligence = require('../intelligence');
 const { printRunSummary, generateReport } = require('../notify');
-const { runDigest } = require('../digest');
+const { runDigest, lastDigestAt } = require('../digest');
 
 const CONCURRENCY = 16;
 
@@ -50,16 +50,22 @@ async function scrapeCompany(company) {
 // Everything since the last digest (runDigest keeps track), not just this
 // run: a container restart (every merge to main) can do the day's scrape
 // hours before the nightly run, which then finds nothing due.
+// One per UTC day, sent by the day's first run to finish. That's normally the
+// nightly one; a restart run sends it only when the nightly run didn't (it
+// crashed, or hung like on 2026-10-09), so a missed day heals on its own.
 async function sendDailyDigest(pool) {
   // Best effort: an email problem must never fail the scrape.
   try {
+    const last = await lastDigestAt(pool);
+    const today = new Date().toISOString().slice(0, 10);
+    if (last && last.toISOString().slice(0, 10) === today) return;
     await runDigest(pool);
   } catch (err) {
     logger.error(`Daily digest failed: ${err.message}`);
   }
 }
 
-async function runPipeline({ digest = true } = {}) {
+async function runPipeline() {
   const startTime = Date.now();
   logger.info('Pipeline run started');
 
@@ -89,7 +95,6 @@ async function runPipeline({ digest = true } = {}) {
 
     if (companies.length === 0) {
       logger.info('No companies due for scraping');
-      if (digest) await sendDailyDigest(pool);
       return;
     }
 
@@ -147,11 +152,11 @@ async function runPipeline({ digest = true } = {}) {
     // Remove inactive jobs older than 30 days to keep Neon storage under control.
     await store.cleanupOldInactiveJobs(30);
 
-    if (digest) await sendDailyDigest(pool);
-
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     logger.info(`Pipeline completed in ${elapsed}s — ${allChanges.length} total changes`);
   } finally {
+    // Here so that nothing failing above (the cleanup, say) costs the digest.
+    await sendDailyDigest(pool);
     await pool.query('SELECT pg_advisory_unlock(20260420)');
   }
 }
