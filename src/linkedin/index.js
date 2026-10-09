@@ -1,4 +1,4 @@
-// Publishes the digest's LinkedIn posts on the user's profile, 4 hours apart.
+// Publishes the digest's LinkedIn posts on the user's profile, 6 hours apart.
 // Off until LINKEDIN_ACCESS_TOKEN is set: a 60-day token from LinkedIn's
 // token generator for an app with "Share on LinkedIn" and "Sign In with
 // LinkedIn using OpenID Connect" (scopes openid, profile, w_member_social).
@@ -7,9 +7,9 @@ const { logger, timeLimit } = require('../utils');
 // ponytail: LinkedIn retires each API version about a year after release.
 // When posts fail with a version error, bump this to a recent YYYYMM.
 const API_VERSION = '202609';
-// 09:00 IST, then 13:00, 17:00 and 21:00 (the last one is the US morning).
+// 09:00 IST, then 15:00 and 21:00 (the last one is the US morning).
 const FIRST_SLOT_UTC = [3, 30];
-const GAP_MS = 4 * 60 * 60 * 1000;
+const GAP_MS = 6 * 60 * 60 * 1000;
 // A post this late (the scraper was down) is skipped rather than published
 // minutes before the next one.
 const MAX_LATE_MS = 60 * 60 * 1000;

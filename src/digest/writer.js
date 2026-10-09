@@ -16,13 +16,13 @@ Return JSON with exactly these keys:
   "shipped": ["one line per FACTS.shipped item, same order, saying in plain words what changed for a job seeker; an empty string for anything a job seeker wouldn't notice or that you can't tell from the title"],
   "broke": "one line about FACTS.broke, or an empty string when nothing broke",
   "closer": "one short line that makes a job seeker want to try the site; the link is added after it",
-  "jobHooks": ["three opening lines for a separate post listing FACTS.jobsPost"]
+  "jobHooks": ["two opening lines for a separate post listing FACTS.jobsPost; it goes out twice, 6 hours apart, once under each"]
 }
 
 Hooks:
 - Under 100 characters. Specific beats clever: lead with the most surprising fact or tension in FACTS.
 - Never start with "Day", "Here's", "Update", "Exciting", "Discover" or "Check out".
-- The three jobHooks take different angles: apply-early urgency, a company or niche named in FACTS.jobsPost, and curiosity.
+- The two jobHooks take different angles: one names companies or a niche from FACTS.jobsPost, the other is apply-early urgency or curiosity.
 - The shape of a good hook (don't copy the wording or numbers): "1,812 jobs vanished overnight. 2,240 new ones took their place." / "Notion, Vercel and Figma all opened engineering roles yesterday."
 - Bad: "Exciting update on Ashby Jobs!", "Discover the latest openings today."
 
@@ -40,10 +40,10 @@ function checkCopy(copy, facts) {
   if (!copy || typeof copy !== 'object') return 'not a JSON object';
   const { hook, hookLine2 = '', shipped, broke = '', closer, jobHooks } = copy;
   if (!Array.isArray(shipped) || shipped.length !== facts.shipped.length) return 'shipped lines don\'t match the PRs';
-  if (!Array.isArray(jobHooks) || jobHooks.length !== 3) return 'need 3 job hooks';
+  if (!Array.isArray(jobHooks) || jobHooks.length !== 2) return 'need 2 job hooks';
   const lines = [hook, hookLine2, broke, closer, ...shipped, ...jobHooks];
   if (lines.some((l) => typeof l !== 'string')) return 'a field isn\'t text';
-  if (!hook || !closer || jobHooks.some((h) => !h) || new Set(jobHooks).size !== 3) return 'empty or repeated lines';
+  if (!hook || !closer || jobHooks.some((h) => !h) || new Set(jobHooks).size !== 2) return 'empty or repeated lines';
   if (facts.broke.boards && !facts.broke.companies.every((c) => broke.includes(c))) return 'broke line leaves out a company';
   const allowed = new Set(numbersIn(JSON.stringify(facts)));
   for (const line of lines) {

@@ -89,16 +89,13 @@ const baseData = (overrides = {}) => ({
   ...overrides,
 });
 
-test('buildDigest: subject numbers, 3 distinct hooks on the same list, links in the first comment', () => {
+test('buildDigest: subject numbers, 2 distinct hooks on the same list', () => {
   const { subject, text, html } = buildDigest(baseData());
   assert.match(subject, /\+1,234 jobs · \+1 companies/);
 
-  const hooks = [...text.matchAll(/^== Post [234]: today's jobs \(hook [ABC]\) .*\n-+\n(.*)$/gm)].map((m) => m[1]);
-  assert.equal(hooks.length, 3);
-  assert.equal(new Set(hooks).size, 3);
-
-  const links = text.match(/^\d+\. https:\/\/ashbyhq-scraper\.vercel\.app\/jobs\/j\d+$/gm);
-  assert.equal(links.length, 10);
+  const hooks = [...text.matchAll(/^== Post [23]: today's jobs \(hook [AB]\) .*\n-+\n(.*)$/gm)].map((m) => m[1]);
+  assert.equal(hooks.length, 2);
+  assert.equal(new Set(hooks).size, 2);
   assert.match(text, /Day 220 of building|day 220/);
   assert.match(text, /across Ashby, Greenhouse and Lever\./);
   assert.match(text, /Shipped:\n→ Daily digest email/);
@@ -139,7 +136,6 @@ const goodCopy = () => ({
   jobHooks: [
     'These 10 roles opened yesterday. Apply before the crowd does.',
     'Frontend, ML and iOS roles, all under a day old.',
-    'Not one of these 10 jobs existed yesterday.',
   ],
 });
 
@@ -164,17 +160,33 @@ test('buildDigest: Groq copy around the exact numbers, tags from the day\'s nich
   assert.match(posts[0], /Shipped:\n→ A daily email with the best new roles\n/);
   assert.match(posts[0], /the day it opens\.\nFree, no sign-up: https:\/\/ashbyhq-scraper\.vercel\.app\n\n#BuildInPublic/);
   assert.deepEqual(posts.slice(1).map((p) => p.split('\n')[0]), goodCopy().jobHooks);
-  assert.match(posts[1], /\n#Hiring #OpenToWork #TechJobs #Frontend #Backend$/);
+  assert.ok(posts[1].endsWith('\n#Hiring #NowHiring #JobOpenings #JobAlert #TechJobs #SoftwareJobs #SoftwareEngineering #SoftwareDeveloper'
+    + ' #OpenToWork #JobSearch #Frontend #WebDevelopment #Backend #APIs #AI #MachineLearning'));
   assert.match(text, /Wording by Groq\./);
 });
 
-test('buildDigest: auto-posted job posts carry the link, and the email says when each goes out', () => {
-  const postAt = postSlots(4, new Date('2026-10-05T00:10:00Z'));
+test('job posts: score after the number, link right under each job, no first comment', () => {
+  const { text, posts } = buildDigest(baseData());
+  assert.equal(posts.length, 3);
+  assert.ok(posts[1].includes('\n\n1. [40] 🎨 Frontend Engineer at Co0 (Berlin)\nLink: https://ashbyhq-scraper.vercel.app/jobs/j0\n\n2. [39] ⚙️ Backend Engineer at Co1'));
+  assert.equal(posts[1].match(/^Link: /gm).length, 10);
+  assert.ok(!/first comment/i.test(text));
+});
+
+test('job posts: long titles are cut and the list shrinks to fit LinkedIn\'s 3,000 characters', () => {
+  const long = Array.from({ length: 10 }, (_, i) => job(i, `Frontend Engineer ${'x'.repeat(200)}`, 40 - i, `Company${i}${'y'.repeat(150)}`));
+  const { posts } = buildDigest(baseData({ candidates: long }));
+  assert.ok(posts[1].length <= 2800, String(posts[1].length));
+  assert.ok(posts[1].match(/^Link: /gm).length < 10);
+  assert.match(posts[1], /^1\. \[40\] 🎨 Frontend Engineer x+… at Company0/m);
+});
+
+test('buildDigest: the email says when each post goes out', () => {
+  const postAt = postSlots(3, new Date('2026-10-05T00:10:00Z'));
   const { text, posts } = buildDigest({ ...baseData(), postAt });
-  assert.match(text, /These post themselves on LinkedIn at 09:00, 13:00, 17:00 and 21:00 IST\./);
-  assert.match(text, /== Post 3: today's jobs \(hook B\) · posts itself at 17:00 IST/);
-  assert.match(posts[1], /\nApply free, no sign-up: https:\/\/ashbyhq-scraper\.vercel\.app\n/);
-  assert.ok(!posts[1].includes('first comment'));
+  assert.match(text, /These post themselves on LinkedIn at 09:00, 15:00 and 21:00 IST\./);
+  assert.match(text, /== Post 3: today's jobs \(hook B\) · posts itself at 21:00 IST/);
+  assert.equal(posts.length, 3);
 });
 
 test('buildDigest: no new software jobs means no jobs posts, and says so', () => {

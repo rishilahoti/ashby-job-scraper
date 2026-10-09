@@ -158,8 +158,9 @@ async function runDigest(pool, { since, dryRun = false } = {}) {
   if (!since) since = (await lastDigestAt(pool)) || new Date(until - 23 * 60 * 60 * 1000);
   const data = await collectDigestData(pool, { since, companiesSince: since });
   const { copy, note } = await writeCopy(copyFacts(data));
-  // Four slots; a day without new software jobs uses only the first.
-  const postAt = linkedin.enabled() ? linkedin.postSlots(4) : null;
+  // The update, then the jobs post twice; a day without new software jobs
+  // uses only the first slot.
+  const postAt = linkedin.enabled() ? linkedin.postSlots(3) : null;
   const email = buildDigest({ ...data, copy, copyNote: note, postAt });
 
   if (dryRun) {

@@ -15,14 +15,31 @@ const SOURCE_NAMES = {
 
 // CamelCase so screen readers say each word. Post 1 is for builders; the job
 // posts pair tags job seekers follow with the day's own niches.
-const BUILD_TAGS = '#BuildInPublic #IndieHackers #SideProject #WebScraping #JobSearch';
+const BUILD_TAGS = '#BuildInPublic #IndieHackers #SideProject #SoloFounder #WebScraping #NodeJS #NextJS #PostgreSQL #WebDevelopment #JobSearch #TechJobs #Hiring';
+const JOB_TAGS = ['#Hiring', '#NowHiring', '#JobOpenings', '#JobAlert', '#TechJobs', '#SoftwareJobs', '#SoftwareEngineering', '#SoftwareDeveloper', '#OpenToWork', '#JobSearch'];
 
-function jobTags(picked) {
+function jobTags(jobs) {
   const count = {};
-  for (const j of picked) if (j.niche !== 'software') count[j.niche] = (count[j.niche] || 0) + 1;
-  const topical = Object.keys(count).sort((a, b) => count[b] - count[a]).map((n) => NICHE_LABELS[n].tag);
-  if (picked.some((j) => j.remote)) topical.splice(1, 0, '#RemoteJobs');
-  return ['#Hiring', '#OpenToWork', '#TechJobs', ...(topical.length ? topical : ['#SoftwareEngineering']).slice(0, 2)].join(' ');
+  for (const j of jobs) count[j.niche] = (count[j.niche] || 0) + 1;
+  const niches = Object.keys(count).sort((a, b) => count[b] - count[a]).flatMap((n) => NICHE_LABELS[n].tags);
+  const remote = jobs.some((j) => j.remote) ? ['#RemoteJobs'] : [];
+  return [...new Set([...JOB_TAGS, ...remote, ...niches.slice(0, 6)])].join(' ');
+}
+
+// Each job with its link right under it. Titles are capped, and jobs come off
+// the bottom until the list fits 2,200 characters: LinkedIn rejects posts over
+// 3,000, and the hook, totals line, hashtags and escapes need the rest.
+function jobList(jobs) {
+  return jobs.flatMap((j, i) => {
+    const title = j.title.length > 70 ? `${j.title.slice(0, 69)}…` : j.title;
+    return [`${i + 1}. [${j.score}] ${NICHE_LABELS[j.niche].emoji} ${title} at ${j.company}${where(j) ? ` (${where(j)})` : ''}`, `Link: ${jobUrl(j)}`, ''];
+  });
+}
+
+function topJobs(candidates) {
+  let jobs = pickTopJobs(candidates);
+  while (jobs.length > 1 && jobList(jobs).join('\n').length > 2200) jobs = jobs.slice(0, -1);
+  return jobs;
 }
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-US');
@@ -122,8 +139,8 @@ function buildPost1(data, day) {
   return lines.join('\n');
 }
 
-// Posts 2-4 are the same list under different hooks. Three hooks a day,
-// rotating through the pool so consecutive days don't repeat.
+// Posts 2 and 3 are the same list under different hooks, rotating through the
+// pool so consecutive days don't repeat.
 const HOOKS = [
   (c) => `${c.n} software jobs went live in the last 24 hours. Early applicants get seen first 👇`,
   (c) => `Most people find a job post weeks after it opens. These ${c.n} opened yesterday:`,
@@ -141,32 +158,24 @@ function buildJobPosts(data, picked, day) {
   const niches = joinAnd([...new Set(picked.filter((j) => j.niche !== 'software').map((j) => NICHE_LABELS[j.niche].name))].slice(0, 4));
   const ctx = { n: picked.length, total: fmt(data.run.new), niches };
   const body = [
-    ...picked.map((j, i) => `${i + 1}. ${NICHE_LABELS[j.niche].emoji} ${j.title} at ${j.company}${where(j) ? ` (${where(j)})` : ''}`),
-    '',
+    ...jobList(picked),
     `${fmt(data.run.new)} new jobs landed in the last 24 hours, straight from company career pages.`,
-    // LinkedIn's self-serve API can post but not comment, so a post that goes
-    // out on its own carries the link itself.
-    data.postAt ? `Apply free, no sign-up: ${SITE_URL}` : 'Apply links in the first comment 👇',
     '',
     jobTags(picked),
   ].join('\n');
-  // 3 is coprime with the pool size (8), so the three hooks are always distinct.
-  const hooks = data.copy?.jobHooks || [0, 1, 2].map((k) => HOOKS[(day + k * 3) % HOOKS.length](ctx));
+  // Two posts, 6 hours apart. 3 is coprime with the pool size (8), so their
+  // hooks are always distinct.
+  const hooks = data.copy?.jobHooks || [0, 1].map((k) => HOOKS[(day + k * 3) % HOOKS.length](ctx));
   return hooks.map((hook) => `${hook}\n\n${body}`);
-}
-
-function buildFirstComment(picked) {
-  return ['Apply links 👇', ...picked.map((j, i) => `${i + 1}. ${jobUrl(j)}`), '', `New jobs every day, free: ${SITE_URL}`].join('\n');
 }
 
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function buildDigest(data) {
   const day = dayNumber(data.date);
-  const picked = pickTopJobs(data.candidates);
+  const picked = topJobs(data.candidates);
   const post1 = buildPost1(data, day);
   const jobPosts = buildJobPosts(data, picked, day);
-  const firstComment = picked.length ? buildFirstComment(picked) : '';
   const { run, totals, newCompanies, shipped, users } = data;
   const { fresh, stale } = splitFailures(data);
   const dateLabel = data.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
@@ -190,8 +199,7 @@ function buildDigest(data) {
     : 'posts below are ready to copy into LinkedIn';
   const posts = [
     [`Post 1: platform update${when(0)}`, post1],
-    ...jobPosts.map((p, i) => [`Post ${i + 2}: today's jobs (hook ${'ABC'[i]})${when(i + 1)}`, p]),
-    ...(firstComment ? [[data.postAt ? 'Optional first comment with direct apply links' : 'First comment for posts 2-4', firstComment]] : []),
+    ...jobPosts.map((p, i) => [`Post ${i + 2}: today's jobs (hook ${'AB'[i]})${when(i + 1)}`, p]),
   ];
   const noJobsNote = picked.length ? '' : 'No new software jobs in this window, so skip the jobs posts today.';
   const jobLines = picked.map((j, i) => `${i + 1}. [${j.score}] ${NICHE_LABELS[j.niche].name} · ${j.title} at ${j.company}${where(j) ? ` · ${where(j)}` : ''} · ${jobUrl(j)}`);
@@ -248,7 +256,7 @@ function buildDigest(data) {
 // What Groq may write about (writer.js): every number in its copy has to
 // appear in here.
 function copyFacts(data) {
-  const picked = pickTopJobs(data.candidates);
+  const picked = topJobs(data.candidates);
   const { fresh } = splitFailures(data);
   const { run, newCompanies, totals, users, shipped } = data;
   return {
