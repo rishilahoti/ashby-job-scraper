@@ -41,6 +41,9 @@ jobs:
                       ${{ env.REGISTRY }}/${{ github.repository }}-scraper:${{ github.sha }}
                   cache-from: type=gha
                   cache-to: type=gha,mode=max
+                  # Rebuilds the Dockerfile's `apk upgrade` layer, re-runs included.
+                  build-args: |
+                      CACHE_BUST=${{ github.run_id }}-${{ github.run_attempt }}
 
             - name: Scan image for vulnerabilities
               uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -50,6 +53,9 @@ jobs:
                   output: trivy-results.sarif
                   severity: CRITICAL,HIGH
                   exit-code: '1'
+                  # For SARIF output the action drops `severity` unless this is
+                  # set, so any MEDIUM finding failed the deploy (2026-10-09).
+                  limit-severities-for-sarif: true
 
             - name: Upload scan results to the Security tab
               if: always()
