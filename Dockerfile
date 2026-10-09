@@ -2,7 +2,10 @@ FROM node:22-alpine
 WORKDIR /app
 # Base image's Alpine package snapshot can lag behind upstream security fixes
 # (e.g. openssl CVEs) — pull current patches at build time regardless of when
-# the node:20-alpine tag was last published.
+# the node:20-alpine tag was last published. CI passes a new CACHE_BUST every
+# build: otherwise the layer cache serves an old upgrade (2026-10-09 shipped
+# zlib 1.3.2-r0 a day after Alpine had released the fixed -r1).
+ARG CACHE_BUST
 RUN apk update && apk upgrade --no-cache
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
