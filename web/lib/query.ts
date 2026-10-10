@@ -346,12 +346,16 @@ export async function getJobs(
 // Throws when the DB is unreachable: the ISR job page then keeps serving its
 // last good render instead of caching a 404 for a job that exists.
 export async function getJobById(jobId: string): Promise<JobWithScore | null> {
-  const { rows } = await query<JobRow>(
-    `SELECT ${LIST_COLUMNS} FROM jobs WHERE job_id = $1`,
+  const { rows } = await query<ScoredJobRow>(
+    `SELECT ${LIST_COLUMNS}, base_score, matched_keywords,
+            ${SCORE_EXPR} AS computed_score
+     FROM jobs
+     WHERE job_id = $1`,
     [jobId]
   );
+
   if (rows.length === 0) return null;
-  return scoreJob(rowToJob(rows[0]));
+  return rowToJobWithScore(rows[0]);
 }
 
 // No is_active filter — this backs the Applied/Ignored pages, which must

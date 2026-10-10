@@ -64,11 +64,23 @@ export async function generateMetadata({
   };
 }
 
-// JobPosting schema requires validThrough; ATS sources don't expose a real
-// expiry, so we estimate one 45 days out from the best date we have.
-function estimateValidThrough(publishedAt: string): string {
-  const anchorMs = publishedAt ? new Date(publishedAt).getTime() : Date.now();
-  return new Date(anchorMs + 45 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+// Estimate an expiry from the publication date when available.
+// Without a reliable date, leave validThrough out of the schema.
+function estimateValidThrough(publishedAt: string): string | undefined {
+  if (!publishedAt) return undefined;
+
+  const publishedDate = new Date(publishedAt);
+
+  if (Number.isNaN(publishedDate.getTime())) return undefined;
+/* 
+Previously, jobs with no publication date received an expiry date calculated from the current time. 
+That date changed on every regeneration. 
+Now, when the publication date is unknown, 
+the function omits the expiry date instead of inventing one.
+*/
+  return new Date(
+    publishedDate.getTime() + 45 * 24 * 60 * 60 * 1000
+  ).toISOString().slice(0, 10);
 }
 
 export default async function JobDetailPage({
