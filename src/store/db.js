@@ -171,6 +171,24 @@ async function migrateSchema(p) {
     )
   `);
 
+  // LinkedIn posts the digest queued (src/linkedin): published when post_at
+  // comes, then marked with posted_at or the error. (day, position) is how
+  // schedulePosts claims a UTC day: one set of posts per day.
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS linkedin_posts (
+      id SERIAL PRIMARY KEY,
+      day DATE NOT NULL,
+      position INT NOT NULL,
+      text TEXT NOT NULL,
+      post_at TIMESTAMPTZ NOT NULL,
+      posted_at TIMESTAMPTZ,
+      post_urn TEXT,
+      error TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (day, position)
+    )
+  `);
+
   // --- one-time migrations for existing deployments ---
 
   // drop description_html if it still exists (frees up ~50-80% storage per row)

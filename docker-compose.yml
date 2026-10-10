@@ -35,6 +35,10 @@ services:
       EMAIL_SERVER_PASSWORD: ${EMAIL_SERVER_PASSWORD:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
       DIGEST_EMAIL_TO: ${DIGEST_EMAIL_TO:-rishilahoti99@gmail.com}
+      # The digest's LinkedIn copy is written by Groq's free tier; templates while unset.
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      # Posts the digest's LinkedIn posts 6 hours apart; off while unset.
+      LINKEDIN_ACCESS_TOKEN: ${LINKEDIN_ACCESS_TOKEN:-}
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
 
