@@ -6,8 +6,16 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ashbyhq-scraper.ver
 export const revalidate = 86400;
 
 const staticUrls: MetadataRoute.Sitemap = [
-  { url: `${siteUrl}/home`, lastModified: new Date(), changeFrequency: "weekly", priority: 1.0 },
-  { url: siteUrl, lastModified: new Date(), changeFrequency: "hourly", priority: 0.9 },
+  {
+    url: `${siteUrl}/home`,
+    changeFrequency: "weekly",
+    priority: 1.0,
+  },
+  {
+    url: siteUrl,
+    changeFrequency: "hourly",
+    priority: 0.9,
+  },
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
