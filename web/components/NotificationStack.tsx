@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { visibleNotifications } from "@/lib/changelog";
+import SurveyCard, { useSurveyOpen } from "@/components/SurveyCard";
 import { dismissNotifications, useDismissed } from "@/lib/notification-store";
 
 const ACTION = "text-xs font-medium text-signal hover:text-signal/80 transition-colors";
@@ -12,12 +13,15 @@ const BUTTON = "text-xs text-ink-muted hover:text-ink transition-colors cursor-p
 // once dismissed, reappears as the header's Sponsor button.
 export default function NotificationStack() {
   const dismissed = useDismissed();
+  const [surveyOpen, closeSurvey] = useSurveyOpen();
   if (!dismissed) return null;
   const items = visibleNotifications(dismissed);
-  if (items.length === 0) return null;
+  if (items.length === 0 && !surveyOpen) return null;
 
-  const [top, ...rest] = items;
-  const dismissTop = () => dismissNotifications([top.id]);
+  // The survey, when due, sits on top of the stack; the cards behind it wait.
+  const top = surveyOpen ? null : items[0];
+  const rest = surveyOpen ? items : items.slice(1);
+  const dismissTop = () => top && dismissNotifications([top.id]);
   const dismissAll = () => dismissNotifications(items.map((n) => n.id));
 
   return (
@@ -31,6 +35,9 @@ export default function NotificationStack() {
             style={{ transform: `translateY(${-(i + 1) * 8}px) scale(${1 - (i + 1) * 0.05})` }}
           />
         ))}
+        {!top ? (
+          <SurveyCard onClose={closeSurvey} />
+        ) : (
         <div key={top.id} className="rounded-lg border border-edge bg-paper shadow-xl p-4 animate-menu-in">
           <div className="flex items-center justify-between gap-2 mb-1">
             <p className="text-[10px] font-mono uppercase tracking-wider text-signal">{top.kicker}</p>
@@ -58,6 +65,7 @@ export default function NotificationStack() {
             )}
           </div>
         </div>
+        )}
       </div>
     </section>
   );

@@ -79,6 +79,16 @@ export async function sendWelcomeEmail(to: string, name: string | null): Promise
   }
 }
 
+export async function notifyAdminOfSurveyResponse(score: number, total: number, email: string | null): Promise<void> {
+  try {
+    const admin = process.env.SIGNUP_NOTIFY_EMAIL || "rishilahoti99@gmail.com";
+    const text = `${email ?? "Someone not signed in"} answered the pay survey: ${score}/5 (response ${total} of 100).`;
+    await send(admin, { subject: `Survey: ${score}/5`, text, html: `<p>${text}</p>` });
+  } catch (err) {
+    console.error("notifyAdminOfSurveyResponse failed", err);
+  }
+}
+
 export async function notifyAdminOfNewSignup(email: string): Promise<void> {
   try {
     const admin = process.env.SIGNUP_NOTIFY_EMAIL || "rishilahoti99@gmail.com";
