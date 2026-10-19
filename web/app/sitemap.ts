@@ -7,6 +7,7 @@ export const revalidate = 86400;
 
 const staticUrls: MetadataRoute.Sitemap = [
   { url: `${siteUrl}/home`, lastModified: new Date(), changeFrequency: "weekly", priority: 1.0 },
+  { url: `${siteUrl}/open-source`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.5 },
   { url: siteUrl, lastModified: new Date(), changeFrequency: "hourly", priority: 0.9 },
 ];
 

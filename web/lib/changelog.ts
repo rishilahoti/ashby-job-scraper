@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "open-source-library",
+    date: "2026-10-19",
+    title: "The scraping code is now a free library: ats-jobs",
+    description:
+      "The code that reads all ten job boards is published on npm as ats-jobs, so anyone can use it in their own projects. See the new Open source page in the menu.",
+  },
+  {
     id: "add-workday-fix",
     date: "2026-10-15",
     title: "Adding Workday companies works again, and job scores match",

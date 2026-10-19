@@ -12,6 +12,7 @@ Each of these platforms is an applicant tracking system used by companies to man
 
 - [Home](https://jobs.whatrunsindia.com/home): Landing page — overview, how it works, FAQ
 - [Job Feed](https://jobs.whatrunsindia.com/): Browse all active job listings from every supported ATS, with filters
+- [Open source](https://jobs.whatrunsindia.com/open-source): ats-jobs, the free MIT Node.js library (npm: ats-jobs) that fetches and normalizes job listings from all ten ATS APIs
 - [Sitemap](https://jobs.whatrunsindia.com/sitemap.xml): All indexed job pages
 
 ## Companies tracked (sample)

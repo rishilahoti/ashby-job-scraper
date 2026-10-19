@@ -14,6 +14,7 @@ import { useCloseOnOutside } from "@/lib/useCloseOnOutside";
 
 // d = the icon's svg path.
 const MOBILE_LINKS: { href: string; label: string; d: string; accent?: boolean }[] = [
+  { href: "/open-source", label: "Open source", d: "M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" },
   { href: "/changelog", label: "Changelog", d: "M9 4.5v15m6-15v15M4.5 9h15m-15 6h15" },
   { href: "/", label: "Feed", d: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" },
   { href: "/applied", label: "Applied", d: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" },
@@ -60,6 +61,7 @@ export default function Header() {
           </a>
           <GitHubStars />
           <SponsorButton />
+          <OpenSourceLink />
         </div>
 
         {/* Desktop nav */}
@@ -183,6 +185,19 @@ function SponsorButton() {
       <span className="text-pink-500" aria-hidden>♥</span>
       <span className="hidden sm:inline">Sponsor</span>
     </a>
+  );
+}
+
+function OpenSourceLink() {
+  return (
+    <Link
+      href="/open-source"
+      title="ats-jobs: the open-source library behind this site"
+      className="hidden sm:flex items-center gap-1 h-7 px-2 rounded-md border border-edge text-xs font-medium text-ink-secondary hover:text-ink hover:bg-surface transition-colors"
+    >
+      <span className="font-mono text-ink-muted" aria-hidden>{"</>"}</span>
+      <span>Open source</span>
+    </Link>
   );
 }
 
