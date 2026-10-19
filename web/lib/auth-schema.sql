@@ -87,3 +87,15 @@ CREATE TABLE IF NOT EXISTS rate_limit_counters
 );
 
 CREATE INDEX IF NOT EXISTS idx_rate_limit_counters_window ON rate_limit_counters (window_start);
+
+-- "Would you pay up to $3/month?" survey (web/app/api/survey/route.ts): 1-5
+-- score per row, the prompt stops once 100 rows exist. One answer per browser
+-- (`device`, a random cookie id) and per account (`user_id`, set when signed in).
+CREATE TABLE IF NOT EXISTS survey_responses
+(
+  id SERIAL PRIMARY KEY,
+  device TEXT NOT NULL UNIQUE,
+  user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE SET NULL,
+  score SMALLINT NOT NULL CHECK (score BETWEEN 1 AND 5),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
