@@ -12,6 +12,8 @@ export const metadata: Metadata = {
   verification: {
     google: "P2_1zWxkE0R-QmgUGw4dGpmHqVlIO0X-SaoFDdH-ciM",
   },
+  // AdSense site-ownership tag.
+  other: { "google-adsense-account": "ca-pub-8450633668347138" },
   title: {
     default: "Ashby Jobs — Browse Ashby, Greenhouse, Lever & More Job Listings",
     template: "%s | Ashby Jobs",
