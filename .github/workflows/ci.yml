@@ -10,7 +10,44 @@ permissions:
   contents: read
 
 jobs:
+  # Decides which of the two heavy jobs below a change can affect, so a web-only PR
+  # doesn't run the scraper tests (or the other way round). The web list is the same
+  # one deploy-web.yml triggers on. dependency-review and secret-scan always run.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read # paths-filter lists the PR's files through the API
+    outputs:
+      scraper: ${{ steps.filter.outputs.scraper }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            scraper:
+              - "src/**"
+              - "test/**"
+              - "index.js"
+              - "eslint.config.js"
+              - "package.json"
+              - "package-lock.json"
+              - ".github/workflows/ci.yml"
+            web:
+              - "web/**"
+              - "package.json"
+              - "package-lock.json"
+              - "src/config/rules.json"
+              - "src/intelligence/**"
+              - "src/normalize/**"
+              - "src/utils/**"
+              - ".github/workflows/ci.yml"
+
   scraper:
+    needs: changes
+    if: needs.changes.outputs.scraper == 'true'
     runs-on: ubuntu-latest
     services:
       # test/db.test.js runs real queries against the configured database — a
@@ -48,6 +85,8 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
 
   web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:

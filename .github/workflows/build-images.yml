@@ -3,6 +3,19 @@ name: Build and Push Scraper Image
 on:
     push:
         branches: [main]
+        # The image is `COPY . .` minus .dockerignore (web is excluded), so anything that
+        # isn't web, docs, deploy config or other workflows can change it. Later patterns
+        # override earlier ones, so this file re-includes itself after the workflows exclusion.
+        paths:
+            - '**'
+            - '!web/**'
+            - '!md/**'
+            - '!**.md'
+            - '!deploy/**'
+            - '!docker-compose.yml'
+            - '!.claude/**'
+            - '!.github/workflows/**'
+            - '.github/workflows/build-images.yml'
     workflow_dispatch:
 
 env:
