@@ -57,8 +57,8 @@ export default function ResumeMatch() {
         <h1 className="font-display text-xl font-bold tracking-tight mb-1">Match your resume</h1>
         <p className="text-sm text-ink-secondary leading-relaxed">
           Paste your resume and we&apos;ll show the jobs that share the most skills with it, at your
-          level. To read your years of experience, the text is sent once to an AI model (Groq); it
-          isn&apos;t saved. Pick your years yourself and the text stays in your browser: only the
+          level. To read your years of experience, the text is sent once to an AI model (Groq); we
+          don&apos;t save it. Pick your years yourself and the text stays in your browser: only the
           skills found in it go to the feed.
         </p>
       </div>

@@ -21,7 +21,7 @@ function matchesWord(text, term) {
 
 // Bump when the tagging code below changes. rules.json changes are detected
 // on their own; either one makes the scraper re-tag every stored job.
-const TAGGING_VERSION = 2;
+const TAGGING_VERSION = 3;
 
 // Enough to count as a software role when no niche matched. Not a bare
 // "engineer": "Lighting and AV Engineer" and "QAQC Engineer" are construction.
@@ -75,7 +75,8 @@ function jobTags(job, rules, matchedKeywords) {
 }
 
 // Years of experience a title implies, for the feed's experience filter.
-const STAFF_TITLE = /\b(staff|principal|director|head|vp|distinguished)\b/i;
+// "Member of Technical Staff" is every level at OpenAI, Anthropic and others.
+const STAFF_TITLE = /(?<!technical )\b(staff|principal|director|head|vp|distinguished)\b/i;
 const SENIOR_TITLE = /\b(senior|sr|lead|manager|architect|iii|iv)\b/i;
 // "5 years of UI/UX development experience", "3+ years building", "1 to 3 years in",
 // "Experience: three years": a number of years (digits or words) with "experience"
