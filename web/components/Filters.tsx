@@ -249,6 +249,7 @@ export default function Filters({
       <select
         value={current.exp}
         onChange={(e) => setParam("exp", e.target.value)}
+        aria-label="Experience"
         className="h-8 max-w-32.5 px-2 text-sm bg-surface border border-edge rounded-md
                    text-ink-secondary focus:outline-none focus:border-edge-strong cursor-pointer"
       >

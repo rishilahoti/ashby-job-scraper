@@ -58,7 +58,8 @@ export default function ResumeMatch() {
         <p className="text-sm text-ink-secondary leading-relaxed">
           Paste your resume and we&apos;ll show the jobs that share the most skills with it, at your
           level. To read your years of experience, the text is sent once to an AI model (Groq); it
-          isn&apos;t saved. Pick your years yourself and nothing leaves your browser.
+          isn&apos;t saved. Pick your years yourself and the text stays in your browser: only the
+          skills found in it go to the feed.
         </p>
       </div>
 

@@ -10,11 +10,11 @@ const REFUSED_SITES = ["same-site", "cross-site"];
 const fail = (status: number, error: string): [null, Response] => [null, Response.json({ error }, { status })];
 
 // Reads a small JSON body sent by this site's own pages, or gives the error response to send instead.
-export async function readJson<T>(request: Request): Promise<[T, null] | [null, Response]> {
+export async function readJson<T>(request: Request, maxBytes = MAX_BODY_BYTES): Promise<[T, null] | [null, Response]> {
   if (REFUSED_SITES.includes(request.headers.get("sec-fetch-site") ?? "")) {
     return fail(403, "Cross-site request refused.");
   }
-  if (Number(request.headers.get("content-length")) > MAX_BODY_BYTES) return fail(413, "Request body too large.");
+  if (Number(request.headers.get("content-length")) > maxBytes) return fail(413, "Request body too large.");
 
   // A chunked upload has no Content-Length, so count while reading too.
   const chunks: Uint8Array[] = [];
@@ -24,7 +24,7 @@ export async function readJson<T>(request: Request): Promise<[T, null] | [null, 
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > MAX_BODY_BYTES) {
+    if (size > maxBytes) {
       await reader.cancel();
       return fail(413, "Request body too large.");
     }

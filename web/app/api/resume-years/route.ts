@@ -29,7 +29,8 @@ export async function POST(request: NextRequest) {
   ) {
     return NextResponse.json({ error: "Too many tries. Pick your experience instead." }, { status: 429 });
   }
-  const [body, failed] = await readJson<{ text?: unknown }>(request);
+  // MAX_RESUME_CHARS of non-Latin text is up to 3 bytes a character, over the usual 16 KB.
+  const [body, failed] = await readJson<{ text?: unknown }>(request, 64 * 1024);
   if (failed) return failed;
   if (typeof body.text !== "string" || !body.text.trim()) {
     return NextResponse.json({ error: "No resume text." }, { status: 400 });
@@ -53,8 +54,11 @@ export async function POST(request: NextRequest) {
     });
     if (!res.ok) throw new Error(`Groq HTTP ${res.status}`);
     const data = await res.json();
-    const years = Number(JSON.parse(data.choices[0].message.content).years);
-    if (!Number.isFinite(years) || years < 0 || years > 50) throw new Error(`Groq gave years=${years}`);
+    // A number, not Number(...): that turns null and "" into 0, a junior's filter.
+    const years = JSON.parse(data.choices[0].message.content).years;
+    if (typeof years !== "number" || !Number.isFinite(years) || years < 0 || years > 50) {
+      throw new Error(`Groq gave years=${JSON.stringify(years)}`);
+    }
     return NextResponse.json({ years: Math.round(years * 10) / 10 });
   } catch (err) {
     console.error("resume-years:", err instanceof Error ? err.message : err);

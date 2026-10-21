@@ -1,6 +1,6 @@
 import { matchesWord } from '../../src/intelligence/rules-engine.js';
 
-// What /match sends to /api/resume-years: under readJson's 16 KB body cap.
+// What /match sends to /api/resume-years, and the most the model is given.
 export const MAX_RESUME_CHARS = 12000;
 
 interface Vocabulary {
