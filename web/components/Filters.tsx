@@ -135,6 +135,8 @@ export default function Filters({
       .split(",")
       .map((t) => t.trim().toLowerCase())
       .filter(Boolean),
+    // Set by /match; there's no control for it here, only the label and Clear all.
+    match: (searchParams.get("match") || "").split(",").filter(Boolean),
     sort: searchParams.get("sort") || "score",
   };
 
@@ -147,6 +149,7 @@ export default function Filters({
     current.departments.length > 0 ||
     current.locations.length > 0 ||
     current.tags.length > 0 ||
+    current.match.length > 0 ||
     current.sort !== "score";
 
   return (
@@ -252,6 +255,12 @@ export default function Filters({
       </select>
 
       {/* Clear */}
+      {current.match.length > 0 && (
+        <span className="h-8 inline-flex items-center text-xs text-ink-muted">
+          Matching your resume: {current.match.join(", ")}
+        </span>
+      )}
+
       {hasAnyFilter && (
         <button
           onClick={() => pushQuery("?")}
