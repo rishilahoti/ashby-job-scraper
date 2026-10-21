@@ -318,21 +318,21 @@ export async function POST(request: NextRequest) {
            apply_url, job_url, published_at, scraped_at,
            compensation_summary, compensation_min, compensation_max,
            compensation_currency, compensation_interval, content_hash, is_active,
-           base_score, matched_keywords, department_group
+           base_score, matched_keywords, department_group, min_years
          )
          SELECT "jobId", $2, $3, title, location, team, department,
                 "employmentType", remote, description,
                 "applyUrl", "jobUrl", "publishedAt", NOW(),
                 "compensationSummary", "compensationMin", "compensationMax",
                 "compensationCurrency", "compensationInterval", "contentHash", TRUE,
-                "baseScore", "matchedKeywords", "departmentGroup"
+                "baseScore", "matchedKeywords", "departmentGroup", "minYears"
          FROM jsonb_to_recordset($1::jsonb) AS r(
            "jobId" text, title text, location text, team text, department text,
            "employmentType" text, remote boolean, description text,
            "applyUrl" text, "jobUrl" text, "publishedAt" timestamptz,
            "compensationSummary" text, "compensationMin" numeric, "compensationMax" numeric,
            "compensationCurrency" text, "compensationInterval" text, "contentHash" text,
-           "baseScore" int, "matchedKeywords" text[], "departmentGroup" text
+           "baseScore" int, "matchedKeywords" text[], "departmentGroup" text, "minYears" smallint
          )
          ON CONFLICT (company, job_id) DO UPDATE SET
            source            = EXCLUDED.source,
@@ -357,6 +357,7 @@ export async function POST(request: NextRequest) {
            base_score        = EXCLUDED.base_score,
            matched_keywords  = EXCLUDED.matched_keywords,
            department_group  = EXCLUDED.department_group,
+           min_years         = EXCLUDED.min_years,
            updated_at        = NOW()`,
         [JSON.stringify(payload), companyNameForJobs, source]
       );

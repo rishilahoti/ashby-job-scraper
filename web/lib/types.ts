@@ -43,6 +43,8 @@ export interface JobFilters {
   tags?: string[];
   // Resume match: jobs with any of these tags, most shared tags first.
   match?: string[];
+  // Jobs asking at most this many years of experience, or not saying.
+  maxYears?: number;
   sort?: "score" | "newest" | "oldest";
   page?: number;
   limit?: number;

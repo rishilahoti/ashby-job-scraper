@@ -194,6 +194,11 @@ const FILTER_SPECS: FilterSpec[] = [
     sql: (f, params) => `matched_keywords && ${pushParam(params, f.match!)}::text[]`,
   },
   {
+    // min_years is NULL when the job doesn't say: those stay in.
+    active: (f) => f.maxYears !== undefined,
+    sql: (f, params) => `COALESCE(min_years, 0) <= ${pushParam(params, f.maxYears!)}`,
+  },
+  {
     active: (f) => f.minScore !== undefined,
     sql: (f, params) => `${SCORE_EXPR} >= ${pushParam(params, f.minScore!)}`,
   },

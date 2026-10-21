@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getJobs, getCompanies, getLocations } from '@/lib/query';
-import { POSITIVE_TAG_OPTIONS } from '@/lib/scoring';
+import { POSITIVE_TAG_OPTIONS, EXPERIENCE_OPTIONS } from '@/lib/scoring';
 import { DEPARTMENT_GROUPS } from '../../../../src/normalize/departments';
 import { PROVIDERS } from '@/lib/providers';
 import type { JobFilters } from '@/lib/types';
@@ -129,6 +129,9 @@ export async function GET(request: NextRequest) {
 
 		const match = parseTags(sp.get('match'));
 		if (match.length > 0) filters.match = match;
+
+		const exp = sp.get('exp');
+		if (EXPERIENCE_OPTIONS.some((o) => o.value === exp)) filters.maxYears = Number(exp);
 
 		const sort = sp.get('sort');
 		if (sort && SORT_OPTIONS.has(sort)) {
