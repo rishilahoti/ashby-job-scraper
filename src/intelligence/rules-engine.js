@@ -21,7 +21,7 @@ function matchesWord(text, term) {
 
 // Bump when the tagging code below changes. rules.json changes are detected
 // on their own; either one makes the scraper re-tag every stored job.
-const TAGGING_VERSION = 3;
+const TAGGING_VERSION = 4;
 
 // Enough to count as a software role when no niche matched. Not a bare
 // "engineer": "Lighting and AV Engineer" and "QAQC Engineer" are construction.
@@ -78,6 +78,8 @@ function jobTags(job, rules, matchedKeywords) {
 // "Member of Technical Staff" is every level at OpenAI, Anthropic and others.
 const STAFF_TITLE = /(?<!technical )\b(staff|principal|director|head|vp|distinguished)\b/i;
 const SENIOR_TITLE = /\b(senior|sr|lead|manager|architect|iii|iv)\b/i;
+// A title made for people with no experience: 0 when the description doesn't say.
+const ENTRY_TITLE = /\b(new grad|graduate|entry[- ]level|early career|junior|jr|fresher|intern|internship|apprentice|trainee)\b/i;
 // "5 years of UI/UX development experience", "3+ years building", "1 to 3 years in",
 // "Experience: three years": a number of years (digits or words) with "experience"
 // before or after it, or with a "+" or a range. A bare "founded 10 years ago" has none.
@@ -101,7 +103,7 @@ function minYears(job) {
     .filter((n) => n <= 15); // more is the company's history, not a requirement
   const title = STAFF_TITLE.test(job.title || '') ? 8 : SENIOR_TITLE.test(job.title || '') ? 5 : 0;
   const years = Math.max(title, ...stated);
-  return years > 0 || stated.length > 0 ? years : null;
+  return years > 0 || stated.length > 0 || ENTRY_TITLE.test(job.title || '') ? years : null;
 }
 
 function scoreKeywords(job, rules) {

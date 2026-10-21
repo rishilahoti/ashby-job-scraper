@@ -10,7 +10,7 @@ import { EXPERIENCE_OPTIONS } from "@/lib/scoring";
 const LEVELS = [{ value: "auto", label: "Read it from my resume" }, ...EXPERIENCE_OPTIONS, { value: "", label: "5+ years" }];
 
 // Years of work experience → the ?exp= value: the smallest bracket that covers them.
-const expFor = (years: number) => EXPERIENCE_OPTIONS.find((o) => years < Number(o.value) + 1)?.value ?? "";
+const expFor = (years: number) => EXPERIENCE_OPTIONS.find((o) => years < o.under)?.value ?? "";
 
 // Skills are matched here in the browser; only the tags go to the feed, as ?match=.
 // With "auto", years come from the Experience dates here too; the text goes to
