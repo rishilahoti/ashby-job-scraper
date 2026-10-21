@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import rules from "../../src/config/rules.json";
-import { resumeTerms, MAX_RESUME_CHARS } from "@/lib/resume-terms";
+import { resumeTerms, resumeYears, MAX_RESUME_CHARS } from "@/lib/resume-terms";
 import { EXPERIENCE_OPTIONS } from "@/lib/scoring";
 
 // "auto" asks /api/resume-years. "5+ years" sets no filter: every job is open to them.
@@ -13,7 +13,8 @@ const LEVELS = [{ value: "auto", label: "Read it from my resume" }, ...EXPERIENC
 const expFor = (years: number) => EXPERIENCE_OPTIONS.find((o) => years < Number(o.value) + 1)?.value ?? "";
 
 // Skills are matched here in the browser; only the tags go to the feed, as ?match=.
-// The text goes to /api/resume-years once (not stored) when "auto" is picked.
+// With "auto", years come from the Experience dates here too; the text goes to
+// /api/resume-years once (not stored) only when there are none to read.
 export default function ResumeMatch() {
   const router = useRouter();
   const [text, setText] = useState("");
@@ -28,7 +29,10 @@ export default function ResumeMatch() {
     setNoTerms(terms.length === 0);
     if (terms.length === 0 || exp === null) return;
     let level = exp;
-    if (level === "auto") {
+    // The resume's own Experience dates first; the model only when they can't be read.
+    const local = level === "auto" ? resumeYears(text) : null;
+    if (local !== null) level = expFor(local);
+    else if (level === "auto") {
       setBusy(true);
       setError("");
       const res = await fetch("/api/resume-years", {
@@ -57,9 +61,9 @@ export default function ResumeMatch() {
         <h1 className="font-display text-xl font-bold tracking-tight mb-1">Match your resume</h1>
         <p className="text-sm text-ink-secondary leading-relaxed">
           Paste your resume and we&apos;ll show the jobs that share the most skills with it, at your
-          level. To read your years of experience, the text is sent once to an AI model (Groq); we
-          don&apos;t save it. Pick your years yourself and the text stays in your browser: only the
-          skills found in it go to the feed.
+          level. Your years of experience are counted in your browser from the dates in your
+          Experience section. Only if it has none we can read is the text sent once to an AI model
+          (Groq); we don&apos;t save it. Only the skills found in your resume go to the feed.
         </p>
       </div>
 
