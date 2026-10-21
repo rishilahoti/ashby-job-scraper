@@ -77,19 +77,26 @@ function jobTags(job, rules, matchedKeywords) {
 // Years of experience a title implies, for the feed's experience filter.
 const STAFF_TITLE = /\b(staff|principal|director|head|vp|distinguished)\b/i;
 const SENIOR_TITLE = /\b(senior|sr|lead|manager|architect|iii|iv)\b/i;
-// "5 years of UI/UX development experience", "3+ years building", "1 to 3 years in": a
-// number of years followed by "experience", or with a "+" or a range. A bare
-// "founded 10 years ago" has neither. Groups: 1 years, 2 "+", 3 range, 4 "experience".
-// ponytail: "Experience: three years" (words) is missed; such jobs stay unknown (null).
-const YEARS_EXP = /(\d{1,2})\s*(\+)?\s*(?:(-|–|to)\s*\d{1,2}\s*\+?\s*)?(?:years?|yrs?)['’]?(\s+(?:of\s+)?(?:[^\s.;:]+\s+){0,5}?experience)?/gi;
+// "5 years of UI/UX development experience", "3+ years building", "1 to 3 years in",
+// "Experience: three years": a number of years (digits or words) with "experience"
+// before or after it, or with a "+" or a range. A bare "founded 10 years ago" has none.
+// Groups: 1 "experience:" before, 2 years, 3 "+", 4 range, 5 "experience" after.
+const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+// No \b before digits: stripped HTML glues them to words ("What We Seek In You3+ years").
+const N = String.raw`\d{1,2}|\b(?:` + NUMBER_WORDS.join('|') + ')';
+const YEARS_EXP = new RegExp(
+  String.raw`(experience\s*(?:of|:|-|–)?\s*)?(${N})\s*(\+)?\s*(?:(-|–|to)\s*(?:${N})\s*\+?\s*)?(?:years?|yrs?)['’]?` +
+  String.raw`(\s+(?:of\s+)?(?:[^\s.;:]+\s+){0,5}?experience)?`,
+  'gi'
+);
 
 // The fewest years of experience a job asks for: the most any "N years of
 // experience" in its description says (the overall bar, not "1+ years with
 // X"), at least what its title implies. null when neither says.
 function minYears(job) {
   const stated = [...(job.description || '').matchAll(YEARS_EXP)]
-    .filter((m) => m[2] || m[3] || m[4])
-    .map((m) => Number(m[1]))
+    .filter((m) => m[1] || m[3] || m[4] || m[5])
+    .map((m) => (/\d/.test(m[2]) ? Number(m[2]) : NUMBER_WORDS.indexOf(m[2].toLowerCase())))
     .filter((n) => n <= 15); // more is the company's history, not a requirement
   const title = STAFF_TITLE.test(job.title || '') ? 8 : SENIOR_TITLE.test(job.title || '') ? 5 : 0;
   const years = Math.max(title, ...stated);
