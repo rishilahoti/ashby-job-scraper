@@ -241,11 +241,13 @@ const getCachedJobsPage = unstable_cache(
       orderBy = "ORDER BY published_at ASC NULLS LAST, id DESC";
     } else {
       // When searching, best text match first, then the usual score. A resume
-      // match puts the jobs sharing the most of its tags first.
+      // match puts the jobs sharing the most of its tags first. With an
+      // experience filter, jobs that say they fit come before ones that don't say.
       let rank = filters.search ? `${searchRankSql(dataParams, filters.search)} DESC, ` : "";
       if (filters.match?.length) {
         rank = `cardinality(ARRAY(SELECT unnest(matched_keywords) INTERSECT SELECT unnest(${pushParam(dataParams, filters.match)}::text[]))) DESC, ${rank}`;
       }
+      if (filters.maxYears !== undefined) rank = `(min_years IS NULL), ${rank}`;
       orderBy = `ORDER BY ${rank}${SCORE_EXPR} DESC, published_at DESC, id DESC`;
     }
 
