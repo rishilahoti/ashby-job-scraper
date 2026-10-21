@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "experience-filter",
+    date: "2026-10-21",
+    title: "Resume match now fits your experience level",
+    description:
+      "Match resume reads your years of work experience from your resume and hides jobs that ask for more, so early-career engineers stop seeing senior roles. There's also a new Experience filter on the feed. Jobs' required years come from their title and description.",
+  },
+  {
     id: "resume-match",
     date: "2026-10-21",
     title: "Match your resume to jobs",

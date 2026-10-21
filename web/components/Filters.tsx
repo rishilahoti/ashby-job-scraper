@@ -5,6 +5,7 @@ import { pushQuery } from "@/lib/push-query";
 import { useRef, useState } from "react";
 import { PROVIDERS } from "@/lib/providers";
 import { parseLocationValues } from "@/lib/location-filter";
+import { EXPERIENCE_OPTIONS } from "@/lib/scoring";
 import { useCloseOnOutside } from "@/lib/useCloseOnOutside";
 
 function ChecklistDropdown({
@@ -129,6 +130,7 @@ export default function Filters({
       .filter(Boolean),
     remote: searchParams.get("remote") || "",
     employmentType: searchParams.get("employmentType") || "",
+    exp: searchParams.get("exp") || "",
     departments: currentDepartments,
     locations: currentLocations,
     tags: (searchParams.get("tags") || "")
@@ -146,6 +148,7 @@ export default function Filters({
     current.source.length > 0 ||
     current.remote ||
     current.employmentType ||
+    current.exp ||
     current.departments.length > 0 ||
     current.locations.length > 0 ||
     current.tags.length > 0 ||
@@ -240,6 +243,20 @@ export default function Filters({
         <option value="Intern">Intern</option>
         <option value="Contract">Contract</option>
         <option value="PartTime">Part Time</option>
+      </select>
+
+      {/* Experience: jobs asking at most this many years */}
+      <select
+        value={current.exp}
+        onChange={(e) => setParam("exp", e.target.value)}
+        aria-label="Experience"
+        className="h-8 max-w-32.5 px-2 text-sm bg-surface border border-edge rounded-md
+                   text-ink-secondary focus:outline-none focus:border-edge-strong cursor-pointer"
+      >
+        <option value="">Any experience</option>
+        {EXPERIENCE_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
       </select>
 
       {/* Sort: only Score, Newest, Oldest */}
