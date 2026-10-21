@@ -13,6 +13,8 @@ test('minYears reads the stated years and the title, null when neither says', ()
   assert.equal(minYears(job('Member of Technical Staff, Applied AI')), null);
   assert.equal(minYears(job('Senior Member of Technical Staff')), 5);
   assert.equal(minYears(job('Junior Developer', '0-1 years of experience')), 0);
+  assert.equal(minYears(job('Software Engineer, New Grad')), 0);
+  assert.equal(minYears(job('Junior Developer', '3+ years of experience')), 3);
   assert.equal(minYears(job('Developer', 'Experience: three years in web development.')), 3);
   assert.equal(minYears(job('Developer', 'Experience: 4 years with Python.')), 4);
   assert.equal(minYears(job('Developer', 'Two to four years of professional experience.')), 2);

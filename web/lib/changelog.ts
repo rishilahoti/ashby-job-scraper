@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "resume-years-in-browser",
+    date: "2026-10-21",
+    title: "Resume match counts your experience in your browser",
+    description:
+      "Match resume now adds up the dates in your resume's Experience section itself, instantly and without sending your resume anywhere. It only asks an AI model when there are no dates it can read. There's also a Fresher / new grad level, here and in the feed's Experience filter: jobs asking for at most a year, with new grad, junior and intern roles counted as fits.",
+  },
+  {
     id: "experience-filter",
     date: "2026-10-21",
     title: "Resume match now fits your experience level",
