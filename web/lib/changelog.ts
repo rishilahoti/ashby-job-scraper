@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "resume-match",
+    date: "2026-10-21",
+    title: "Match your resume to jobs",
+    description:
+      "Paste your resume on the new Match resume page to see the jobs that share the most skills with it. Your resume stays in your browser and is never uploaded or saved.",
+  },
+  {
     id: "open-source-library",
     date: "2026-10-19",
     title: "The scraping code is now a free library: ats-jobs",
@@ -110,7 +117,7 @@ export interface AppNotification {
 
 // Changelog entries that also get a notification, newest first. Not every
 // entry deserves one: add an id here when a feature should be announced.
-const ANNOUNCED_IDS = ["more-providers", "department-groups", "role-and-tech-tags", "auth"];
+const ANNOUNCED_IDS = ["resume-match", "more-providers", "department-groups", "role-and-tech-tags", "auth"];
 
 const shortDate = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });

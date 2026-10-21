@@ -41,6 +41,8 @@ export interface JobFilters {
   team?: string;
   locations?: string[];
   tags?: string[];
+  // Resume match: jobs with any of these tags, most shared tags first.
+  match?: string[];
   sort?: "score" | "newest" | "oldest";
   page?: number;
   limit?: number;

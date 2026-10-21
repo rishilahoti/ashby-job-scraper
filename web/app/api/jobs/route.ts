@@ -20,6 +20,22 @@ const MAX_SEARCH_LEN = 200;
 const MAX_PAGE = 20000;
 const MAX_LIMIT = 100;
 
+const TAG_SET = new Set(POSITIVE_TAG_OPTIONS.map((t) => t.toLowerCase()));
+
+// Comma list of known tags; unknown ones are dropped. The allowlist also caps
+// the list's length, so a long ?match= can't bloat the query or the cache key.
+function parseTags(value: string | null): string[] {
+	if (!value) return [];
+	return [
+		...new Set(
+			value
+				.split(',')
+				.map((t) => t.trim().toLowerCase())
+				.filter((t) => TAG_SET.has(t))
+		),
+	];
+}
+
 function safeInt(value: string | null, def: number, max: number): number {
 	if (value == null || value === '') return def;
 	const n = parseInt(value, 10);
@@ -108,17 +124,11 @@ export async function GET(request: NextRequest) {
 			);
 		}
 
-		const tagsParam = sp.get('tags');
-		if (tagsParam) {
-			const tagSet = new Set(
-				POSITIVE_TAG_OPTIONS.map((t) => t.toLowerCase())
-			);
-			const tags = tagsParam
-				.split(',')
-				.map((t) => t.trim().toLowerCase())
-				.filter((t) => t && tagSet.has(t));
-			if (tags.length > 0) filters.tags = [...new Set(tags)];
-		}
+		const tags = parseTags(sp.get('tags'));
+		if (tags.length > 0) filters.tags = tags;
+
+		const match = parseTags(sp.get('match'));
+		if (match.length > 0) filters.match = match;
 
 		const sort = sp.get('sort');
 		if (sort && SORT_OPTIONS.has(sort)) {

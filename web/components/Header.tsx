@@ -17,6 +17,7 @@ const MOBILE_LINKS: { href: string; label: string; d: string; accent?: boolean }
   { href: "/open-source", label: "Open source", d: "M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" },
   { href: "/changelog", label: "Changelog", d: "M9 4.5v15m6-15v15M4.5 9h15m-15 6h15" },
   { href: "/", label: "Feed", d: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" },
+  { href: "/match", label: "Match resume", d: "M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" },
   { href: "/applied", label: "Applied", d: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" },
   { href: "/ignored", label: "Ignored", d: "M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243" },
   { href: "/add", label: "+ Add", d: "M12 4.5v15m7.5-7.5h-15", accent: true },
@@ -68,6 +69,7 @@ export default function Header() {
         <nav className="hidden sm:flex items-center gap-1">
           <NavLink href="/changelog" label="Changelog" />
           <NavLink href="/" label="Feed" />
+          <NavLink href="/match" label="Match resume" />
           <NavLink href="/applied" label="Applied" count={appliedCount} />
           <NavLink href="/ignored" label="Ignored" count={ignoredCount} />
           <NavLink href="/add" label="+ Add" accent />

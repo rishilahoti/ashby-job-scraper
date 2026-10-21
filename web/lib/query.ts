@@ -189,6 +189,11 @@ const FILTER_SPECS: FilterSpec[] = [
     sql: (f, params) => `matched_keywords @> ${pushParam(params, f.tags!.map((t) => t.toLowerCase()))}::text[]`,
   },
   {
+    // Any shared tag (&&, on the same GIN index), unlike tags' all-of (@>).
+    active: (f) => !!f.match && f.match.length > 0,
+    sql: (f, params) => `matched_keywords && ${pushParam(params, f.match!)}::text[]`,
+  },
+  {
     active: (f) => f.minScore !== undefined,
     sql: (f, params) => `${SCORE_EXPR} >= ${pushParam(params, f.minScore!)}`,
   },
@@ -230,8 +235,12 @@ const getCachedJobsPage = unstable_cache(
     } else if (filters.sort === "oldest") {
       orderBy = "ORDER BY published_at ASC NULLS LAST, id DESC";
     } else {
-      // When searching, best text match first, then the usual score.
-      const rank = filters.search ? `${searchRankSql(dataParams, filters.search)} DESC, ` : "";
+      // When searching, best text match first, then the usual score. A resume
+      // match puts the jobs sharing the most of its tags first.
+      let rank = filters.search ? `${searchRankSql(dataParams, filters.search)} DESC, ` : "";
+      if (filters.match?.length) {
+        rank = `cardinality(ARRAY(SELECT unnest(matched_keywords) INTERSECT SELECT unnest(${pushParam(dataParams, filters.match)}::text[]))) DESC, ${rank}`;
+      }
       orderBy = `ORDER BY ${rank}${SCORE_EXPR} DESC, published_at DESC, id DESC`;
     }
 
