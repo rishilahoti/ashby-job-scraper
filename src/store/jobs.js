@@ -29,7 +29,7 @@ async function touchJob(company, jobId, scrapedAt) {
 
 async function upsertJob(job) {
   const pool = getPool();
-  const { baseScore, matchedKeywords } = computeStoredScore(job, config.intelligence.rules);
+  const { baseScore, matchedKeywords, minYears } = computeStoredScore(job, config.intelligence.rules);
 
   const { rows } = await pool.query(
     `WITH old_hash AS (
@@ -40,13 +40,13 @@ async function upsertJob(job) {
         employment_type, remote, description,
         apply_url, job_url, published_at, scraped_at,
         compensation_summary, compensation_min, compensation_max, compensation_currency, compensation_interval,
-        content_hash, is_active, base_score, matched_keywords, department_group
+        content_hash, is_active, base_score, matched_keywords, department_group, min_years
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10,
         $11, $12, $13, $14,
         $15, $16, $17, $18, $19,
-        $20, TRUE, $21, $22, $23
+        $20, TRUE, $21, $22, $23, $24
       )
       ON CONFLICT (company, job_id) DO UPDATE SET
         source            = EXCLUDED.source,
@@ -74,6 +74,7 @@ async function upsertJob(job) {
         base_score        = EXCLUDED.base_score,
         matched_keywords  = EXCLUDED.matched_keywords,
         department_group  = EXCLUDED.department_group,
+        min_years         = EXCLUDED.min_years,
         updated_at        = NOW()
       RETURNING
         (xmax = 0)                                               AS was_inserted,
@@ -84,7 +85,7 @@ async function upsertJob(job) {
       job.applyUrl, job.jobUrl, job.publishedAt, job.scrapedAt,
       job.compensationSummary, job.compensationMin ?? null, job.compensationMax ?? null, job.compensationCurrency ?? null,
       job.compensationInterval ?? null, job.contentHash, baseScore, matchedKeywords,
-      departmentGroup(job.department, job.team, job.title),
+      departmentGroup(job.department, job.team, job.title), minYears,
     ]
   );
 
@@ -220,18 +221,19 @@ async function rescoreJobsIfRulesChanged(rules) {
     lastId = rows[rows.length - 1].id;
     const values = [];
     const placeholders = rows.map((row, i) => {
-      const { baseScore, matchedKeywords } = computeStoredScore(row, rules);
-      values.push(row.id, baseScore, matchedKeywords, departmentGroup(row.department, row.team, row.title));
-      return `($${i * 4 + 1}::int, $${i * 4 + 2}::int, $${i * 4 + 3}::text[], $${i * 4 + 4}::text)`;
+      const { baseScore, matchedKeywords, minYears } = computeStoredScore(row, rules);
+      values.push(row.id, baseScore, matchedKeywords, departmentGroup(row.department, row.team, row.title), minYears);
+      return `($${i * 5 + 1}::int, $${i * 5 + 2}::int, $${i * 5 + 3}::text[], $${i * 5 + 4}::text, $${i * 5 + 5}::smallint)`;
     });
-    // Only rows whose score, tags or group change. Most jobs aren't dev roles
-    // and get no new tags; rewriting them would just bloat the table.
+    // Only rows whose score, tags, group or years change. Most jobs aren't dev
+    // roles and get no new tags; rewriting them would just bloat the table.
     const { rowCount } = await pool.query(
-      `UPDATE jobs SET base_score = v.base_score, matched_keywords = v.tags, department_group = v.department_group
-       FROM (VALUES ${placeholders.join(', ')}) AS v(id, base_score, tags, department_group)
+      `UPDATE jobs SET base_score = v.base_score, matched_keywords = v.tags, department_group = v.department_group,
+         min_years = v.min_years
+       FROM (VALUES ${placeholders.join(', ')}) AS v(id, base_score, tags, department_group, min_years)
        WHERE jobs.id = v.id
-         AND (jobs.base_score, jobs.matched_keywords, jobs.department_group)
-             IS DISTINCT FROM (v.base_score, v.tags, v.department_group)`,
+         AND (jobs.base_score, jobs.matched_keywords, jobs.department_group, jobs.min_years)
+             IS DISTINCT FROM (v.base_score, v.tags, v.department_group, v.min_years)`,
       values
     );
     total += rowCount ?? 0;

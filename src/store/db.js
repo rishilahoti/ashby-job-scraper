@@ -212,6 +212,9 @@ async function migrateSchema(p) {
   // src/normalize/departments.js's group, for the feed's department filter.
   // Filled by upsertJob and, for jobs already stored, rescoreJobsIfRulesChanged.
   await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS department_group TEXT`);
+  // rules-engine.js minYears: years of experience the job asks for, NULL when it
+  // doesn't say. For the feed's experience filter; filled like department_group.
+  await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS min_years SMALLINT`);
 
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_published ON jobs (published_at DESC) WHERE is_active = TRUE`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_score ON jobs (base_score DESC) WHERE is_active = TRUE`);
