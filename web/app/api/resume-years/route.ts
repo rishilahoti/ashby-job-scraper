@@ -20,8 +20,13 @@ don't count. One decimal place. 0 if there is no work experience.`;
 export async function POST(request: NextRequest) {
   const key = process.env.GROQ_API_KEY;
   if (!key) return NextResponse.json({ error: "Not available." }, { status: 503 });
-  // Each call spends free-tier Groq tokens.
-  if (await isRateLimited("resume-years", getClientIp(request), 10, 60)) {
+  // Each call spends free-tier Groq tokens, from the key the LinkedIn digest
+  // uses too: per IP, plus a daily cap so many IPs can't drain it. The IP is
+  // cf-connecting-ip, which clients can't forge: the Tunnel is the only way in.
+  if (
+    (await isRateLimited("resume-years", getClientIp(request), 10, 60)) ||
+    (await isRateLimited("resume-years-all", "all", 500, 1440))
+  ) {
     return NextResponse.json({ error: "Too many tries. Pick your experience instead." }, { status: 429 });
   }
   const [body, failed] = await readJson<{ text?: unknown }>(request);
