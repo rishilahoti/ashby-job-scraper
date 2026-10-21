@@ -57,7 +57,8 @@ export async function POST(request: NextRequest) {
     // A number, not Number(...): that turns null and "" into 0, a junior's filter.
     const years = JSON.parse(data.choices[0].message.content).years;
     if (typeof years !== "number" || !Number.isFinite(years) || years < 0 || years > 50) {
-      throw new Error(`Groq gave years=${JSON.stringify(years)}`);
+      // The type only: a string could be the resume's own words.
+      throw new Error(`Groq gave years of type ${typeof years}${typeof years === "number" ? ` (${years})` : ""}`);
     }
     return NextResponse.json({ years: Math.round(years * 10) / 10 });
   } catch (err) {
