@@ -21,7 +21,7 @@ function matchesWord(text, term) {
 
 // Bump when the tagging code below changes. rules.json changes are detected
 // on their own; either one makes the scraper re-tag every stored job.
-const TAGGING_VERSION = 1;
+const TAGGING_VERSION = 2;
 
 // Enough to count as a software role when no niche matched. Not a bare
 // "engineer": "Lighting and AV Engineer" and "QAQC Engineer" are construction.
@@ -72,6 +72,28 @@ function jobTags(job, rules, matchedKeywords) {
     ...matchedKeywords.filter((m) => m.weight > 0).map((m) => m.keyword),
     ...(devTitle ? (rules.tags || []).filter((tag) => matchesWord(text, tag)) : []),
   ])];
+}
+
+// Years of experience a title implies, for the feed's experience filter.
+const STAFF_TITLE = /\b(staff|principal|director|head|vp|distinguished)\b/i;
+const SENIOR_TITLE = /\b(senior|sr|lead|manager|architect|iii|iv)\b/i;
+// "5 years of UI/UX development experience", "3+ years building", "1 to 3 years in": a
+// number of years followed by "experience", or with a "+" or a range. A bare
+// "founded 10 years ago" has neither. Groups: 1 years, 2 "+", 3 range, 4 "experience".
+// ponytail: "Experience: three years" (words) is missed; such jobs stay unknown (null).
+const YEARS_EXP = /(\d{1,2})\s*(\+)?\s*(?:(-|–|to)\s*\d{1,2}\s*\+?\s*)?(?:years?|yrs?)['’]?(\s+(?:of\s+)?(?:[^\s.;:]+\s+){0,5}?experience)?/gi;
+
+// The fewest years of experience a job asks for: the most any "N years of
+// experience" in its description says (the overall bar, not "1+ years with
+// X"), at least what its title implies. null when neither says.
+function minYears(job) {
+  const stated = [...(job.description || '').matchAll(YEARS_EXP)]
+    .filter((m) => m[2] || m[3] || m[4])
+    .map((m) => Number(m[1]))
+    .filter((n) => n <= 15); // more is the company's history, not a requirement
+  const title = STAFF_TITLE.test(job.title || '') ? 8 : SENIOR_TITLE.test(job.title || '') ? 5 : 0;
+  const years = Math.max(title, ...stated);
+  return years > 0 || stated.length > 0 ? years : null;
 }
 
 function scoreKeywords(job, rules) {
@@ -152,7 +174,7 @@ function computeStoredScore(job, rules) {
   const remote = scoreRemote(job, rules);
   const department = scoreDepartment(job, rules);
   const baseScore = keywords.total + location.boost + remote + department.boost;
-  return { baseScore, matchedKeywords: jobTags(job, rules, keywords.matched) };
+  return { baseScore, matchedKeywords: jobTags(job, rules, keywords.matched), minYears: minYears(job) };
 }
 
-module.exports = { matchesWord, escapeRegex, computeScore, computeStoredScore, classifyNiche, jobTags, TAGGING_VERSION };
+module.exports = { matchesWord, escapeRegex, computeScore, computeStoredScore, classifyNiche, jobTags, minYears, TAGGING_VERSION };
