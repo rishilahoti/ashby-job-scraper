@@ -1,5 +1,8 @@
 import { matchesWord } from '../../src/intelligence/rules-engine.js';
 
+// What /match sends to /api/resume-years: under readJson's 16 KB body cap.
+export const MAX_RESUME_CHARS = 12000;
+
 interface Vocabulary {
 	keywords: Record<string, number>;
 	niches: Record<string, string[]>;
@@ -7,7 +10,7 @@ interface Vocabulary {
 }
 
 // Level words are left out: on a resume "Intern at X, 2019" is the past, not
-// the job wanted. Seniority comes with the LLM profile (AI search plan step 4).
+// the job wanted. Seniority comes from /api/resume-years and the experience filter.
 const LEVEL_WORDS = new Set(['new grad', 'entry level', 'junior', 'intern']);
 
 // The feed tags a resume names, in the words the scraper tags jobs with
