@@ -7,9 +7,9 @@
 # A failed run emails EMAIL_FROM through the site's SMTP: mail.env next to this script
 # holds the EMAIL_* lines from web.env (chmod 600).
 # The copy goes over ssh as host "backup-copy" (~/.ssh/config); on the scraper server that key
-# is restricted to `rrsync -wo -no-del ~/db-backups/offsite` in authorized_keys: it can add files
-# there and nothing else, so someone holding this server can't wipe the copies. That server
-# deletes copies older than 8 days itself (cron: find ~/db-backups/offsite -name 'jobs-*.dump' -mtime +8 -delete).
+# is restricted to `rrsync -wo -no-del ~/db-backups/offsite` in authorized_keys, and that server's
+# offsite-keep.sh moves each dump out of the key's reach, so someone holding this server can't
+# wipe or overwrite the copies.
 set -euo pipefail
 umask 077
 cd "$(dirname "$0")"
@@ -37,5 +37,5 @@ docker compose -f ~/ashby-web/docker-compose.yml exec -T db \
 mv "$tmp" "$out"
 ls -1t jobs-*.dump | tail -n +8 | xargs -r rm --
 # Off the box: losing this server's disk would otherwise take the DB and its dumps together.
-rsync -a --include='jobs-*.dump' --exclude='*' ./ backup-copy:
+rsync -a "$out" backup-copy:
 echo "$(date -u +%FT%TZ) ok $out $(du -h "$out" | cut -f1)"
