@@ -9,6 +9,7 @@ services:
     image: ghcr.io/rishilahoti/ashby-job-scraper-web:${WEB_TAG:?WEB_TAG is set in .env by deploy.sh}
     restart: unless-stopped
     env_file: web.env
+    networks: [default, jobs-db]
     depends_on:
       db:
         condition: service_healthy
@@ -34,6 +35,7 @@ services:
     image: cloudflare/cloudflared:2026.10.0
     restart: unless-stopped
     command: tunnel --no-autoupdate run
+    networks: [default, jobs-db]
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN}
     depends_on:
@@ -53,6 +55,8 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     env_file: db.env
+    # Only on jobs-db, which only web and cloudflared join: umami can't reach it, and it has no internet.
+    networks: [jobs-db]
     # 50 connections, as on the old server: web pool + scraper + a build's prerender fit.
     command: ["postgres", "-c", "shared_buffers=512MB", "-c", "max_connections=50"]
     shm_size: 256m
@@ -105,6 +109,9 @@ services:
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
+networks:
+  jobs-db:
+    internal: true
 volumes:
   jobs-db-data:
   umami-db-data:

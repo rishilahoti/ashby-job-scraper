@@ -55,7 +55,8 @@ Checked 2026-10-22: no token gets 403, a wrong one 401.
 5. Scraper server: `git pull`, `docker compose up -d` (its `db` becomes the forwarder, the old Postgres
    container goes, its volume `app_db_data` stays as the rollback copy). Check a scrape run completes.
 6. Backups: `deploy/db/backup.sh` + `mail.env` + cron move here; the `backup-copy` ssh key goes in, restricted to
-   `rrsync ~/db-backups/offsite` on the scraper server. Remove the cron line there.
+   `rrsync -wo -no-del ~/db-backups/offsite` on the scraper server, which gets the cron line that deletes copies
+   older than 8 days (see backup.sh). Remove the old backup cron line there.
 7. A few days later, if nothing needed the old copy: `docker volume rm app_db_data` there.
 
 Rollback (before step 7): on the scraper server `git checkout <previous commit> -- docker-compose.yml`,
