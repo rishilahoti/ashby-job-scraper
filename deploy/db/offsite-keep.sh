@@ -14,7 +14,8 @@ for f in offsite/*; do
   if [ "$f" = "$today" ] && [ -f "$f" ] && [ ! -L "$f" ]; then
     dest="kept/$(date -u +%Y%m%dT%H%M%SZ)-${f#offsite/}"
     mv -n -- "$f" "$dest"
-    touch -- "$dest"
+    # Checked again once in kept/, where the sender can't swap it for a symlink any more.
+    if [ -f "$dest" ] && [ ! -L "$dest" ]; then touch -h -- "$dest"; else rm -rf -- "$dest"; fi
   else
     echo "$(date -u +%FT%TZ) removed unexpected $f"
     rm -rf -- "$f"
