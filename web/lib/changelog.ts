@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "for-you-link",
+    date: "2026-10-22",
+    title: "A For you link to your matched jobs",
+    description:
+      "After you match your resume once, a For you link in the menu takes you back to the jobs that fit it, from any page. It lives in this browser; empty the box on Match resume to remove it.",
+  },
+  {
     id: "resume-kept",
     date: "2026-10-22",
     title: "Match resume remembers your resume",

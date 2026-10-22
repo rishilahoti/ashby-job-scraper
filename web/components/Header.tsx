@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useStatuses } from "./StatusProvider";
 import { THEME_ICON, nextTheme, useTheme } from "./ThemeProvider";
@@ -11,6 +11,12 @@ import { GITHUB_REPO, GitHubIcon, useGitHubStars } from "./GitHubBadge";
 import { SPONSOR_ID, SPONSOR_URL } from "@/lib/changelog";
 import { useDismissed } from "@/lib/notification-store";
 import { useCloseOnOutside } from "@/lib/useCloseOnOutside";
+import { forYouHref } from "@/lib/for-you";
+
+const FOR_YOU_ICON = "M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z";
+// No subscription: /match sets the link and then navigates, and every navigation
+// re-renders the header (usePathname), which reads it again.
+const noSubscribe = () => () => {};
 
 // d = the icon's svg path.
 const MOBILE_LINKS: { href: string; label: string; d: string; accent?: boolean }[] = [
@@ -30,6 +36,7 @@ export default function Header() {
   const isAuthed = sessionStatus === "authenticated";
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
+  const forYou = useSyncExternalStore(noSubscribe, forYouHref, () => null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const counts: Record<string, number | undefined> = {
@@ -69,6 +76,7 @@ export default function Header() {
         <nav className="hidden sm:flex items-center gap-1">
           <NavLink href="/changelog" label="Changelog" />
           <NavLink href="/" label="Feed" />
+          {forYou && <NavLink href={forYou} label="For you" />}
           <NavLink href="/match" label="Match resume" />
           <NavLink href="/applied" label="Applied" count={appliedCount} />
           <NavLink href="/ignored" label="Ignored" count={ignoredCount} />
@@ -96,6 +104,14 @@ export default function Header() {
                          bg-paper shadow-xl overflow-hidden animate-menu-in origin-top-right"
             >
               <div className="p-1.5">
+                {forYou && (
+                  <MobileNavLink
+                    href={forYou}
+                    label="For you"
+                    d={FOR_YOU_ICON}
+                    onNavigate={() => setMenuOpen(false)}
+                  />
+                )}
                 {MOBILE_LINKS.map(({ href, label, d, accent }) => (
                   <MobileNavLink
                     key={href}
