@@ -13,7 +13,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-10-22",
     title: "Match resume remembers your resume",
     description:
-      "The resume you paste on Match resume stays in your browser, so next time it's already there and one click finds your jobs again. We don't keep a copy. Empty the box to forget it.",
+      "The resume you paste on Match resume stays in your browser, so next time it's already there and one click finds your jobs again. We don't keep a copy. Empty the box to forget it. When your experience has to be read by an AI model and the first one is busy, a second one (Google's Gemini) now tries before asking you to pick.",
   },
   {
     id: "resume-years-in-browser",

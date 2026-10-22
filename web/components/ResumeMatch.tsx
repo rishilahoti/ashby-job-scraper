@@ -97,9 +97,10 @@ export default function ResumeMatch() {
         <p className="text-sm text-ink-secondary leading-relaxed">
           Paste your resume and we&apos;ll show the jobs that share the most skills with it, at your
           level. Your years of experience are counted in your browser from the dates in your
-          Experience section. Only if it has none we can read is the text sent once to an AI model
-          (Groq); we don&apos;t save it. Only the skills found in your resume go to the feed. Your
-          resume stays in this browser for next time; empty the box to forget it.
+          Experience section. Only if it has none we can read is the text sent once to an AI model:
+          Groq, or Google&apos;s Gemini when Groq is busy, whose free tier lets Google use it to
+          improve its products. We don&apos;t save it. Only the skills found in your resume go to the
+          feed. Your resume stays in this browser for next time; empty the box to forget it.
         </p>
       </div>
 
