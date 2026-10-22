@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useSyncExternalStore, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import rules from "../../src/config/rules.json";
 import { resumeTerms, resumeYears, MAX_RESUME_CHARS } from "@/lib/resume-terms";
@@ -12,12 +12,42 @@ const LEVELS = [{ value: "auto", label: "Read it from my resume" }, ...EXPERIENC
 // Years of work experience → the ?exp= value: the smallest bracket that covers them.
 const expFor = (years: number) => EXPERIENCE_OPTIONS.find((o) => years < o.under)?.value ?? "";
 
+// This browser only: { text, years? }. years is the AI's answer for that same
+// text, so matching again doesn't ask again; any edit rewrites it without years.
+const KEY = "match-resume";
+
+function save(value: { text: string; years?: number }) {
+  try {
+    if (value.text) localStorage.setItem(KEY, JSON.stringify(value));
+    else localStorage.removeItem(KEY);
+  } catch {
+    // storage disabled or full: the resume just isn't kept
+  }
+}
+
+function saved(): { text?: unknown; years?: unknown } {
+  try {
+    return JSON.parse(localStorage.getItem(KEY) ?? "{}") ?? {};
+  } catch {
+    return {};
+  }
+}
+
+// Read once per render, never subscribed: only this page writes it. "" on the server.
+const keptText = () => {
+  const { text } = saved();
+  return typeof text === "string" ? text : "";
+};
+const noSubscribe = () => () => {};
+
 // Skills are matched here in the browser; only the tags go to the feed, as ?match=.
 // With "auto", years come from the Experience dates here too; the text goes to
 // /api/resume-years once (not stored) only when there are none to read.
 export default function ResumeMatch() {
   const router = useRouter();
-  const [text, setText] = useState("");
+  const kept = useSyncExternalStore(noSubscribe, keptText, () => "");
+  const [typed, setText] = useState<string | null>(null);
+  const text = typed ?? kept;
   const [exp, setExp] = useState<string | null>("auto");
   const [noTerms, setNoTerms] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -33,6 +63,10 @@ export default function ResumeMatch() {
     const local = level === "auto" ? resumeYears(text) : null;
     if (local !== null) level = expFor(local);
     else if (level === "auto") {
+      const cached = saved();
+      if (cached.text === text && typeof cached.years === "number") level = expFor(cached.years);
+    }
+    if (level === "auto") {
       setBusy(true);
       setError("");
       const res = await fetch("/api/resume-years", {
@@ -48,6 +82,8 @@ export default function ResumeMatch() {
         setExp(null);
         return;
       }
+      // Not if the box was edited or emptied while waiting: that would bring the old text back.
+      if (saved().text === text) save({ text, years: data.years });
       level = expFor(data.years);
     }
     const params = new URLSearchParams({ match: terms.join(",") });
@@ -62,8 +98,10 @@ export default function ResumeMatch() {
         <p className="text-sm text-ink-secondary leading-relaxed">
           Paste your resume and we&apos;ll show the jobs that share the most skills with it, at your
           level. Your years of experience are counted in your browser from the dates in your
-          Experience section. Only if it has none we can read is the text sent once to an AI model
-          (Groq); we don&apos;t save it. Only the skills found in your resume go to the feed.
+          Experience section. Only if it has none we can read is the text sent once to an AI model:
+          Groq, or Google&apos;s Gemini when Groq is busy, whose free tier lets Google use it to
+          improve its products. We don&apos;t save it. Only the skills found in your resume go to the
+          feed. Your resume stays in this browser for next time; empty the box to forget it.
         </p>
       </div>
 
@@ -93,7 +131,10 @@ export default function ResumeMatch() {
 
         <textarea
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            save({ text: e.target.value });
+          }}
           placeholder="Open your resume, select all, copy, and paste it here."
           rows={14}
           aria-label="Resume text"
