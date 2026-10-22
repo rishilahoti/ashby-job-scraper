@@ -10,7 +10,7 @@ A production-grade system that scrapes public job listings across **Ashby, Lever
 - **Automated Scraping** — Runs its own cron (default daily) inside the scraper container (no external scheduler needed)
 - **Change Detection** — Tracks new, updated, and removed postings via content hashing
 - **Intelligent Scoring** — Ranks jobs by keyword relevance, location, remote preference, department, and freshness
-- **Self-hosted Database** — Postgres running on a Docker Compose stack (see [Deployment](#deployment)), SSL-enabled, reachable over the public internet for the web frontend
+- **Self-hosted Database** — Postgres next to the web app on the Oracle server (see [Deployment](#deployment)), with no public port: the scraper and GitHub Actions reach it through a Cloudflare Tunnel with an Access service token
 - **Web Frontend** — Next.js 16 App Router (a container on an Oracle server, behind Cloudflare) with filtering, pagination, and per-browser apply/ignore tracking (localStorage)
 - **Stealth-Aware** — Jittered scheduling, randomized delays, browser-like headers
 - **Reports** — CLI summaries and daily Markdown reports with apply links
@@ -28,11 +28,12 @@ A production-grade system that scrapes public job listings across **Ashby, Lever
 │                              │                                │
 │                   Intelligence ─→ Notifications               │
 │                                                               │
-│  db container ─→ Postgres 17, SSL, exposed on :5432          │
+│  db container ─→ cloudflared access tcp (forwards db:5432)    │
 └──────────────────────────────┬───────────────────────────────┘
-                               │  (public internet, TLS)
+                               │  (Cloudflare Tunnel, Access service token)
 ┌──────────────────────────────┴───────────────────────────────┐
-│ Frontend (Next.js container, behind Cloudflare)                │
+│ Frontend + database (Oracle server, behind Cloudflare)         │
+│ db container ─→ Postgres 17, no published port                 │
 │                                                                │
 │ Server Components ─→ PostgreSQL queries ─→ Scored job feed    │
 │ /add page ─→ POST /api/companies ─→ Live scrape + insert      │

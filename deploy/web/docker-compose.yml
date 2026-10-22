@@ -59,7 +59,6 @@ services:
     networks: [jobs-db]
     # 50 connections, as on the old server: web pool + scraper + a build's prerender fit.
     command: ["postgres", "-c", "shared_buffers=512MB", "-c", "max_connections=50"]
-    shm_size: 256m
     volumes:
       - jobs-db-data:/var/lib/postgresql/data
     healthcheck:

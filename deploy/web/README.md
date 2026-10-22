@@ -43,7 +43,8 @@ Checked 2026-10-22: no token gets 403, a wrong one 401.
 
 ## Moving the database here (one-time, measured at ~10 min of no writes)
 
-1. Here: write `db.env`, copy this folder's `docker-compose.yml` over, `docker compose up -d db`.
+1. Here: write `db.env`, copy this folder's `docker-compose.yml` over, `docker compose up -d`. That starts `db` and
+   recreates `web` and `cloudflared` onto its `jobs-db` network (a few seconds' restart; `web` still uses the old DB).
 2. Scraper server: add `CF_ACCESS_CLIENT_ID/SECRET` to `~/app/.env`. Stop the scraper
    (`docker compose stop scraper`) and make the old DB read-only
    (`ALTER DATABASE <db> SET default_transaction_read_only = on`, then terminate the other sessions),
@@ -54,7 +55,8 @@ Checked 2026-10-22: no token gets 403, a wrong one 401.
    `/api/health`. GitHub: set the `DATABASE_URL` secret to `postgres://<user>:<password>@127.0.0.1:5432/<db>`.
 5. Scraper server: `git pull`, `docker compose up -d` (its `db` becomes the forwarder, the old Postgres
    container goes, its volume `app_db_data` stays as the rollback copy). Check a scrape run completes.
-6. Backups: `deploy/db/backup.sh` + `mail.env` + cron move here; the `backup-copy` ssh key goes in, restricted to
+6. Backups: `deploy/db/backup.sh` + `mail.env` + cron move here; on the scraper server `mkdir -p ~/db-backups/offsite`
+   (rrsync can't create it), and the `backup-copy` ssh key goes in there, restricted to
    `rrsync -wo -no-del ~/db-backups/offsite` on the scraper server, which gets `deploy/db/offsite-keep.sh`
    on cron (moves copies out of the key's reach, keeps 8 days). Remove the old backup cron line there.
 7. A few days later, if nothing needed the old copy: `docker volume rm app_db_data` there.

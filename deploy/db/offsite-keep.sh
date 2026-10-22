@@ -11,7 +11,7 @@ mkdir -p kept
 today="offsite/jobs-$(date -u +%F).dump"
 for f in offsite/*; do
   [ -e "$f" ] || [ -L "$f" ] || continue
-  if [ "$f" = "$today" ] && [ -f "$f" ] && [ ! -L "$f" ]; then
+  if [ "$f" = "$today" ]; then
     dest="kept/$(date -u +%Y%m%dT%H%M%SZ)-${f#offsite/}"
     mv -n -- "$f" "$dest"
     # Checked again once in kept/, where the sender can't swap it for a symlink any more.
