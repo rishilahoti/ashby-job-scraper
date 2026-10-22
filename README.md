@@ -10,7 +10,7 @@ A production-grade system that scrapes public job listings across **Ashby, Lever
 - **Automated Scraping** — Runs its own cron (default daily) inside the scraper container (no external scheduler needed)
 - **Change Detection** — Tracks new, updated, and removed postings via content hashing
 - **Intelligent Scoring** — Ranks jobs by keyword relevance, location, remote preference, department, and freshness
-- **Self-hosted Database** — Postgres running on a Docker Compose stack (see [Deployment](#deployment)), SSL-enabled, reachable over the public internet for the web frontend
+- **Self-hosted Database** — Postgres next to the web app on the Oracle server (see [Deployment](#deployment)), with no public port: the scraper and GitHub Actions reach it through a Cloudflare Tunnel with an Access service token
 - **Web Frontend** — Next.js 16 App Router (a container on an Oracle server, behind Cloudflare) with filtering, pagination, and per-browser apply/ignore tracking (localStorage)
 - **Stealth-Aware** — Jittered scheduling, randomized delays, browser-like headers
 - **Reports** — CLI summaries and daily Markdown reports with apply links
@@ -28,11 +28,12 @@ A production-grade system that scrapes public job listings across **Ashby, Lever
 │                              │                                │
 │                   Intelligence ─→ Notifications               │
 │                                                               │
-│  db container ─→ Postgres 17, SSL, exposed on :5432          │
+│  db container ─→ cloudflared access tcp (forwards db:5432)    │
 └──────────────────────────────┬───────────────────────────────┘
-                               │  (public internet, TLS)
+                               │  (Cloudflare Tunnel, Access service token)
 ┌──────────────────────────────┴───────────────────────────────┐
-│ Frontend (Next.js container, behind Cloudflare)                │
+│ Frontend + database (Oracle server, behind Cloudflare)         │
+│ db container ─→ Postgres 17, no published port                 │
 │                                                                │
 │ Server Components ─→ PostgreSQL queries ─→ Scored job feed    │
 │ /add page ─→ POST /api/companies ─→ Live scrape + insert      │
@@ -43,13 +44,14 @@ A production-grade system that scrapes public job listings across **Ashby, Lever
 
 ## Deployment
 
-Frontend and database are hosted separately:
+The frontend and the database share one server; the scraper runs on another:
 
 - **Frontend** — https://jobs.whatrunsindia.com. A Next.js standalone container on an Oracle ARM server, reached through a Cloudflare Tunnel (no open ports); Cloudflare provides DNS, edge caching and the firewall. `.github/workflows/deploy-web.yml` builds the arm64 image (`web/Dockerfile`) on every push to `main`, scans it, pushes it to GHCR, and ssh-es to the server with a key that can only run `deploy/web/deploy.sh` (pull, restart, roll back if the new image isn't healthy). Server layout, the compose file and the settings it expects are in `deploy/web/`. The old Vercel address only redirects (308) to the new one.
-- **Database + scraper** — `docker-compose.yml` at repo root runs `db` (Postgres 17, SSL enabled via a self-signed cert in `./certs/`, published on `5432`), `scraper` (runs `node index.js start`, which scrapes immediately on boot then follows `CRON_SCHEDULE`, default daily), and `watchtower` (polls GHCR every 5 min, auto-pulls + recreates `scraper` on new pushes to `main` — no manual SSH/pull needed). The scraper image is built and pushed to GHCR by `.github/workflows/build-images.yml` on every push to `main`.
+- **Database** — Postgres 17 runs on the same Oracle ARM server as the frontend (`db` in `deploy/web/docker-compose.yml`), with no published port. The web app reaches it on the compose network; everything else comes in through the Cloudflare Tunnel at `db.whatrunsindia.com`, which only lets through the Access service token `jobs-db` (`cloudflared access tcp` on the client side). Nightly backups: `deploy/db/backup.sh`.
+- **Scraper** — `docker-compose.yml` at repo root (a separate server) runs `scraper` (runs `node index.js start`, which scrapes immediately on boot then follows `CRON_SCHEDULE`, default daily), `db` (a `cloudflared access tcp` forwarder to the database, so the scraper still connects to `db:5432`), and `watchtower` (polls GHCR every 5 min, auto-pulls + recreates `scraper` on new pushes to `main` — no manual SSH/pull needed). The scraper image is built and pushed to GHCR by `.github/workflows/build-images.yml` on every push to `main`.
 - **One-time data backfills** (e.g. the location canonicalization migration) don't run automatically on startup — they can scan the whole `jobs` table, which shouldn't happen silently on every scraper restart. Run them once per database with `docker compose exec scraper node index.js migrate`.
 
-SSL note: the self-signed cert encrypts the connection but isn't CA-verified — both `src/store/db.js` and `web/lib/db.ts` connect with `rejectUnauthorized: false`, and only enable SSL at all when the connection string includes `sslmode=require`.
+SSL note: the tunnel encrypts database traffic, so the database runs without SSL. `src/store/db.js` and `web/lib/db.ts` still turn SSL on (without CA verification) when a connection string includes `sslmode=require`.
 
 ## Quick Start
 
