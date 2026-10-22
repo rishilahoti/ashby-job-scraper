@@ -1,30 +1,21 @@
 services:
+  # The database runs on the web server (deploy/web/docker-compose.yml). This forwards db:5432 to it
+  # through Cloudflare (db.whatrunsindia.com, Access service token), so DATABASE_URL below is unchanged.
+  # The service token is CF_ACCESS_CLIENT_ID/SECRET in .env.
   db:
-    image: postgres:17-alpine
+    image: cloudflare/cloudflared:2026.10.0
     restart: unless-stopped
+    command: access tcp --hostname db.whatrunsindia.com --url 0.0.0.0:5432
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "max_connections=50",
-              "-c", "ssl=on", "-c", "ssl_cert_file=/certs/server.crt", "-c", "ssl_key_file=/certs/server.key"]
-    ports:
-      - "5432:5432"
-    volumes:
-      - db_data:/var/lib/postgresql/data
-      - ./certs:/certs:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      TUNNEL_SERVICE_TOKEN_ID: ${CF_ACCESS_CLIENT_ID:?}
+      TUNNEL_SERVICE_TOKEN_SECRET: ${CF_ACCESS_CLIENT_SECRET:?}
 
   scraper:
     image: ghcr.io/rishilahoti/ashby-job-scraper-scraper:latest
     restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
+    # Not "healthy": cloudflared's image has no shell for a healthcheck. A scrape that can't reach
+    # the database fails and is retried on the next run.
+    depends_on: [db]
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       CRON_SCHEDULE: ${CRON_SCHEDULE:-0 0 * * *}
@@ -54,6 +45,3 @@ services:
       WATCHTOWER_POLL_INTERVAL: "300"
       WATCHTOWER_CLEANUP: "true"
       DOCKER_API_VERSION: "1.41"
-
-volumes:
-  db_data:

@@ -9,6 +9,9 @@ services:
     image: ghcr.io/rishilahoti/ashby-job-scraper-web:${WEB_TAG:?WEB_TAG is set in .env by deploy.sh}
     restart: unless-stopped
     env_file: web.env
+    depends_on:
+      db:
+        condition: service_healthy
     # Caps so a traffic spike can't starve the other project's API on this 2-CPU server: at most
     # one core, so the API always has the other.
     mem_limit: 1280m
@@ -39,6 +42,30 @@ services:
     mem_limit: 256m
     pids_limit: 128
     cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+  # The jobs database. No published port: web reaches it as db:5432 here, and the scraper, GitHub builds
+  # and discover.yml come in through the tunnel (db.whatrunsindia.com -> tcp://db:5432, Access service
+  # token only). The tunnel carries it encrypted, so no ssl. db.env holds POSTGRES_USER/PASSWORD/DB.
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file: db.env
+    # 50 connections, as on the old server: web pool + scraper + a build's prerender fit.
+    command: ["postgres", "-c", "shared_buffers=512MB", "-c", "max_connections=50"]
+    shm_size: 256m
+    volumes:
+      - jobs-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    mem_limit: 2g
+    cpus: 1.0
+    pids_limit: 256
     security_opt: [no-new-privileges:true]
     logging:
       driver: json-file
@@ -79,4 +106,5 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 volumes:
+  jobs-db-data:
   umami-db-data:

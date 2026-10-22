@@ -40,7 +40,23 @@ jobs:
         with:
           persist-credentials: false
 
+      # The database has no public port: DATABASE_URL points at 127.0.0.1:5432, which this forwards
+      # through Cloudflare (db.whatrunsindia.com), where only the Access service token gets through.
+      - name: Open the database tunnel
+        env:
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          docker run -d --network host -e TUNNEL_SERVICE_TOKEN_ID -e TUNNEL_SERVICE_TOKEN_SECRET \
+            cloudflare/cloudflared:2026.10.0 access tcp --hostname db.whatrunsindia.com --url 127.0.0.1:5432
+          for _ in $(seq 1 20); do (: > /dev/tcp/127.0.0.1/5432) 2>/dev/null && exit 0; sleep 1; done
+          echo "::error::the database tunnel never started listening"; exit 1
+
+      # Host networking, so the prerender inside the build reaches the tunnel on the runner's 127.0.0.1.
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: network=host
+          buildkitd-flags: --allow-insecure-entitlement network.host
 
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -55,6 +71,8 @@ jobs:
           file: web/Dockerfile
           push: false
           load: true
+          network: host
+          allow: network.host
           platforms: linux/arm64
           tags: ${{ env.IMAGE }}:${{ github.sha }}
           secrets: |
