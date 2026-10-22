@@ -1,0 +1,7 @@
+# Settings not set here come from the organization's CodeRabbit UI settings.
+inheritance: true
+reviews:
+  auto_review:
+    # Review a PR's first push only; ask for more with "@coderabbitai review".
+    # Every push used to spend one of the few included reviews per hour.
+    auto_incremental_review: false
