@@ -11,12 +11,9 @@ import { GITHUB_REPO, GitHubIcon, useGitHubStars } from "./GitHubBadge";
 import { SPONSOR_ID, SPONSOR_URL } from "@/lib/changelog";
 import { useDismissed } from "@/lib/notification-store";
 import { useCloseOnOutside } from "@/lib/useCloseOnOutside";
-import { forYouHref } from "@/lib/for-you";
+import { forYouHref, subscribeForYou } from "@/lib/for-you";
 
 const FOR_YOU_ICON = "M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z";
-// No subscription: /match sets the link and then navigates, and every navigation
-// re-renders the header (usePathname), which reads it again.
-const noSubscribe = () => () => {};
 
 // d = the icon's svg path.
 const MOBILE_LINKS: { href: string; label: string; d: string; accent?: boolean }[] = [
@@ -36,7 +33,7 @@ export default function Header() {
   const isAuthed = sessionStatus === "authenticated";
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
-  const forYou = useSyncExternalStore(noSubscribe, forYouHref, () => null);
+  const forYou = useSyncExternalStore(subscribeForYou, forYouHref, () => null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const counts: Record<string, number | undefined> = {

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import rules from "../../src/config/rules.json";
 import { resumeTerms, resumeYears, MAX_RESUME_CHARS } from "@/lib/resume-terms";
 import { EXPERIENCE_OPTIONS } from "@/lib/scoring";
-import { FOR_YOU_KEY } from "@/lib/for-you";
+import { setForYou } from "@/lib/for-you";
 
 // "auto" asks /api/resume-years. "5+ years" sets no filter: every job is open to them.
 const LEVELS = [{ value: "auto", label: "Read it from my resume" }, ...EXPERIENCE_OPTIONS, { value: "", label: "5+ years" }];
@@ -20,13 +20,11 @@ const KEY = "match-resume";
 function save(value: { text: string; years?: number }) {
   try {
     if (value.text) localStorage.setItem(KEY, JSON.stringify(value));
-    else {
-      localStorage.removeItem(KEY);
-      localStorage.removeItem(FOR_YOU_KEY);
-    }
+    else localStorage.removeItem(KEY);
   } catch {
     // storage disabled or full: the resume just isn't kept
   }
+  if (!value.text) setForYou(null);
 }
 
 function saved(): { text?: unknown; years?: unknown } {
@@ -93,11 +91,8 @@ export default function ResumeMatch() {
     const params = new URLSearchParams({ match: terms.join(",") });
     if (level) params.set("exp", level);
     const url = `/?${params}`;
-    try {
-      localStorage.setItem(FOR_YOU_KEY, url);
-    } catch {
-      // storage disabled: no "For you" link
-    }
+    // Same as the years: a box emptied while waiting stays forgotten.
+    if (saved().text === text) setForYou(url);
     router.push(url);
   };
 
