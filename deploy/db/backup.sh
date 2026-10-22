@@ -14,8 +14,9 @@ alert() {
   . ./mail.env
   printf 'From: %s\r\nTo: %s\r\nSubject: DB backup failed\r\n\r\n%s\r\n' "$EMAIL_FROM" "$EMAIL_FROM" \
     "Last night's backup on the DB server failed. See ~/db-backups/backup.log." |
+    # The password goes in as a config file, not an argument: ps shows arguments.
     curl -sS --ssl-reqd --url "smtp://$EMAIL_SERVER_HOST:$EMAIL_SERVER_PORT" \
-      --user "$EMAIL_SERVER_USER:$EMAIL_SERVER_PASSWORD" \
+      -K <(printf 'user = "%s:%s"\n' "$EMAIL_SERVER_USER" "$EMAIL_SERVER_PASSWORD") \
       --mail-from "$EMAIL_FROM" --mail-rcpt "$EMAIL_FROM" -T -
 }
 
