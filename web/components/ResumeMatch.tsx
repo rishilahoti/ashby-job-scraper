@@ -82,7 +82,8 @@ export default function ResumeMatch() {
         setExp(null);
         return;
       }
-      save({ text, years: data.years });
+      // Not if the box was edited or emptied while waiting: that would bring the old text back.
+      if (saved().text === text) save({ text, years: data.years });
       level = expFor(data.years);
     }
     const params = new URLSearchParams({ match: terms.join(",") });
