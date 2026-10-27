@@ -101,7 +101,7 @@ function stripBase64(state, chunk) {
     }
     if (b === BASE64_MARKER[state.matched]) {
       if (++state.matched === BASE64_MARKER.length) {
-        kept.push(chunk.subarray(start, i + 1));
+        kept.push(Buffer.from(chunk.subarray(start, i + 1)));
         state.skipping = true;
         state.matched = 0;
       }
@@ -109,7 +109,9 @@ function stripBase64(state, chunk) {
       state.matched = b === BASE64_MARKER[0] ? 1 : 0;
     }
   }
-  if (!state.skipping) kept.push(chunk.subarray(start));
+  if (!state.skipping) kept.push(Buffer.from(chunk.subarray(start)));
+  // Copies, not views: a view keeps its whole raw chunk alive, base64 and all,
+  // which the size cap below would never see.
   return kept;
 }
 
