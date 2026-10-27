@@ -81,6 +81,26 @@ const SOURCE_REQUESTS = {
   },
 };
 
+// response.json() buffers the whole body, so one huge board can take the
+// process down. Count bytes while streaming and give up past the cap instead.
+// Not retryable: the board will be just as big a second later.
+async function readJsonCapped(response, slug, source) {
+  const { maxBodyBytes } = config.fetch;
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of response.body) {
+    size += chunk.length;
+    if (size > maxBodyBytes) {
+      throw new FetchError(
+        `Response too large for ${slug} (${source}): over ${Math.round(maxBodyBytes / 1048576)} MB`,
+        slug, response.status, false
+      );
+    }
+    chunks.push(chunk);
+  }
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
 // One request/response cycle with the existing retry+backoff policy. Shared by
 // the single-page sources and Workday's paginated loop below.
 async function fetchOnce(url, options, slug, source, extractJobs) {
@@ -104,7 +124,7 @@ async function fetchOnce(url, options, slug, source, extractJobs) {
         );
       }
 
-      const data = await timeLimit(response.json(), timeoutMs);
+      const data = await timeLimit(readJsonCapped(response, slug, source), timeoutMs);
       const jobs = extractJobs(data);
       if (jobs === null) {
         throw new FetchError(

@@ -28,6 +28,9 @@ const config = {
     maxRetries: 3,
     retryBaseMs: 1000,
     timeoutMs: 30000,
+    // The biggest real board (Bjak, ~34 MB) fits. A 109 MB Teamtailor feed
+    // (Foveaassocies) ran the 1 GB VM out of heap on 2026-10-27, every restart.
+    maxBodyBytes: 50 * 1024 * 1024,
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
   },
 
