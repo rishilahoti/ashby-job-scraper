@@ -124,6 +124,26 @@ test('fetchJobBoard gives up without retrying on a body over the size cap', asyn
   }
 });
 
+test('fetchJobBoard drops inline base64 images wherever the chunks split', async () => {
+  const originalFetch = global.fetch;
+  const html = '<p>Hi</p><img src="data:image/png;base64,iVBORw0KGgo+/AAA=="><p>Bye 💼</p>';
+  const bytes = Buffer.from(JSON.stringify({ jobs: [{ id: 1, html }] }));
+  let split;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    body: (async function* () { yield bytes.subarray(0, split); yield bytes.subarray(split); })(),
+  });
+  try {
+    for (split = 0; split <= bytes.length; split++) {
+      const { jobs } = await fetchJobBoard('acme', 'ashby');
+      assert.equal(jobs[0].html, '<p>Hi</p><img src="data:image/png;base64,"><p>Bye 💼</p>', `split at ${split}`);
+    }
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('fetchJobBoard throws when the response shape is invalid', async () => {
   await withServer(
     (req, res) => {

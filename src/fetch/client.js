@@ -81,22 +81,57 @@ const SOURCE_REQUESTS = {
   },
 };
 
+// Inline images (src="data:image/png;base64,...") can dwarf a whole board: one
+// Teamtailor posting carried 90 MB of them. sanitizeDescription strips every
+// tag anyway, so drop the base64 bytes as they stream in. Removing plain
+// characters from inside a JSON string never breaks the JSON.
+const BASE64_MARKER = Buffer.from(';base64,');
+const isBase64Byte = (b) =>
+  (b >= 65 && b <= 90) || (b >= 97 && b <= 122) || (b >= 47 && b <= 57) || b === 43 || b === 61; // A-Z a-z / 0-9 + =
+
+function stripBase64(state, chunk) {
+  const kept = [];
+  let start = 0;
+  for (let i = 0; i < chunk.length; i++) {
+    const b = chunk[i];
+    if (state.skipping) {
+      if (isBase64Byte(b)) continue;
+      state.skipping = false;
+      start = i;
+    }
+    if (b === BASE64_MARKER[state.matched]) {
+      if (++state.matched === BASE64_MARKER.length) {
+        kept.push(chunk.subarray(start, i + 1));
+        state.skipping = true;
+        state.matched = 0;
+      }
+    } else {
+      state.matched = b === BASE64_MARKER[0] ? 1 : 0;
+    }
+  }
+  if (!state.skipping) kept.push(chunk.subarray(start));
+  return kept;
+}
+
 // response.json() buffers the whole body, so one huge board can take the
-// process down. Count bytes while streaming and give up past the cap instead.
+// process down. Count the kept bytes while streaming and give up past the cap.
 // Not retryable: the board will be just as big a second later.
 async function readJsonCapped(response, slug, source) {
   const { maxBodyBytes } = config.fetch;
   const chunks = [];
+  const state = { matched: 0, skipping: false };
   let size = 0;
-  for await (const chunk of response.body) {
-    size += chunk.length;
-    if (size > maxBodyBytes) {
-      throw new FetchError(
-        `Response too large for ${slug} (${source}): over ${Math.round(maxBodyBytes / 1048576)} MB`,
-        slug, response.status, false
-      );
+  for await (const raw of response.body) {
+    for (const chunk of stripBase64(state, raw)) {
+      size += chunk.length;
+      if (size > maxBodyBytes) {
+        throw new FetchError(
+          `Response too large for ${slug} (${source}): over ${Math.round(maxBodyBytes / 1048576)} MB`,
+          slug, response.status, false
+        );
+      }
+      chunks.push(chunk);
     }
-    chunks.push(chunk);
   }
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
