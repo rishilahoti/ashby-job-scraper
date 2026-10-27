@@ -102,6 +102,48 @@ test('fetchJobBoard throws without retrying on a 404', async () => {
   );
 });
 
+test('fetchJobBoard gives up without retrying on a body over the size cap', async () => {
+  const original = config.fetch.maxBodyBytes;
+  config.fetch.maxBodyBytes = 1024;
+  let attempts = 0;
+  try {
+    await withServer(
+      (req, res) => {
+        attempts++;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ jobs: [{ id: 1, description: 'x'.repeat(4096) }] }));
+      },
+      (baseUrl) =>
+        withAshbyBaseUrl(baseUrl, async () => {
+          await assert.rejects(() => fetchJobBoard('acme', 'ashby'), /too large/);
+          assert.equal(attempts, 1);
+        })
+    );
+  } finally {
+    config.fetch.maxBodyBytes = original;
+  }
+});
+
+test('fetchJobBoard drops inline base64 images wherever the chunks split', async () => {
+  const originalFetch = global.fetch;
+  const html = '<p>Hi</p><img src="data:image/png;base64,iVBORw0KGgo+/AAA=="><p>Bye 💼</p>';
+  const bytes = Buffer.from(JSON.stringify({ jobs: [{ id: 1, html }] }));
+  let split;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    body: (async function* () { yield bytes.subarray(0, split); yield bytes.subarray(split); })(),
+  });
+  try {
+    for (split = 0; split <= bytes.length; split++) {
+      const { jobs } = await fetchJobBoard('acme', 'ashby');
+      assert.equal(jobs[0].html, '<p>Hi</p><img src="data:image/png;base64,"><p>Bye 💼</p>', `split at ${split}`);
+    }
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('fetchJobBoard throws when the response shape is invalid', async () => {
   await withServer(
     (req, res) => {
@@ -123,7 +165,8 @@ test('fetchJobBoard gives up on a response that never settles', { timeout: 5000 
   let attempts = 0;
   global.fetch = async () => {
     attempts++;
-    return { ok: true, status: 200, json: () => new Promise(() => {}) };
+    const body = { [Symbol.asyncIterator]: () => ({ next: () => new Promise(() => {}) }) };
+    return { ok: true, status: 200, body };
   };
   Object.assign(config.fetch, { timeoutMs: 20, retryBaseMs: 1 });
   try {

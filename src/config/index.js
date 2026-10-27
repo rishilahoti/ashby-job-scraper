@@ -27,7 +27,12 @@ const config = {
     },
     maxRetries: 3,
     retryBaseMs: 1000,
-    timeoutMs: 30000,
+    // Covers the whole download. Foveaassocies' 109 MB feed takes 34-37 s from
+    // the VM; the 2026-10-26 run had no timeouts at all, so the slack is free.
+    timeoutMs: 90000,
+    // Counted after inline base64 images are dropped (see fetch/client.js), so
+    // it only trips on real job text. The biggest board (Bjak) is ~34 MB.
+    maxBodyBytes: 50 * 1024 * 1024,
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
   },
 
