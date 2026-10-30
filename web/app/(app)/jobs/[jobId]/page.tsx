@@ -2,10 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { cache } from "react";
+import Script from "next/script";
 import { getJobById } from "@/lib/query";
 import ScoreBadge from "@/components/ScoreBadge";
 import StatusButton from "@/components/StatusButton";
 import SourceTag from "@/components/SourceTag";
+import { hasContent } from "@/lib/content";
 
 // Scraper runs daily, so a day-old render is at most one scrape behind — and
 // crawlers re-fetching within the day hit the cache instead of a render.
@@ -62,6 +64,8 @@ export async function generateMetadata({
     },
     twitter: { card: "summary", title, description },
     alternates: { canonical: url },
+    // Expired or description-less: keep crawlers following links, out of the index.
+    ...(!hasContent(job) && { robots: { index: false, follow: true } }),
   };
 }
 
@@ -135,6 +139,17 @@ export default async function JobDetailPage({
 
   return (
     <div className="max-w-3xl mx-auto">
+      {/* Ads only where there's something to read (AdSense policy: no ads on
+          screens without publisher content). The feed is navigation, so none there.
+          ponytail: after a client-side hop back to the feed the library stays
+          loaded; Auto ads may still place there. Add per-page exclusions in AdSense if it does. */}
+      {hasContent(job) && (
+        <Script
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8450633668347138"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
+      )}
       <script
         type="application/ld+json"
         // job.title/description/company come from externally-scraped, employer-controlled

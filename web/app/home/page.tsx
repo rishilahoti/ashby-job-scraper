@@ -434,7 +434,10 @@ export default async function HomePage() {
               <a href="https://www.greenhouse.io" className="text-[#64748B] underline" target="_blank" rel="noopener noreferrer">
                 Greenhouse
               </a>{" "}
-              public APIs
+              public APIs ·{" "}
+              <a href="/privacy" className="text-[#64748B] underline">
+                Privacy
+              </a>
             </span>
           </div>
         </footer>
