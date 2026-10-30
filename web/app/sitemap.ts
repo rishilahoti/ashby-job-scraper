@@ -23,7 +23,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const { rows } = await query<{ job_id: string; created_at: string }>(
       `SELECT job_id, created_at
        FROM jobs
-       WHERE is_active = TRUE AND length(description) >= $1
+       WHERE is_active = TRUE AND length(btrim(description, E' \\t\\r\\n')) >= $1
        ORDER BY created_at DESC
        LIMIT 5000`,
       [MIN_DESCRIPTION_CHARS]

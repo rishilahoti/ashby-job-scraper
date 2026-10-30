@@ -26,7 +26,8 @@ export default function PrivacyPage() {
       <p className={P}>
         Signing in with Google, GitHub or an email code stores your email address, and your name and
         profile picture if the provider shares them. We also store the jobs you mark Applied or Ignored,
-        so they follow you across devices. Email sign-in codes are kept only until they expire.
+        so they follow you across devices. Email sign-in codes are stored hashed with your email address
+        and deleted about a day after they expire.
       </p>
 
       <h2 className={H2}>Stored in your browser</h2>
@@ -39,8 +40,9 @@ export default function PrivacyPage() {
       <h2 className={H2}>Match resume</h2>
       <p className={P}>
         Skills are matched inside your browser. If you ask us to read your years of experience, the
-        resume text is sent once to an AI model (Groq, or Google Gemini if Groq is busy) to get that
-        number. We don&apos;t save the resume.
+        resume text is sent to Groq&apos;s AI model to get that number. If Groq fails or gives an
+        unusable answer, the same text is also sent to Google Gemini, so either or both may receive
+        it. We don&apos;t save the resume.
       </p>
 
       <h2 className={H2}>Cookies</h2>
@@ -48,6 +50,13 @@ export default function PrivacyPage() {
         We set a sign-in cookie when you sign in, and a random survey cookie if you answer our one-question
         survey, so we don&apos;t ask you twice. Survey answers are stored with that random id, and with
         your account if you&apos;re signed in.
+      </p>
+
+      <h2 className={H2}>IP addresses</h2>
+      <p className={P}>
+        To stop abuse, we count requests per IP address when you request a sign-in code, add a
+        company, read your years of experience, or answer the survey. Those counts are deleted after
+        about a day.
       </p>
 
       <h2 className={H2}>Advertising</h2>
