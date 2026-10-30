@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "privacy-and-ads",
+    date: "2026-10-30",
+    title: "A privacy policy, and ads on job pages",
+    description:
+      "There's now a privacy policy (linked at the bottom of every page) that says what we store and how to remove it. Job pages with a full description may show a Google ad; the feed and empty listings won't.",
+  },
+  {
     id: "for-you-link",
     date: "2026-10-22",
     title: "A For you link to your matched jobs",

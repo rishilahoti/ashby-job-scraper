@@ -6,6 +6,8 @@ import { getJobById } from "@/lib/query";
 import ScoreBadge from "@/components/ScoreBadge";
 import StatusButton from "@/components/StatusButton";
 import SourceTag from "@/components/SourceTag";
+import { hasContent } from "@/lib/content";
+import AdsenseScript from "@/components/AdsenseScript";
 
 // Scraper runs daily, so a day-old render is at most one scrape behind — and
 // crawlers re-fetching within the day hit the cache instead of a render.
@@ -62,6 +64,8 @@ export async function generateMetadata({
     },
     twitter: { card: "summary", title, description },
     alternates: { canonical: url },
+    // Expired or description-less: keep crawlers following links, out of the index.
+    ...(!hasContent(job) && { robots: { index: false, follow: true } }),
   };
 }
 
@@ -135,6 +139,9 @@ export default async function JobDetailPage({
 
   return (
     <div className="max-w-3xl mx-auto">
+      {/* Ads only where there's something to read (AdSense policy: no ads on
+          screens without publisher content). The feed is navigation, so none there. */}
+      {hasContent(job) && <AdsenseScript />}
       <script
         type="application/ld+json"
         // job.title/description/company come from externally-scraped, employer-controlled

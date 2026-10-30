@@ -74,12 +74,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           {children}
         </ThemeProvider>
-        {/* AdSense: loads the library; Google decides placement once the site is approved. */}
-        <Script
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8450633668347138"
-          crossOrigin="anonymous"
-          strategy="afterInteractive"
-        />
         <Script
           src="https://stats.whatrunsindia.com/script.js"
           data-website-id="56758f43-f995-44cd-a81d-1b0d49a93b5c"

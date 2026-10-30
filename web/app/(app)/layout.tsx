@@ -1,3 +1,4 @@
+import Link from "next/link";
 import Header from "@/components/Header";
 import StatusProvider from "@/components/StatusProvider";
 import NotificationStack from "@/components/NotificationStack";
@@ -12,6 +13,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <StatusProvider>
           <Header />
           <main className="container-main py-6">{children}</main>
+          <footer className="container-main pb-8 text-xs text-ink-muted">
+            <Link href="/privacy" className="hover:text-ink transition-colors">Privacy policy</Link>
+          </footer>
           <NotificationStack />
         </StatusProvider>
       </SessionProvider>
