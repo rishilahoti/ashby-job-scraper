@@ -1,6 +1,7 @@
 // Finds Shopify brands worldwide and the addresses they publish on their own
 // sites. Public pages only, one request at a time.
 const dns = require('dns').promises;
+const net = require('net');
 const { logger, delay, timeLimit } = require('../utils');
 const { fetchCdx, getLatestCdxIndexId } = require('../discovery');
 const { adFacts, addAdvertisers } = require('./ads');
@@ -9,6 +10,9 @@ const SEED = require('./seed-hosts.json');
 const UA = 'Mozilla/5.0 (compatible; WhatRunsIndia-store-check/1.0; +https://whatrunsindia.com)';
 const PAGES = ['/', '/pages/contact', '/pages/contact-us', '/pages/about', '/pages/about-us', '/policies/privacy-policy', '/policies/terms-of-service', '/policies/refund-policy', '/policies/shipping-policy'];
 const CURSOR_KEY = 'outreach_cdx_cursor';
+// Hundreds of unknown sites feed this: a page past this size is skipped.
+const MAX_PAGE_BYTES = 8 * 1048576;
+const MAX_REDIRECTS = 5;
 const MIN_PRODUCTS = 5;
 // Past this they have an in-house studio and won't read a cold email.
 const MAX_PRODUCTS = 2500;
@@ -54,7 +58,26 @@ function isJunk(email) {
     || /(^|\.)(shopify\.com|myshopify\.com|shopifypreview\.com|w3\.org|schema\.org|wixpress\.com|cloudflare\.com|googleusercontent\.com|klaviyo\.com|judge\.me)$/.test(domain);
 }
 
-const withoutScripts = (html) => html.replace(/<script\b[\s\S]*?<\/script[^>]*>/gi, ' ').replace(/<style\b[\s\S]*?<\/style[^>]*>/gi, ' ');
+// A plain scan, because a lazy regex here goes quadratic on a page full of
+// unclosed <script> tags.
+function withoutBlock(html, tag) {
+  const lower = html.toLowerCase();
+  let out = '';
+  let at = 0;
+  for (;;) {
+    const open = lower.indexOf(`<${tag}`, at);
+    if (open < 0) return out + html.slice(at);
+    out += `${html.slice(at, open)} `;
+    const close = lower.indexOf(`</${tag}`, open);
+    const end = close < 0 ? -1 : lower.indexOf('>', close);
+    if (end < 0) return out;
+    at = end + 1;
+  }
+}
+
+// One space between words first, so nothing below backtracks on long runs.
+const withoutScripts = (html) => withoutBlock(withoutBlock(html, 'script'), 'style').replace(/\s+/g, ' ');
+const withoutTags = (text) => text.replace(/<[^<>]*>/g, ' ');
 
 function extractEmails(html) {
   const clean = withoutScripts(html);
@@ -64,9 +87,10 @@ function extractEmails(html) {
   for (const m of text.matchAll(/mailto:([^"'?\s>]+)/gi)) {
     let target = m[1];
     try { target = decodeURIComponent(target); } catch { /* a stray % in a mailto */ }
-    for (const x of target.matchAll(EMAIL)) found.add(x[0].toLowerCase());
+    for (const x of target.slice(0, 320).matchAll(EMAIL)) found.add(x[0].toLowerCase());
   }
-  for (const x of text.replace(/<[^>]+>/g, ' ').matchAll(EMAIL)) found.add(x[0].toLowerCase());
+  // No address is this long, and the email pattern is slow on endless tokens.
+  for (const x of withoutTags(text).replace(/\S{320,}/g, ' ').matchAll(EMAIL)) found.add(x[0].toLowerCase());
   return [...found].filter((e) => !isJunk(e));
 }
 
@@ -143,25 +167,73 @@ function storeFacts(meta, products, now = new Date()) {
   return facts;
 }
 
-async function get(url) {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    await delay(1100);
-    let res;
+const PRIVATE_RANGES = new net.BlockList();
+for (const [address, prefix] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.168.0.0', 16]]) PRIVATE_RANGES.addSubnet(address, prefix, 'ipv4');
+for (const [address, prefix] of [['::1', 128], ['fc00::', 7], ['fe80::', 10]]) PRIVATE_RANGES.addSubnet(address, prefix, 'ipv6');
+
+const isPlainHostname = (host) => host.length <= 253 && /^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/i.test(host);
+const isPrivateAddress = ({ address, family }) => PRIVATE_RANGES.check(address, family === 6 ? 'ipv6' : 'ipv4');
+
+// Store domains and redirects come from the sites themselves, so each hop is
+// checked before we connect. ponytail: checked, not pinned, so DNS rebinding
+// could still slip through. Pin the address if this ever handles secrets.
+async function isPublicHost(host) {
+  if (!isPlainHostname(host)) return false;
+  const addresses = await dns.lookup(host, { all: true }).catch(() => []);
+  return addresses.length > 0 && !addresses.some(isPrivateAddress);
+}
+
+async function readCapped(res) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of res.body) {
+    size += chunk.length;
+    if (size > MAX_PAGE_BYTES) return null;
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+async function get(firstUrl) {
+  let url = firstUrl;
+  let rateLimited = false;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    let target;
     try {
-      res = await timeLimit(fetch(url, { headers: { 'user-agent': UA }, redirect: 'follow', signal: AbortSignal.timeout(15000) }), 20000);
+      target = new URL(url);
     } catch {
       return null;
     }
-    if ((res.status === 429 || res.status === 430) && !attempt) {
+    if (target.protocol !== 'https:' || target.port || target.username || !(await isPublicHost(target.hostname))) return null;
+    await delay(1100);
+    let res;
+    try {
+      res = await timeLimit(fetch(target, { headers: { 'user-agent': UA }, redirect: 'manual', signal: AbortSignal.timeout(15000) }), 20000);
+    } catch {
+      return null;
+    }
+    const location = res.headers.get('location');
+    if (res.status >= 300 && res.status < 400 && location) {
+      await res.body?.cancel();
+      try {
+        url = new URL(location, target).href;
+      } catch {
+        return null;
+      }
+      continue;
+    }
+    if ((res.status === 429 || res.status === 430) && !rateLimited) {
+      rateLimited = true;
       await res.body?.cancel();
       await delay(20000);
+      hop--;
       continue;
     }
     if (res.status !== 200) {
       await res.body?.cancel();
       return null;
     }
-    return timeLimit(res.text(), 20000).catch(() => null);
+    return timeLimit(readCapped(res), 20000).catch(() => null);
   }
   return null;
 }
@@ -188,7 +260,7 @@ async function readStore(host, meta, ad) {
     const html = await get(base + page);
     if (!html) continue;
     extractEmails(html).forEach((e) => emails.add(e));
-    if (!person) person = publishedName(decode(withoutScripts(html)).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '));
+    if (!person) person = publishedName(withoutTags(decode(withoutScripts(html))));
   }
   const usable = [];
   for (const contact of pickContacts([...emails], domain, person)) {
@@ -270,6 +342,8 @@ async function collectBrands(pool, { target = 40, minutes = 25 } = {}) {
     const { rows } = await pool.query(`SELECT host, ad FROM outreach_hosts WHERE checked_at IS NULL ORDER BY source = 'meta-ads' DESC, source = 'seed' DESC, host LIMIT 1`);
     if (!rows[0]) break;
     const { host, ad } = rows[0];
+    // Marked first: a page that wedges the scrape is never picked up again.
+    await pool.query(`UPDATE outreach_hosts SET checked_at = NOW(), outcome = 'started' WHERE host = $1`, [host]);
     let outcome = 'outside target markets';
     try {
       const meta = await targetStore(host);
@@ -291,4 +365,4 @@ async function collectBrands(pool, { target = 40, minutes = 25 } = {}) {
   return { checked, added };
 }
 
-module.exports = { extractEmails, publishedName, pickContacts, storeFacts, collectBrands, isOwnDomain, MARKETS };
+module.exports = { isPlainHostname, isPrivateAddress, extractEmails, publishedName, pickContacts, storeFacts, collectBrands, isOwnDomain, MARKETS };

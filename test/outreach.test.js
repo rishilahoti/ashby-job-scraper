@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { extractEmails, publishedName, pickContacts, storeFacts } = require('../src/outreach/stores');
+const { isPlainHostname, isPrivateAddress, extractEmails, publishedName, pickContacts, storeFacts } = require('../src/outreach/stores');
 const { advertisers, adFacts } = require('../src/outreach/ads');
 const { openerProblem, buildEmail, CAL } = require('../src/outreach/email');
 const { dailyCap, currentFacts, gapMs, inSendWindow } = require('../src/outreach');
@@ -14,6 +14,25 @@ test('extractEmails finds real addresses and drops page noise', () => {
   assert.deepEqual(extractEmails('<a href="mailto:a@brand.in?subject=x">m</a>'), ['a@brand.in']);
   assert.deepEqual(extractEmails('<p>logo@2x.png you@example.com x@shopify.com</p>'), []);
   assert.deepEqual(extractEmails('<script>"a@brand.in"</script>'), []);
+});
+
+test('extractEmails stays fast on hostile pages', () => {
+  assert.deepEqual(extractEmails('<script>"a@brand.in"</script ><p>b@brand.in</p>'), ['b@brand.in']);
+  const started = Date.now();
+  extractEmails('<script'.repeat(200000));
+  extractEmails('<'.repeat(1000000));
+  extractEmails(`${'a.'.repeat(500000)}@`);
+  assert.ok(Date.now() - started < 3000);
+});
+
+test('only public hostnames are fetched', () => {
+  for (const host of ['brand.com', 'shop.brand.co.in', 'x-y.myshopify.com']) assert.equal(isPlainHostname(host), true, host);
+  for (const host of ['localhost', 'db', '127.0.0.1', '169.254.169.254', 'brand.com:5432', 'a@brand.com', 'brand.com/x', '[::1]']) assert.equal(isPlainHostname(host), false, host);
+  assert.equal(isPrivateAddress({ address: '169.254.169.254', family: 4 }), true);
+  assert.equal(isPrivateAddress({ address: '10.0.0.8', family: 4 }), true);
+  assert.equal(isPrivateAddress({ address: '::1', family: 6 }), true);
+  assert.equal(isPrivateAddress({ address: '::ffff:127.0.0.1', family: 6 }), true);
+  assert.equal(isPrivateAddress({ address: '23.227.38.65', family: 4 }), false);
 });
 
 test('publishedName needs a label or an honorific, and rejects page words', () => {
