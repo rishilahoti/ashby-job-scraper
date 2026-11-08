@@ -54,7 +54,7 @@ function isJunk(email) {
     || /(^|\.)(shopify\.com|myshopify\.com|shopifypreview\.com|w3\.org|schema\.org|wixpress\.com|cloudflare\.com|googleusercontent\.com|klaviyo\.com|judge\.me)$/.test(domain);
 }
 
-const withoutScripts = (html) => html.replace(/<script\b[\s\S]*?<\/script>/gi, ' ').replace(/<style\b[\s\S]*?<\/style>/gi, ' ');
+const withoutScripts = (html) => html.replace(/<script\b[\s\S]*?<\/script[^>]*>/gi, ' ').replace(/<style\b[\s\S]*?<\/style[^>]*>/gi, ' ');
 
 function extractEmails(html) {
   const clean = withoutScripts(html);
@@ -180,7 +180,7 @@ const hasMail = (domain) => dns.resolveMx(domain).then((r) => r.length > 0, () =
 
 // { domain, name, facts, contacts } or null when there's nobody to write to.
 async function readStore(host, meta, ad) {
-  const domain = (meta.domain && !meta.domain.endsWith('myshopify.com') ? meta.domain : host).replace(/^www\./, '');
+  const domain = (meta.domain && !meta.domain.endsWith('.myshopify.com') ? meta.domain : host).replace(/^www\./, '');
   const base = `https://${domain}`;
   const emails = new Set();
   let person = null;
