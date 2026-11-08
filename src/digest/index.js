@@ -5,7 +5,6 @@ const config = require('../config');
 const { logger, timeLimit } = require('../utils');
 const { buildDigest, copyFacts } = require('./content');
 const { writeCopy } = require('./writer');
-const linkedin = require('../linkedin');
 
 const REPO = 'rishilahoti/ashby-job-scraper';
 
@@ -155,11 +154,7 @@ async function runDigest(pool, { since, dryRun = false } = {}) {
   if (!since) since = (await lastDigestAt(pool)) || new Date(until - 23 * 60 * 60 * 1000);
   const data = await collectDigestData(pool, { since });
   const { copy, note } = await writeCopy(copyFacts(data));
-  // The update, then the jobs post twice; a day without new software jobs
-  // uses only the first slot, and a late digest only the slots still ahead.
-  const slots = linkedin.enabled() ? linkedin.postSlots(3) : [];
-  const late = linkedin.enabled() && !slots.length ? ' LinkedIn: today\'s posting times have passed, so nothing posts itself.' : '';
-  let email = buildDigest({ ...data, copy, copyNote: note + late, postAt: slots.length ? slots : null });
+  const email = buildDigest({ ...data, copy, copyNote: note });
 
   if (dryRun) {
     fs.mkdirSync(config.notify.reportsDir, { recursive: true });
@@ -177,19 +172,6 @@ async function runDigest(pool, { since, dryRun = false } = {}) {
   }
   const from = process.env.EMAIL_FROM || process.env.EMAIL_SERVER_USER;
   const to = process.env.DIGEST_EMAIL_TO || 'rishilahoti99@gmail.com';
-  // Queued before the email goes out, so the email says what actually
-  // happened. Best effort: when nothing is queued, it has the posts to copy.
-  if (slots.length) {
-    let problem = null;
-    try {
-      if (await linkedin.schedulePosts(pool, email.posts, slots)) logger.info(`Queued ${Math.min(email.posts.length, slots.length)} LinkedIn posts`);
-      else problem = 'an earlier digest already queued today\'s posts';
-    } catch (err) {
-      problem = `queueing them failed (${err.message})`;
-      logger.error(`Queueing LinkedIn posts failed: ${err.message}`);
-    }
-    if (problem) email = buildDigest({ ...data, copy, copyNote: `${note} LinkedIn: ${problem}, so nothing posts itself.`, postAt: null });
-  }
   await transport.sendMail({ from: `Ashby Jobs <${from}>`, to, subject: email.subject, text: email.text, html: email.html });
   logger.info(`Daily digest sent to ${to}`);
   // Where the next digest starts. `until` is when this one began collecting,
@@ -202,4 +184,4 @@ async function runDigest(pool, { since, dryRun = false } = {}) {
   return email;
 }
 
-module.exports = { runDigest, collectDigestData, lastDigestAt };
+module.exports = { runDigest, collectDigestData, lastDigestAt, smtpTransport };

@@ -12,12 +12,12 @@ test('littleText escapes what LinkedIn reserves and keeps hashtags', () => {
   assert.equal(littleText('#Hiring #OpenToWork\n#TechJobs'), '#Hiring #OpenToWork\n#TechJobs');
 });
 
-test('postSlots: 09:00, 15:00 and 21:00 IST; a late digest keeps only the times still ahead', () => {
+test('postSlots: 10:00 and 18:00 IST on weekdays; a late run keeps only the times still ahead', () => {
   const iso = (dates) => dates.map((d) => d.toISOString());
-  assert.deepEqual(iso(postSlots(3, new Date('2026-10-09T00:15:00Z'))), [
-    '2026-10-09T03:30:00.000Z', '2026-10-09T09:30:00.000Z', '2026-10-09T15:30:00.000Z',
-  ]);
-  // 10:30 IST: 09:00 has passed, 15:00 and 21:00 stay put.
-  assert.deepEqual(iso(postSlots(3, new Date('2026-10-09T05:00:00Z'))), ['2026-10-09T09:30:00.000Z', '2026-10-09T15:30:00.000Z']);
-  assert.deepEqual(postSlots(3, new Date('2026-10-09T16:00:00Z')), []);
+  assert.deepEqual(iso(postSlots(new Date('2026-11-09T01:30:00Z'))), ['2026-11-09T04:30:00.000Z', '2026-11-09T12:30:00.000Z']);
+  // 11:00 IST: 10:00 has passed.
+  assert.deepEqual(iso(postSlots(new Date('2026-11-09T05:30:00Z'))), ['2026-11-09T12:30:00.000Z']);
+  assert.deepEqual(postSlots(new Date('2026-11-09T13:00:00Z')), []);
+  // A Saturday.
+  assert.deepEqual(postSlots(new Date('2026-11-07T01:30:00Z')), []);
 });

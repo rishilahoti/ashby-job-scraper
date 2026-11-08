@@ -1,4 +1,4 @@
-const { logger, delay } = require('../utils');
+const { logger, delay, timeLimit } = require('../utils');
 const { fetchJobBoard } = require('../fetch');
 const { loadRegistry, isValidSlug } = require('../sources');
 const store = require('../store');
@@ -56,8 +56,8 @@ async function fetchCdx(url) {
   for (let attempt = 1; attempt <= CDX_ATTEMPTS; attempt++) {
     let waitMs = 15000 * 2 ** (attempt - 1);
     try {
-      const res = await fetch(url);
-      if (res.ok) return await res.text();
+      const res = await timeLimit(fetch(url), 120000);
+      if (res.ok) return await timeLimit(res.text(), 120000);
       lastError = new Error(`Common Crawl returned HTTP ${res.status}`);
       const retryAfter = Number(res.headers.get('retry-after'));
       if (retryAfter > 0) waitMs = Math.min(retryAfter, 120) * 1000;
@@ -242,4 +242,4 @@ async function discoverCompanies({ source, cdxLimit = 3000, verifyLimit = 300, d
   return { candidates: candidates.length, unknown: unknown.length, checked, added };
 }
 
-module.exports = { discoverCompanies, slugFromCrawledUrl };
+module.exports = { discoverCompanies, slugFromCrawledUrl, fetchCdx, getLatestCdxIndexId };

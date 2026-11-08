@@ -83,13 +83,13 @@ function checkCopy(copy, facts) {
   return null;
 }
 
-async function askGroq(key, facts) {
+async function askGroq(key, system, user) {
   const res = await timeLimit(fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: MODEL,
-      messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: `FACTS:\n${JSON.stringify(facts, null, 1)}` }],
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
       response_format: { type: 'json_object' },
       temperature: 0.9,
       reasoning_effort: 'medium',
@@ -109,7 +109,7 @@ async function writeCopy(facts) {
   let problem;
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const copy = await askGroq(key, facts);
+      const copy = await askGroq(key, SYSTEM, `FACTS:\n${JSON.stringify(facts, null, 1)}`);
       problem = checkCopy(copy, facts);
       if (!problem) return { copy, note: `Wording by Groq (${MODEL}), numbers from the database.` };
     } catch (err) {
@@ -120,4 +120,4 @@ async function writeCopy(facts) {
   return { copy: null, note: `Template copy: Groq's draft failed a check (${problem}).` };
 }
 
-module.exports = { writeCopy, checkCopy };
+module.exports = { writeCopy, checkCopy, askGroq };

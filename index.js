@@ -80,6 +80,58 @@ program
   });
 
 program
+  .command('outreach-collect')
+  .description('Run the daily brand scrape now')
+  .option('--target <n>', 'stop after this many new brands', (v) => parseInt(v, 10), 40)
+  .option('--minutes <n>', 'stop after this long', (v) => parseInt(v, 10), 25)
+  .action(async (options) => {
+    const store = require('./src/store');
+    const { collectBrands } = require('./src/outreach/stores');
+    try {
+      await store.initDb();
+      await collectBrands(store.getPool(), options);
+    } catch (err) {
+      logger.error(`Brand scrape failed: ${err.message}`);
+      process.exit(1);
+    } finally {
+      await store.closeDb();
+    }
+  });
+
+program
+  .command('outreach-preview')
+  .description('Email yourself the sequence for the best few brands. Nobody else gets anything and nothing is recorded')
+  .option('--count <n>', 'how many brands', (v) => parseInt(v, 10), 3)
+  .action(async (options) => {
+    const store = require('./src/store');
+    const { previewTo } = require('./src/outreach');
+    try {
+      await previewTo(store.getPool(), process.env.DIGEST_EMAIL_TO || process.env.EMAIL_SERVER_USER, options.count);
+    } catch (err) {
+      logger.error(`Preview failed: ${err.message}`);
+      process.exit(1);
+    } finally {
+      await store.closeDb();
+    }
+  });
+
+program
+  .command('marketing-preview')
+  .description('Write today\'s posts and print them, without queueing or sending anything')
+  .action(async () => {
+    const store = require('./src/store');
+    const { buildDay } = require('./src/marketing');
+    try {
+      console.log(JSON.stringify(await buildDay(store.getPool(), new Date(), { queue: false }), null, 2));
+    } catch (err) {
+      logger.error(`Preview failed: ${err.message}`);
+      process.exit(1);
+    } finally {
+      await store.closeDb();
+    }
+  });
+
+program
   .command('migrate')
   .description('Run one-time database backfills that don\'t run automatically on startup (currently: canonicalize existing job locations, resplit compound search terms), then re-score and regroup jobs if the rules changed')
   .action(async () => {

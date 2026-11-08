@@ -189,6 +189,64 @@ async function migrateSchema(p) {
     )
   `);
 
+  // Cold outreach (src/outreach). A host is one store to look at; a brand is a
+  // store worth writing to, and its contacts are the people written to.
+  // (contact_id, step) being unique is what stops an email going out twice.
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS outreach_hosts (
+      host TEXT PRIMARY KEY,
+      source TEXT NOT NULL,
+      ad JSONB,
+      checked_at TIMESTAMPTZ,
+      outcome TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await p.query(`CREATE INDEX IF NOT EXISTS outreach_hosts_unchecked ON outreach_hosts (source, host) WHERE checked_at IS NULL`);
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS outreach_brands (
+      id SERIAL PRIMARY KEY,
+      domain TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      country TEXT NOT NULL,
+      tz TEXT NOT NULL,
+      facts JSONB NOT NULL,
+      replied_at TIMESTAMPTZ,
+      reply_from TEXT,
+      reply_subject TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS outreach_contacts (
+      id SERIAL PRIMARY KEY,
+      brand_id INT NOT NULL REFERENCES outreach_brands(id),
+      email TEXT NOT NULL UNIQUE,
+      name TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      step INT NOT NULL DEFAULT 0,
+      next_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      thread_id TEXT,
+      subject TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await p.query(`CREATE INDEX IF NOT EXISTS outreach_contacts_due ON outreach_contacts (next_at) WHERE status = 'active'`);
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS outreach_sends (
+      id SERIAL PRIMARY KEY,
+      contact_id INT NOT NULL REFERENCES outreach_contacts(id),
+      step INT NOT NULL,
+      subject TEXT NOT NULL,
+      body TEXT NOT NULL,
+      message_id TEXT,
+      sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      error TEXT,
+      UNIQUE (contact_id, step)
+    )
+  `);
+  await p.query(`ALTER TABLE linkedin_posts ADD COLUMN IF NOT EXISTS image TEXT`);
+
   // --- one-time migrations for existing deployments ---
 
   // structured salary data (min/max/currency), where the source exposes it —

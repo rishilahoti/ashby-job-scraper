@@ -209,14 +209,10 @@ function buildDigest(data) {
   ];
   // IST: the one person reading this is in India.
   const ist = (d) => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
-  // A late digest gets fewer slots than posts (postSlots).
-  const when = (i) => (data.postAt ? (data.postAt[i] ? ` · posts itself at ${ist(data.postAt[i])} IST` : ' · not posted: its time today has passed') : '');
-  const intro = data.postAt
-    ? `these post themselves on LinkedIn at ${joinAnd(data.postAt.slice(0, 1 + jobPosts.length).map(ist))} IST`
-    : 'posts below are ready to copy into LinkedIn';
+  const intro = 'posts below are ready to copy into LinkedIn';
   const posts = [
-    [`Post 1: platform update${when(0)}`, post1],
-    ...jobPosts.map((p, i) => [`Post ${i + 2}: today's jobs (hook ${'AB'[i]})${when(i + 1)}`, p]),
+    ['Post 1: platform update', post1],
+    ...jobPosts.map((p, i) => [`Post ${i + 2}: today's jobs (hook ${'AB'[i]})`, p]),
   ];
   const noJobsNote = picked.length ? '' : 'No new software jobs in this window, so skip the jobs posts today.';
   const jobLines = picked.map((j, i) => `${i + 1}. [${j.score}] ${NICHE_LABELS[j.niche].name} · ${j.title} at ${j.company}${where(j) ? ` · ${where(j)}` : ''} · ${jobUrl(j)}`);

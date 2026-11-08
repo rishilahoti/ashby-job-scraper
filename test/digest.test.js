@@ -6,7 +6,7 @@ const { computeStoredScore } = require('../src/intelligence/rules-engine');
 const { classifyNiche, NICHE_LABELS } = require('../src/digest/niche');
 const { buildDigest, pickTopJobs, copyFacts } = require('../src/digest/content');
 const { checkCopy } = require('../src/digest/writer');
-const { postSlots, littleText } = require('../src/linkedin');
+const { littleText } = require('../src/linkedin');
 
 test('every niche in rules.json has a display label', () => {
   for (const niche of Object.keys(rules.niches)) assert.ok(NICHE_LABELS[niche], niche);
@@ -204,14 +204,6 @@ test('post 1: a busy day\'s shipped list gives way so the post fits LinkedIn', (
   assert.ok(littleText(post1).length <= 3000, String(littleText(post1).length));
   assert.match(post1, /\n→ …and \d+ more\n/);
   assert.match(post1, /\nWhat broke:\n.*\n\nFree, no sign-up: .*\n\n#BuildInPublic/);
-});
-
-test('buildDigest: the email says when each post goes out', () => {
-  const postAt = postSlots(3, new Date('2026-10-05T00:10:00Z'));
-  const { text, posts } = buildDigest({ ...baseData(), postAt });
-  assert.match(text, /These post themselves on LinkedIn at 09:00, 15:00 and 21:00 IST\./);
-  assert.match(text, /== Post 3: today's jobs \(hook B\) · posts itself at 21:00 IST/);
-  assert.equal(posts.length, 3);
 });
 
 test('buildDigest: no new software jobs means no jobs posts, and says so', () => {
