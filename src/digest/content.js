@@ -210,7 +210,7 @@ function buildDigest(data) {
   // IST: the one person reading this is in India.
   const ist = (d) => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
   // A late digest gets fewer slots than posts (postSlots).
-  const when = (i) => (data.postAt ? (data.postAt[i] ? ` · posts itself at ${ist(data.postAt[i])} IST` : ' · not posted: its time today has passed') : '');
+  const when = (i) => (data.postAt ? (data.postAt[i] ? ` · posts itself at ${ist(data.postAt[i])} IST` : ' · not posted automatically') : '');
   const intro = data.postAt
     ? `these post themselves on LinkedIn at ${joinAnd(data.postAt.slice(0, 1 + jobPosts.length).map(ist))} IST`
     : 'posts below are ready to copy into LinkedIn';
