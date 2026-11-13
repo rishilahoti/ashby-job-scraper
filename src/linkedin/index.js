@@ -18,10 +18,12 @@ const enabled = () => Boolean(process.env.LINKEDIN_ACCESS_TOKEN);
 
 // Today's fixed slots still ahead of `now`, at most `count`. A late digest
 // keeps the times and drops the posts that missed theirs, last ones first
-// (the second jobs post is a repeat).
+// (the second jobs post is a repeat). Saturdays and Sundays only: weekdays
+// belong to WhatRunsIndia on the same profile.
 function postSlots(count, now = new Date()) {
   const first = new Date(now);
   first.setUTCHours(FIRST_SLOT_UTC[0], FIRST_SLOT_UTC[1], 0, 0);
+  if (![0, 6].includes(first.getUTCDay())) return [];
   return Array.from({ length: count }, (_, i) => new Date(first.getTime() + i * GAP_MS)).filter((slot) => slot >= now);
 }
 
