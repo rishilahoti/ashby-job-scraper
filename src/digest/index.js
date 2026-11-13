@@ -155,10 +155,10 @@ async function runDigest(pool, { since, dryRun = false } = {}) {
   if (!since) since = (await lastDigestAt(pool)) || new Date(until - 23 * 60 * 60 * 1000);
   const data = await collectDigestData(pool, { since });
   const { copy, note } = await writeCopy(copyFacts(data));
-  // Only the 09:00 IST update posts itself; the jobs posts stay in the email
-  // to copy by hand. A late digest posts nothing.
-  const slots = linkedin.enabled() ? linkedin.postSlots(1) : [];
-  const late = linkedin.enabled() && !slots.length ? ' LinkedIn: today\'s posting times have passed, so nothing posts itself.' : '';
+  // Weekends: the update, then the jobs post twice; a day without new software
+  // jobs uses only the first slot, and a late digest only the slots still ahead.
+  const slots = linkedin.enabled() ? linkedin.postSlots(3) : [];
+  const late = linkedin.enabled() && !slots.length ? ' LinkedIn: nothing posts itself today (weekends only, at times still ahead).' : '';
   let email = buildDigest({ ...data, copy, copyNote: note + late, postAt: slots.length ? slots : null });
 
   if (dryRun) {

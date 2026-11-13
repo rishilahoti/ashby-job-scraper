@@ -207,7 +207,7 @@ test('post 1: a busy day\'s shipped list gives way so the post fits LinkedIn', (
 });
 
 test('buildDigest: the email says when each post goes out', () => {
-  const postAt = postSlots(3, new Date('2026-10-05T00:10:00Z'));
+  const postAt = postSlots(3, new Date('2026-10-04T00:10:00Z')); // a Sunday
   const { text, posts } = buildDigest({ ...baseData(), postAt });
   assert.match(text, /These post themselves on LinkedIn at 09:00, 15:00 and 21:00 IST\./);
   assert.match(text, /== Post 3: today's jobs \(hook B\) · posts itself at 21:00 IST/);
