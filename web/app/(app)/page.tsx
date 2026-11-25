@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { getJobs, getTopCompanies, getStats, getLocations } from "@/lib/query";
+import { getJobs, getTopCompanies, getStats, getTopLocations } from "@/lib/query";
 import { POSITIVE_TAG_OPTIONS } from "@/lib/scoring";
 import { DEPARTMENT_GROUPS } from "../../../src/normalize/departments";
 import { PROVIDER_NAMES } from "@/lib/providers";
@@ -46,7 +46,7 @@ export default async function FeedPage() {
     getJobs(),
     getTopCompanies(),
     getStats(),
-    getLocations(),
+    getTopLocations(),
   ]);
 
   const websiteSchema = {

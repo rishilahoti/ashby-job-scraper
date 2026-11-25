@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "faster-filters",
+    date: "2026-11-25",
+    title: "Faster location filter and search, lighter feed",
+    description:
+      "Filtering by location now answers right away instead of taking several seconds, and broad searches like \"product manager\" are about three times faster. The location list shows the 1,000 places with the most jobs, which makes the feed page about three-quarters smaller; search still finds any location.",
+  },
+  {
     id: "workday-fresh",
     date: "2026-11-25",
     title: "Workday jobs are up to date again",

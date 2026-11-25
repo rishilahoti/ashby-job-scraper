@@ -82,7 +82,7 @@ function ChecklistDropdown({
             >
               <input
                 type="checkbox"
-                checked={selected.includes(value)}
+                checked={selectedSet.has(value)}
                 onChange={() => toggle(value)}
                 className="cursor-pointer"
               />
@@ -206,7 +206,10 @@ export default function Filters({
       {/* Location — searchable checklist */}
       <ChecklistDropdown
         label="All locations"
-        options={locations.map((location) => ({ value: location, label: location }))}
+        // The list is the top locations only; a ?location= link to another one still shows it.
+        options={[...current.locations.filter((l) => !locations.includes(l)), ...locations].map(
+          (location) => ({ value: location, label: location })
+        )}
         selected={current.locations}
         onChange={(next) => setParam("location", next.join(","))}
       />

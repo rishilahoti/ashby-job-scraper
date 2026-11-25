@@ -221,10 +221,12 @@ async function migrateSchema(p) {
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_published ON jobs (published_at DESC) WHERE is_active = TRUE`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_score ON jobs (base_score DESC) WHERE is_active = TRUE`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_remote ON jobs (remote)`);
-  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_department ON jobs (department)`);
-  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_team ON jobs (team)`);
-  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_location ON jobs (location)`);
-  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_location ON jobs (location) WHERE is_active = TRUE`);
+  // Nothing filters on the raw department/team/location columns (0 index scans in a month,
+  // 2026-11), yet every nightly upsert kept these up to date.
+  await p.query(`DROP INDEX IF EXISTS idx_jobs_department, idx_jobs_team, idx_jobs_location, idx_jobs_active_location`);
+  // The feed's location filter (web/lib/query.ts) matches LOWER(TRIM(location)), which a
+  // plain (location) index can't serve: 9.7 s per filtered page at 518K active jobs (2026-11).
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_location_lower ON jobs (LOWER(TRIM(location))) WHERE is_active = TRUE`);
   // The feed's company filter (web/lib/query.ts) matches LOWER(TRIM(company)); without
   // this, every company page scanned all of jobs (10 s at 660K rows, 2026-11).
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_company_lower ON jobs (LOWER(TRIM(company))) WHERE is_active = TRUE`);
