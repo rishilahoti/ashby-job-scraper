@@ -3,6 +3,7 @@ import { query } from "@/lib/db";
 // Reuses the scraper's own adapters (single source of truth for normalize logic —
 // see src/normalize/adapters/*.js) instead of a second, hand-kept-in-sync copy here.
 import { ADAPTERS } from "../../../../src/normalize";
+import { fetchHttp2 } from "../../../../src/utils/http2";
 // Same shared scoring core src/store/jobs.js's upsertJob uses — without this,
 // jobs added here got base_score 0 and no matched_keywords until their content
 // next changed and the scraper's own upsertJob happened to recompute them.
@@ -104,7 +105,8 @@ async function fetchWorkday(slug: string): Promise<FetchResult> {
 
   const jobs: Record<string, unknown>[] = [];
   for (let page = 0; page < WORKDAY_MAX_PAGES; page++) {
-    const res = await fetch(apiUrl, {
+    // HTTP/2: Workday's Cloudflare 429s every HTTP/1.1 request from Node (see src/utils/http2.js).
+    const res = await fetchHttp2(apiUrl, {
       method: "POST",
       headers: { ...HEADERS, "Content-Type": "application/json" },
       body: JSON.stringify({ appliedFacets: {}, limit: WORKDAY_PAGE_SIZE, offset: page * WORKDAY_PAGE_SIZE, searchText: "" }),

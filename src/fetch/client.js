@@ -1,5 +1,6 @@
 const config = require('../config');
 const { logger, delay, timeLimit } = require('../utils');
+const { fetchHttp2 } = require('../utils/http2');
 
 const DEFAULT_HEADERS = {
   'User-Agent': config.fetch.userAgent,
@@ -167,10 +168,11 @@ async function fetchOnce(url, options, slug, source, extractJobs, parse = JSON.p
     try {
       logger.debug(`Fetching ${slug} (${source}, attempt ${attempt}/${config.fetch.maxRetries})`);
       const { timeoutMs } = config.fetch;
-      const response = await timeLimit(fetch(url, {
+      const { http2, ...requestOptions } = options;
+      const response = await timeLimit((http2 ? fetchHttp2 : fetch)(url, {
         headers: DEFAULT_HEADERS,
         signal: AbortSignal.timeout(timeoutMs),
-        ...options,
+        ...requestOptions,
       }), timeoutMs);
 
       if (!response.ok) {
@@ -243,7 +245,8 @@ async function fetchWorkdayJobBoard(slug, source) {
     const body = JSON.stringify({ appliedFacets: {}, limit: WORKDAY_PAGE_SIZE, offset: page * WORKDAY_PAGE_SIZE, searchText: '' });
     const pageJobs = await fetchOnce(
       apiUrl,
-      { method: 'POST', headers: { ...DEFAULT_HEADERS, 'Content-Type': 'application/json' }, body },
+      // HTTP/2: Workday's Cloudflare 429s every HTTP/1.1 request from Node (see utils/http2.js).
+      { method: 'POST', headers: { ...DEFAULT_HEADERS, 'Content-Type': 'application/json' }, body, http2: true },
       slug, source,
       (data) => (Array.isArray(data?.jobPostings) ? data.jobPostings : null)
     );

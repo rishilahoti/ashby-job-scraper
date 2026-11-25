@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "workday-fresh",
+    date: "2026-11-25",
+    title: "Workday jobs are up to date again",
+    description:
+      "Workday's servers had been turning our checks away, so its listings went stale and some led to closed postings. Every Workday board is read again each night, and adding a Workday company from +Add works again.",
+  },
+  {
     id: "rippling",
     date: "2026-11-25",
     title: "Rippling, Personio and Breezy jobs, and closed jobs leave sooner",
