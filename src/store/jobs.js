@@ -8,26 +8,29 @@ const { departmentGroup, DEPARTMENT_RULES_VERSION } = require('../normalize/depa
 const MAX_SNAPSHOTS_PER_JOB = 2;
 
 // Cheap lookup used to skip re-sending unchanged descriptions over the wire.
-// Scoped by source too: two boards can share a company name (Acme on Ashby
-// and on Greenhouse), and each scrape would otherwise deactivate the other's jobs.
-async function getContentHashesForCompany(company, source) {
+// Scoped to the board (its slug), not just the company name: 2,318 boards share
+// a name with another board on the same ATS (a Workday tenant's career sites are
+// all "Alterra"), and each one's scrape deactivated the others' jobs (2026-11).
+// Rows with no board yet predate the column; they get it on their next scrape.
+async function getContentHashesForCompany(company, source, board) {
   const pool = getPool();
   const { rows } = await pool.query(
-    'SELECT job_id, content_hash FROM jobs WHERE company = $1 AND source = $2 AND is_active = TRUE',
-    [company, source]
+    `SELECT job_id, content_hash FROM jobs
+     WHERE company = $1 AND source = $2 AND (board = $3 OR board IS NULL) AND is_active = TRUE`,
+    [company, source, board]
   );
   return new Map(rows.map(r => [r.job_id, r.content_hash]));
 }
 
 // Bumps scraped_at/is_active without re-sending the (large) description
 // column: one query per board instead of one per job.
-async function touchJobs(company, jobIds, scrapedAt) {
+async function touchJobs(company, jobIds, scrapedAt, board) {
   if (jobIds.length === 0) return;
   const pool = getPool();
   await pool.query(
-    `UPDATE jobs SET scraped_at = $1, is_active = TRUE, updated_at = NOW()
+    `UPDATE jobs SET scraped_at = $1, is_active = TRUE, updated_at = NOW(), board = $4
      WHERE company = $2 AND job_id = ANY($3::text[])`,
-    [scrapedAt, company, jobIds]
+    [scrapedAt, company, jobIds, board]
   );
 }
 
@@ -44,13 +47,13 @@ async function upsertJob(job) {
         employment_type, remote, description,
         apply_url, job_url, published_at, scraped_at,
         compensation_summary, compensation_min, compensation_max, compensation_currency, compensation_interval,
-        content_hash, is_active, base_score, matched_keywords, department_group, min_years
+        content_hash, is_active, base_score, matched_keywords, department_group, min_years, board
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10,
         $11, $12, $13, $14,
         $15, $16, $17, $18, $19,
-        $20, TRUE, $21, $22, $23, $24
+        $20, TRUE, $21, $22, $23, $24, $25
       )
       ON CONFLICT (company, job_id) DO UPDATE SET
         source            = EXCLUDED.source,
@@ -79,6 +82,7 @@ async function upsertJob(job) {
         matched_keywords  = EXCLUDED.matched_keywords,
         department_group  = EXCLUDED.department_group,
         min_years         = EXCLUDED.min_years,
+        board             = EXCLUDED.board,
         updated_at        = NOW()
       RETURNING
         (xmax = 0)                                               AS was_inserted,
@@ -89,7 +93,7 @@ async function upsertJob(job) {
       job.applyUrl, job.jobUrl, job.publishedAt, job.scrapedAt,
       job.compensationSummary, job.compensationMin ?? null, job.compensationMax ?? null, job.compensationCurrency ?? null,
       job.compensationInterval ?? null, job.contentHash, baseScore, matchedKeywords,
-      departmentGroup(job.department, job.team, job.title), minYears,
+      departmentGroup(job.department, job.team, job.title), minYears, job.board ?? null,
     ]
   );
 
@@ -101,19 +105,20 @@ async function upsertJob(job) {
 
 // Deactivates the company's active jobs missing from this scrape and returns
 // them shaped like normalized jobs, for the JOB_REMOVED events.
-async function markRemovedJobs(company, activeJobIds, source) {
+async function markRemovedJobs(company, activeJobIds, source, board) {
   const pool = getPool();
   const { rows } = await pool.query(
     `UPDATE jobs
        SET is_active = FALSE, updated_at = NOW()
      WHERE company = $1
        AND source = $3
+       AND (board = $4 OR board IS NULL)
        AND is_active = TRUE
        AND NOT (job_id = ANY($2::text[]))
      RETURNING job_id AS "jobId", company, title, location, team, department,
                employment_type AS "employmentType", remote,
                apply_url AS "applyUrl", job_url AS "jobUrl"`,
-    [company, activeJobIds, source]
+    [company, activeJobIds, source, board]
   );
 
   if (rows.length > 0) logger.debug(`Marked ${rows.length} jobs as removed for ${company}`);

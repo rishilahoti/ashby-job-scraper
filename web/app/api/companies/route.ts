@@ -348,14 +348,14 @@ export async function POST(request: NextRequest) {
            apply_url, job_url, published_at, scraped_at,
            compensation_summary, compensation_min, compensation_max,
            compensation_currency, compensation_interval, content_hash, is_active,
-           base_score, matched_keywords, department_group, min_years
+           base_score, matched_keywords, department_group, min_years, board
          )
          SELECT "jobId", $2, $3, title, location, team, department,
                 "employmentType", remote, description,
                 "applyUrl", "jobUrl", "publishedAt", NOW(),
                 "compensationSummary", "compensationMin", "compensationMax",
                 "compensationCurrency", "compensationInterval", "contentHash", TRUE,
-                "baseScore", "matchedKeywords", "departmentGroup", "minYears"
+                "baseScore", "matchedKeywords", "departmentGroup", "minYears", $4
          FROM jsonb_to_recordset($1::jsonb) AS r(
            "jobId" text, title text, location text, team text, department text,
            "employmentType" text, remote boolean, description text,
@@ -394,8 +394,9 @@ export async function POST(request: NextRequest) {
            department_group  = EXCLUDED.department_group,
            min_years         = CASE WHEN EXCLUDED.description IS NULL AND jobs.description IS NOT NULL
                                     THEN jobs.min_years ELSE EXCLUDED.min_years END,
+           board             = EXCLUDED.board,
            updated_at        = NOW()`,
-        [JSON.stringify(payload), companyNameForJobs, source]
+        [JSON.stringify(payload), companyNameForJobs, source, slug]
       );
     }
 
@@ -407,9 +408,9 @@ export async function POST(request: NextRequest) {
     if (seenJobIds.length > 0) {
       const { rowCount } = await query(
         `UPDATE jobs SET is_active = FALSE, updated_at = NOW()
-         WHERE company = $1 AND source = $2 AND is_active = TRUE
+         WHERE company = $1 AND source = $2 AND (board = $4 OR board IS NULL) AND is_active = TRUE
            AND job_id != ALL($3::text[])`,
-        [companyNameForJobs, source, seenJobIds]
+        [companyNameForJobs, source, seenJobIds, slug]
       );
       removed = rowCount ?? 0;
     }
