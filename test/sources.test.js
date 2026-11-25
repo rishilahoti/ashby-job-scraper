@@ -18,6 +18,8 @@ test('all implemented ATS providers can be registered', () => {
     'rippling',
     'personio',
     'breezy',
+    'yc',
+    'wellfound',
   ]);
 });
 

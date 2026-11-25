@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "yc-wellfound",
+    date: "2026-11-26",
+    title: "Y Combinator and Wellfound startup jobs",
+    description:
+      "The feed now includes jobs from Y Combinator's startup job board and from Wellfound, with full descriptions and the salary and equity ranges they list. New YC companies that are hiring join on their own each day. You can also add a startup from +Add by pasting its YC or Wellfound page.",
+  },
+  {
     id: "faster-filters",
     date: "2026-11-25",
     title: "Faster location filter and search, lighter feed",
@@ -173,7 +180,7 @@ export interface AppNotification {
 
 // Changelog entries that also get a notification, newest first. Not every
 // entry deserves one: add an id here when a feature should be announced.
-const ANNOUNCED_IDS = ["resume-match", "more-providers", "department-groups", "role-and-tech-tags", "auth"];
+const ANNOUNCED_IDS = ["yc-wellfound", "resume-match", "more-providers", "department-groups", "role-and-tech-tags", "auth"];
 
 const shortDate = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });

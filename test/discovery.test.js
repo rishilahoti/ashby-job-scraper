@@ -76,3 +76,9 @@ test('Personio and Breezy boards come from their subdomains', () => {
   assert.equal(slugFromCrawledUrl('breezy', 'https://nexthire.breezy.hr/p/abc'), 'nexthire');
   assert.equal(slugFromCrawledUrl('breezy', 'https://www.breezy.hr/pricing'), null);
 });
+
+test('Wellfound boards are the second segment of /company/ URLs', () => {
+  assert.equal(slugFromCrawledUrl('wellfound', 'https://wellfound.com/company/fuzehq/jobs'), 'fuzehq');
+  assert.equal(slugFromCrawledUrl('wellfound', 'https://wellfound.com/company/100ms'), '100ms');
+  assert.equal(slugFromCrawledUrl('wellfound', 'https://wellfound.com/jobs/2448180-software-engineer'), null);
+});

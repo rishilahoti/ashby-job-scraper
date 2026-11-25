@@ -15,6 +15,8 @@ export const PROVIDERS = [
   { value: "rippling", label: "Rippling" },
   { value: "personio", label: "Personio" },
   { value: "breezy", label: "Breezy" },
+  { value: "yc", label: "Y Combinator" },
+  { value: "wellfound", label: "Wellfound" },
 ] as const;
 
 export const PROVIDER_NAMES = PROVIDERS.map((p) => p.label);
@@ -45,6 +47,8 @@ export const URL_PATTERNS: Record<Source, RegExp> = {
   rippling: /(?:https?:\/\/)?ats\.rippling\.com\/(?:(?:[a-zA-Z]{2}-[a-zA-Z]{2}|embed)\/)?([a-zA-Z0-9_-]+)/,
   personio: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.jobs\.personio\.(?:de|com)/,
   breezy: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.breezy\.hr/,
+  yc: /(?:https?:\/\/)?(?:www\.)?ycombinator\.com\/companies\/([a-zA-Z0-9_-]+)/,
+  wellfound: /(?:https?:\/\/)?(?:www\.)?wellfound\.com\/company\/([a-zA-Z0-9_-]+)/,
 };
 
 export function matchBoardUrl(input: string): { source: Source; slug: string } | null {

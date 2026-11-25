@@ -103,7 +103,7 @@ program
   .command('add <slug>')
   .description('Add a company to the source registry')
   .option('-n, --name <name>', 'Company display name')
-  .option('-s, --source <source>', 'ATS source: ashby, lever, greenhouse, workable, recruitee, teamtailor, pinpoint, smartrecruiters, workday, keka, rippling, personio, or breezy', 'ashby')
+  .option('-s, --source <source>', 'ATS source: ashby, lever, greenhouse, workable, recruitee, teamtailor, pinpoint, smartrecruiters, workday, keka, rippling, personio, breezy, yc (Y Combinator), or wellfound', 'ashby')
   .action((slug, options) => {
     const { addCompany } = require('./src/sources');
     const success = addCompany(slug, options.name, options.source);
@@ -117,7 +117,7 @@ program
 program
   .command('discover')
   .description('Crawl Common Crawl for new company boards, verify against the live API, and add them')
-  .requiredOption('-s, --source <source>', 'ashby, greenhouse, workable, smartrecruiters, recruitee, teamtailor, pinpoint, workday, keka, rippling, personio, or breezy (Lever blocks Common Crawl\'s bot, so it needs --from)')
+  .requiredOption('-s, --source <source>', 'ashby, greenhouse, workable, smartrecruiters, recruitee, teamtailor, pinpoint, workday, keka, rippling, personio, breezy, wellfound, or yc (Lever blocks Common Crawl\'s bot, so it needs --from)')
   .option('--from <file>', 'read candidate boards from a file (one "slug" or "slug<TAB>name" per line) instead of Common Crawl')
   .option('--cdx-limit <n>', 'max Common Crawl URLs to scan (path-based sources; subdomain sources read every page)', (v) => parseInt(v, 10), 3000)
   .option('--verify-limit <n>', 'max new candidates to verify against the live API', (v) => parseInt(v, 10), 300)

@@ -12,7 +12,7 @@ import { departmentGroup } from "../../../../src/normalize/departments";
 import rules from "../../../../src/config/rules.json";
 import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 import { readJson } from "@/lib/read-json";
-import { matchBoardUrl } from "@/lib/providers";
+import { PROVIDER_NAMES, matchBoardUrl } from "@/lib/providers";
 
 type Source = keyof typeof ADAPTERS;
 const SOURCES = Object.keys(ADAPTERS) as Source[];
@@ -161,6 +161,17 @@ async function fetchPersonio(slug: string): Promise<FetchResult> {
   return { ok: true, jobs: postings.map((posting) => ({ posting, slug })), companyName: null };
 }
 
+// YC and Wellfound are pages, not APIs: the scraper's adapter reads the jobs out
+// of the HTML, so both places parse it the same way.
+async function fetchPage(url: string, jobsFromPage: (html: string) => unknown[] | null): Promise<FetchResult> {
+  const res = await fetch(url, { headers: { ...HEADERS, Accept: "text/html" }, signal: AbortSignal.timeout(15000) });
+  if (!res.ok) return { ok: false, status: res.status };
+  const jobs = jobsFromPage(await res.text());
+  if (!jobs) return { ok: false, status: 502 };
+  const name = (jobs[0] as { companyName?: unknown } | undefined)?.companyName;
+  return { ok: true, jobs, companyName: typeof name === "string" ? name : null };
+}
+
 const SOURCE_CONFIG: Record<
   Source,
   {
@@ -227,6 +238,14 @@ const SOURCE_CONFIG: Record<
     fetch: (slug) => fetchJson(`https://${slug}.breezy.hr/json`, (d) => [d, d?.[0]?.company?.name]),
     boardUrl: (slug) => `https://${slug}.breezy.hr`,
   },
+  yc: {
+    fetch: (slug) => fetchPage(`https://www.ycombinator.com/companies/${slug}/jobs`, ADAPTERS.yc.jobsFromPage),
+    boardUrl: (slug) => `https://www.ycombinator.com/companies/${slug}/jobs`,
+  },
+  wellfound: {
+    fetch: (slug) => fetchPage(`https://wellfound.com/company/${slug}/jobs`, ADAPTERS.wellfound.jobsFromPage),
+    boardUrl: (slug) => `https://wellfound.com/company/${slug}/jobs`,
+  },
 };
 
 // Unauthenticated and, per job board, does up to WORKDAY_MAX_PAGES fetches
@@ -249,8 +268,7 @@ export async function POST(request: NextRequest) {
     if (!parsed) {
       return NextResponse.json(
         {
-          error:
-            "Invalid input. Provide a job board URL (Ashby, Lever, Greenhouse, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, Workday, Keka, Rippling, Personio, or Breezy) or a slug.",
+          error: `Invalid input. Provide a job board URL (${PROVIDER_NAMES.join(", ")}) or a slug.`,
         },
         { status: 400 }
       );
@@ -307,7 +325,7 @@ export async function POST(request: NextRequest) {
     for (const raw of "filterRaw" in adapter ? adapter.filterRaw(result.jobs) : result.jobs) {
       const job = adapter.normalizeJob(raw, companyNameForJobs) as NormalizedJob | null;
       if (!job) continue;
-      // Rippling and Breezy list jobs without descriptions; the scraper fetches them per
+      // Rippling, Breezy, YC and Wellfound list jobs without descriptions; the scraper fetches them per
       // job (src/diff/index.js). This suffix, the same one it uses, makes it try these.
       if (!job.description && "fetchDescription" in adapter) job.contentHash += ":nodesc";
       byId.set(job.jobId, job);

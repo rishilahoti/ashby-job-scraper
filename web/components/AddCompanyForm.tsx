@@ -28,6 +28,8 @@ const SOURCE_META: Record<Source, { label: string; domain: string; placeholder: 
   rippling: { label: "Rippling", domain: "ats.rippling.com", placeholder: "https://ats.rippling.com/company/jobs  or  company-slug" },
   personio: { label: "Personio", domain: "jobs.personio.de", placeholder: "https://company.jobs.personio.de  or  company-slug" },
   breezy: { label: "Breezy", domain: "breezy.hr", placeholder: "https://company.breezy.hr  or  company-slug" },
+  yc: { label: "Y Combinator", domain: "ycombinator.com", placeholder: "https://www.ycombinator.com/companies/company/jobs  or  company-slug" },
+  wellfound: { label: "Wellfound", domain: "wellfound.com", placeholder: "https://wellfound.com/company/company/jobs  or  company-slug" },
 };
 
 export default function AddCompanyForm() {
