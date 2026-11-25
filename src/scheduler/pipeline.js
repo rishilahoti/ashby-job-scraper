@@ -141,12 +141,12 @@ async function runPipeline() {
       logger.error(`Deactivating unseen jobs failed: ${err.message}`);
     }
 
-    // Best effort, like the re-scoring pass and the digest: this summary loads
-    // every active job, and when that query timed out (2026-10-07, while
-    // autovacuum was busy on jobs) the error also cost the cleanup and the digest.
+    // Best effort, like the re-scoring pass and the digest: when this query timed
+    // out (2026-10-07, while autovacuum was busy on jobs) the error also cost the
+    // cleanup and the digest.
     try {
-      const allActiveJobs = await store.getAllActiveJobs();
-      const { filtered } = intelligence.filterAndRank(allActiveJobs);
+      const topJobs = await store.getTopActiveJobs();
+      const { filtered } = intelligence.filterAndRank(topJobs);
 
       if (config.notify.cli) {
         printRunSummary(allChanges, filtered);
@@ -159,8 +159,13 @@ async function runPipeline() {
       logger.error(`Run summary failed: ${err.message}`);
     }
 
-    // Remove inactive jobs older than 30 days to keep Neon storage under control.
-    await store.cleanupOldInactiveJobs(30);
+    // Remove inactive jobs older than 30 days. Best effort: it used to be the one
+    // step whose failure ended the run before "Pipeline completed" (2026-11-25).
+    try {
+      await store.cleanupOldInactiveJobs(30);
+    } catch (err) {
+      logger.error(`Cleanup failed: ${err.message}`);
+    }
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     logger.info(`Pipeline completed in ${elapsed}s — ${allChanges.length} total changes`);
