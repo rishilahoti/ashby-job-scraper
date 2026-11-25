@@ -335,3 +335,89 @@ test('breezy.normalizeJob maps a /json position', () => {
   assert.equal(job.publishedAt, '2026-09-09T05:07:43.918Z');
   assert.equal(breezy.normalizeJob({ name: 'No id' }, 'Acme'), null);
 });
+
+const yc = require('../src/normalize/adapters/yc');
+const wellfound = require('../src/normalize/adapters/wellfound');
+
+// Trimmed from ycombinator.com/companies/posthog/jobs: props in an HTML-escaped data-page attribute.
+const YC_POSTING = {
+  id: 122380,
+  title: 'Strategic Finance Analyst',
+  url: '/companies/posthog/jobs/Zj8Hw8R-strategic-finance-analyst',
+  location: 'San Francisco, CA, US / Remote (US)',
+  type: 'Full-time',
+  prettyRole: 'Sales',
+  salaryRange: '$120K - $180K',
+  equityRange: '',
+  companyName: 'PostHog',
+  createdAt: '13 days',
+};
+const ycPage = (props) => `<div id="app" data-page="${JSON.stringify({ component: 'WaasShowJobsPage', props })
+  .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"></div>`;
+
+test('yc.jobsFromPage reads the jobs out of the escaped data-page props', () => {
+  assert.deepEqual(yc.jobsFromPage(ycPage({ jobPostings: [{ ...YC_POSTING, title: "R&D 'Lead'" }] })), [{ ...YC_POSTING, title: "R&D 'Lead'" }]);
+  assert.deepEqual(yc.jobsFromPage(ycPage({ jobPostings: [] })), []);
+  assert.equal(yc.jobsFromPage('<html>no props</html>'), null);
+  assert.equal(yc.jobsFromPage(ycPage({})), null);
+});
+
+test('yc.normalizeJob maps a YC job posting', () => {
+  const job = yc.normalizeJob(YC_POSTING, 'PostHog');
+  assert.equal(job.jobId, 'yc-122380');
+  assert.equal(job.source, 'yc');
+  assert.equal(job.location, 'San Francisco');
+  assert.equal(job.remote, true);
+  assert.equal(job.department, 'Sales');
+  assert.equal(job.compensationSummary, '$120K - $180K');
+  assert.equal(job.jobUrl, 'https://www.ycombinator.com/companies/posthog/jobs/Zj8Hw8R-strategic-finance-analyst');
+  assert.equal(job.description, null);
+  const daysAgo = (Date.now() - Date.parse(job.publishedAt)) / 86400000;
+  assert.ok(daysAgo > 12.9 && daysAgo < 13.1);
+  assert.equal(yc.normalizeJob({ title: 'No id' }, 'Acme'), null);
+});
+
+// Trimmed from wellfound.com/company/fuzehq/jobs: the Apollo cache in __NEXT_DATA__.
+const WELLFOUND_LISTING = {
+  __typename: 'JobListing',
+  id: '2448180',
+  slug: 'software-engineer',
+  title: 'Software Engineer',
+  locationNames: ['Dubai', 'Bengaluru'],
+  remote: true,
+  primaryRoleTitle: 'Engineering',
+  liveStartAt: 1793169764,
+  jobType: 'full_time',
+  compensation: '$40k – $100k • 0.05% – 0.1%',
+  description: '',
+};
+const wellfoundPage = (data) => `<script id="__NEXT_DATA__" type="application/json" crossorigin="anonymous">${
+  JSON.stringify({ props: { pageProps: { apolloState: { data } } } })}</script>`;
+
+test("wellfound.jobsFromPage reads only the startup's own listings", () => {
+  const data = {
+    'Startup:9160805': {
+      'jobListingsConnection({"first":10})': { edges: [{ node: { __ref: 'JobListing:2448180' } }] },
+      'jobListingsConnection({"first":20})': { edges: [{ node: { __ref: 'JobListing:2448180' } }] },
+    },
+    'JobListing:2448180': WELLFOUND_LISTING,
+    'JobListing:999': { ...WELLFOUND_LISTING, id: '999' },
+  };
+  assert.deepEqual(wellfound.jobsFromPage(wellfoundPage(data)), [WELLFOUND_LISTING]);
+  assert.deepEqual(wellfound.jobsFromPage(wellfoundPage({ 'Startup:1': {} })), []);
+  assert.equal(wellfound.jobsFromPage(wellfoundPage({})), null);
+  assert.equal(wellfound.jobsFromPage('<html>challenge</html>'), null);
+});
+
+test('wellfound.normalizeJob maps a job listing', () => {
+  const job = wellfound.normalizeJob(WELLFOUND_LISTING, 'Fuze');
+  assert.equal(job.jobId, 'wellfound-2448180');
+  assert.equal(job.source, 'wellfound');
+  assert.equal(job.location, 'Dubai');
+  assert.equal(job.remote, true);
+  assert.equal(job.employmentType, 'Full-time');
+  assert.equal(job.publishedAt, '2026-10-28T06:42:44.000Z');
+  assert.equal(job.jobUrl, 'https://wellfound.com/jobs/2448180-software-engineer');
+  assert.equal(job.compensationSummary, '$40k – $100k • 0.05% – 0.1%');
+  assert.equal(wellfound.normalizeJob({ title: 'No id' }, 'Acme'), null);
+});

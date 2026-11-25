@@ -1,6 +1,8 @@
 const config = require('../config');
 const { logger, delay, timeLimit } = require('../utils');
 const { fetchHttp2 } = require('../utils/http2');
+const yc = require('../normalize/adapters/yc');
+const wellfound = require('../normalize/adapters/wellfound');
 
 const DEFAULT_HEADERS = {
   'User-Agent': config.fetch.userAgent,
@@ -9,6 +11,7 @@ const DEFAULT_HEADERS = {
   'Accept-Encoding': 'gzip, deflate, br',
   'Cache-Control': 'no-cache',
 };
+const HTML_HEADERS = { ...DEFAULT_HEADERS, Accept: 'text/html' };
 
 class FetchError extends Error {
   constructor(message, slug, statusCode, retryable) {
@@ -88,6 +91,20 @@ const SOURCE_REQUESTS = {
     // One request returns the whole board, unpaged (its /api/v2 list pages by 20).
     buildUrl: (slug) => new URL(`https://api.rippling.com/platform/api/ats/v1/board/${slug}/jobs`),
     extractJobs: (data) => (Array.isArray(data) ? data : null),
+  },
+  // Job boards, not ATS APIs: the jobs come out of each company's page, read
+  // by the adapter so the +Add route parses it the same way.
+  yc: {
+    buildUrl: (slug) => new URL(`https://www.ycombinator.com/companies/${slug}/jobs`),
+    headers: HTML_HEADERS,
+    parse: (html) => html,
+    extractJobs: (html) => yc.jobsFromPage(html),
+  },
+  wellfound: {
+    buildUrl: (slug) => new URL(`https://wellfound.com/company/${slug}/jobs`),
+    headers: HTML_HEADERS,
+    parse: (html) => html,
+    extractJobs: (html) => wellfound.jobsFromPage(html),
   },
   smartrecruiters: {
     // Capped at 100 postings (SmartRecruiters' own max `limit`) — fine for the
@@ -322,7 +339,8 @@ async function fetchJobBoard(slug, source = 'ashby') {
   }
 
   const url = sourceConfig.buildUrl(slug);
-  const jobs = await fetchOnce(url, {}, slug, source, sourceConfig.extractJobs, sourceConfig.parse);
+  const options = sourceConfig.headers ? { headers: sourceConfig.headers } : {};
+  const jobs = await fetchOnce(url, options, slug, source, sourceConfig.extractJobs, sourceConfig.parse);
   logger.info(`Fetched ${jobs.length} jobs from ${slug} (${source})`);
   return { jobs };
 }

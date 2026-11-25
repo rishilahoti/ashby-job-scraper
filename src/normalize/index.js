@@ -12,8 +12,10 @@ const keka = require('./adapters/keka');
 const rippling = require('./adapters/rippling');
 const personio = require('./adapters/personio');
 const breezy = require('./adapters/breezy');
+const yc = require('./adapters/yc');
+const wellfound = require('./adapters/wellfound');
 
-const ADAPTERS = { ashby, lever, greenhouse, workable, recruitee, teamtailor, pinpoint, smartrecruiters, workday, keka, rippling, personio, breezy };
+const ADAPTERS = { ashby, lever, greenhouse, workable, recruitee, teamtailor, pinpoint, smartrecruiters, workday, keka, rippling, personio, breezy, yc, wellfound };
 
 function normalizeResponse(apiResponse, company, source = 'ashby') {
   const adapter = ADAPTERS[source];

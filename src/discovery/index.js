@@ -1,5 +1,6 @@
 const { logger, delay } = require('../utils');
 const { fetchJobBoard } = require('../fetch');
+const { fetchText } = require('../normalize/shared');
 const fs = require('fs');
 const { loadRegistry, isValidSlug, SUPPORTED_SOURCES } = require('../sources');
 const store = require('../store');
@@ -16,6 +17,8 @@ const CDX_DOMAINS = {
   workable: 'apply.workable.com',
   smartrecruiters: 'jobs.smartrecruiters.com',
   rippling: 'ats.rippling.com',
+  // wellfound.com/company/{slug}: the slug is the second segment.
+  wellfound: 'wellfound.com/company',
 };
 
 // These give each company its own subdomain (acme.recruitee.com) instead of a
@@ -97,6 +100,7 @@ function slugFromCrawledUrl(source, rawUrl) {
     const segments = url.pathname.split('/').filter(Boolean);
     // Some Rippling board URLs start with a locale (/en-GB/acme/jobs) or /embed.
     if (source === 'rippling' && /^([a-z]{2}-[a-z]{2}|embed)$/i.test(segments[0] ?? '')) segments.shift();
+    if (source === 'wellfound' && segments.shift() !== 'company') return null;
     slug = segments[0];
   } else {
     if (!url.hostname.endsWith(`.${subdomainDomain}`)) return null;
@@ -170,6 +174,43 @@ async function fetchCandidateSlugs(source, cdxLimit) {
   return [...slugs];
 }
 
+// YC's company directory searches a public Algolia index with a short-lived
+// key printed in the page. Algolia returns at most 1,000 hits per query and
+// over 1,400 YC companies are hiring, so it is read one batch at a time
+// (the biggest has under 100).
+async function fetchYcHiringCompanies() {
+  const page = await fetchText('https://www.ycombinator.com/companies');
+  const [, app, key] = /AlgoliaOpts = \{"app":"([^"]+)","key":"([^"]+)"/.exec(page) ?? [];
+  if (!app) throw new Error("No Algolia key on YC's company directory");
+
+  const search = async (params) => {
+    const res = await fetch(`https://${app}-dsn.algolia.net/1/indexes/YCCompany_production/query`, {
+      method: 'POST',
+      headers: { 'X-Algolia-Application-Id': app, 'X-Algolia-API-Key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ params: new URLSearchParams(params).toString() }),
+    });
+    if (!res.ok) throw new Error(`YC's Algolia search returned HTTP ${res.status}`);
+    return res.json();
+  };
+
+  const { facets } = await search({ filters: 'isHiring:true', hitsPerPage: 0, facets: '["batch"]', maxValuesPerFacet: 1000 });
+  const names = new Map();
+  for (const batch of Object.keys(facets?.batch ?? {})) {
+    const { hits } = await search({
+      filters: `isHiring:true AND batch:"${batch}"`,
+      hitsPerPage: 1000,
+      attributesToRetrieve: '["slug","name"]',
+    });
+    for (const { slug, name } of hits) {
+      if (isValidSlug(slug?.toLowerCase(), 'yc')) names.set(slug.toLowerCase(), name || '');
+    }
+  }
+  return names;
+}
+
+// Sources whose boards come from a list of their own, not Common Crawl.
+const CANDIDATE_LISTS = { yc: fetchYcHiringCompanies };
+
 async function getKnownSlugs(source) {
   const caseSensitive = CASE_SENSITIVE_SOURCES.has(source);
   const norm = (s) => (caseSensitive ? s : s.toLowerCase());
@@ -240,8 +281,10 @@ function readSlugFile(file, source) {
 
 async function discoverCompanies({ source, cdxLimit = 3000, verifyLimit = 300, dryRun = false, fromFile }) {
   const crawled = CDX_DOMAINS[source] ?? (CDX_SUBDOMAIN_DOMAINS[source] && `*.${CDX_SUBDOMAIN_DOMAINS[source]}`);
-  if (fromFile ? !SUPPORTED_SOURCES.includes(source) : !crawled) {
-    const supported = fromFile ? SUPPORTED_SOURCES : [...Object.keys(CDX_DOMAINS), ...Object.keys(CDX_SUBDOMAIN_DOMAINS)];
+  if (fromFile ? !SUPPORTED_SOURCES.includes(source) : !crawled && !CANDIDATE_LISTS[source]) {
+    const supported = fromFile
+      ? SUPPORTED_SOURCES
+      : [...Object.keys(CDX_DOMAINS), ...Object.keys(CDX_SUBDOMAIN_DOMAINS), ...Object.keys(CANDIDATE_LISTS)];
     throw new Error(`Unsupported source "${source}" — must be one of: ${supported.join(', ')}`);
   }
 
@@ -249,6 +292,9 @@ async function discoverCompanies({ source, cdxLimit = 3000, verifyLimit = 300, d
   let names;
   if (fromFile) {
     names = readSlugFile(fromFile, source);
+    candidates = [...names.keys()];
+  } else if (CANDIDATE_LISTS[source]) {
+    names = await CANDIDATE_LISTS[source]();
     candidates = [...names.keys()];
   } else {
     logger.info(`Fetching crawled URLs for ${crawled} from Common Crawl...`);

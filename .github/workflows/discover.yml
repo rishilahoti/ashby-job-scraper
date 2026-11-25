@@ -44,7 +44,7 @@ jobs:
             # grows it gradually; raise this once the VM has room.
             - name: Discover companies
               run: |
-                  for s in ashby greenhouse workable smartrecruiters recruitee teamtailor pinpoint "workday --verify-limit 25" keka rippling personio breezy; do
+                  for s in ashby greenhouse workable smartrecruiters recruitee teamtailor pinpoint "workday --verify-limit 25" keka rippling personio breezy yc wellfound; do
                       node index.js discover --source $s || echo "::warning::discover --source $s failed"
                   done
               env:

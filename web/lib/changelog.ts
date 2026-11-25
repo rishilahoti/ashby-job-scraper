@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "yc-wellfound",
+    date: "2026-11-26",
+    title: "Y Combinator and Wellfound startup jobs",
+    description:
+      "The feed now includes jobs from Y Combinator's startup job board and from Wellfound, with full descriptions and the salary and equity ranges they list. New YC companies that are hiring join on their own each day. You can also add a startup from +Add by pasting its YC or Wellfound page.",
+  },
+  {
     id: "faster-filters",
     date: "2026-11-25",
     title: "Faster location filter and search, lighter feed",

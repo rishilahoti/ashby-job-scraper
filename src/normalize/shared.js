@@ -55,6 +55,19 @@ async function fetchText(url) {
   return res.text();
 }
 
+// The schema.org JobPosting a job page embeds for search engines (YC, Wellfound).
+function jobPostingFromHtml(html) {
+  for (const [, json] of html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)) {
+    try {
+      const data = JSON.parse(json);
+      if (data?.['@type'] === 'JobPosting') return data;
+    } catch {
+      // Another block that isn't valid JSON: keep looking.
+    }
+  }
+  return null;
+}
+
 const COUNTRY_ALIASES = new Map([
   ['us', 'United States'],
   ['usa', 'United States'],
@@ -278,4 +291,5 @@ module.exports = {
   sanitizeUrl,
   normalizeLocation,
   fetchText,
+  jobPostingFromHtml,
 };
