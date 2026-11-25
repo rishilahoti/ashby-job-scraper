@@ -1,0 +1,24 @@
+name: Purge Cloudflare cache
+
+# The purge from deploy-web.yml on its own, for when the data changed a lot (a bulk board import)
+# and cached pages would otherwise show old numbers for up to an hour. Re-running deploy-web for
+# this doesn't work: it builds a new image, and the new container starts from the homepage
+# rendered at build time, which Cloudflare then caches again.
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Purge the Cloudflare cache
+        env:
+          CF_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_PURGE_TOKEN }}
+        run: |
+          [ -n "$CF_PURGE_TOKEN" ] || { echo "::error::no CLOUDFLARE_PURGE_TOKEN secret"; exit 1; }
+          curl -fsS --max-time 20 -X POST -H "Authorization: Bearer $CF_PURGE_TOKEN" -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/zones/db4ee4cf3f2874b65a7ea8da743d24a9/purge_cache" \
+            --data '{"hosts":["jobs.whatrunsindia.com"]}' -o /dev/null
