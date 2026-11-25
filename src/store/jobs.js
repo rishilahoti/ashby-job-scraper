@@ -157,7 +157,11 @@ async function saveSnapshot(job) {
   );
 }
 
-async function getAllActiveJobs() {
+// The run summary and `report`: the best-scored jobs, not all of them. All of them
+// was 674K rows (2026-11), past the 30 s statement timeout and the scraper's memory.
+const SUMMARY_JOBS = 2000;
+
+async function getTopActiveJobs() {
   const pool = getPool();
   const { rows } = await pool.query(
     `SELECT
@@ -169,10 +173,12 @@ async function getAllActiveJobs() {
        compensation_min AS "compensationMin", compensation_max AS "compensationMax",
        compensation_currency AS "compensationCurrency", compensation_interval AS "compensationInterval"
      FROM jobs
-     WHERE is_active = TRUE`
+     WHERE is_active = TRUE
+     ORDER BY base_score DESC
+     LIMIT $1`,
+    [SUMMARY_JOBS]
   );
-  // No ORDER BY: both callers re-sort by score (filterAndRank), and sorting
-  // ~50K rows with their description snippets spilled to disk on the 1 GB VM.
+  // Callers re-rank these with the freshness boost (filterAndRank).
   return rows;
 }
 
@@ -261,26 +267,30 @@ async function rescoreJobsIfRulesChanged(rules) {
 // Delete inactive jobs older than retentionDays to keep Neon storage under control.
 async function cleanupOldInactiveJobs(retentionDays = 30) {
   const pool = getPool();
-  const { rowCount } = await pool.query(
-    `DELETE FROM jobs
-     WHERE is_active = FALSE
-       AND updated_at < NOW() - ($1 || ' days')::INTERVAL`,
+  // The deleted jobs' snapshots go in the same statement (135K were left behind by
+  // 2026-11). A NOT EXISTS sweep over all snapshots took past the 30 s timeout.
+  const { rows: [{ jobs: rowCount, snapshots }] } = await pool.query(
+    `WITH gone AS (
+       DELETE FROM jobs
+       WHERE is_active = FALSE AND updated_at < NOW() - ($1 || ' days')::INTERVAL
+       RETURNING company, job_id
+     ), snaps AS (
+       DELETE FROM job_snapshots s USING gone g
+       WHERE s.company = g.company AND s.job_id = g.job_id
+       RETURNING 1
+     )
+     SELECT (SELECT COUNT(*) FROM gone)::int AS jobs, (SELECT COUNT(*) FROM snaps)::int AS snapshots`,
     [retentionDays]
   );
   if (rowCount > 0) {
     logger.info(`Cleaned up ${rowCount} inactive jobs older than ${retentionDays} days`);
   }
-  // Their snapshots too (135K were left behind by 2026-11), and the per-board run log,
-  // which grows by one row per board per run (~18K a day at 18K boards).
-  const { rowCount: snapshots } = await pool.query(
-    `DELETE FROM job_snapshots s
-     WHERE NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company = s.company AND j.job_id = s.job_id)`
-  );
+  // The per-board run log grows by one row per board per run (~18K a day at 18K boards).
   const { rowCount: runs } = await pool.query(
     `DELETE FROM scrape_runs WHERE started_at < NOW() - ($1 || ' days')::INTERVAL`,
     [retentionDays]
   );
-  if (snapshots > 0 || runs > 0) logger.info(`Cleaned up ${snapshots} orphaned snapshots and ${runs} old scrape runs`);
+  if (snapshots > 0 || runs > 0) logger.info(`Cleaned up ${snapshots} snapshots of those jobs and ${runs} old scrape runs`);
   return rowCount;
 }
 
@@ -289,6 +299,9 @@ async function cleanupOldInactiveJobs(retentionDays = 30) {
 // forever. Every successful scrape bumps scraped_at, so a job unseen for this
 // many days is one we can no longer vouch for. It comes back on the next
 // successful scrape that lists it.
+// ponytail: a full scan of jobs (8 s at 674K active, 2026-11). An index on scraped_at would
+// make it instant but stop every nightly touch being a cheap HOT update; add it only if
+// this nears the 30 s statement timeout.
 async function deactivateUnseenJobs(days = 3) {
   const pool = getPool();
   const { rowCount } = await pool.query(
@@ -307,7 +320,7 @@ module.exports = {
   upsertJob,
   markRemovedJobs,
   saveSnapshot,
-  getAllActiveJobs,
+  getTopActiveJobs,
   startScrapeRun,
   completeScrapeRun,
   rescoreJobsIfRulesChanged,

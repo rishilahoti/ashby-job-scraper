@@ -96,8 +96,8 @@ function writeReport(dateStr, content) {
 }
 
 async function generateReportFromDb(store, intelligence) {
-  const activeJobs = await store.getAllActiveJobs();
-  const { filtered } = intelligence.filterAndRank(activeJobs);
+  const topJobs = await store.getTopActiveJobs();
+  const { filtered } = intelligence.filterAndRank(topJobs);
 
   const reportPath = generateReport([], filtered);
   return reportPath;
