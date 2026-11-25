@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { getJobs, getCompanies, getStats, getLocations } from "@/lib/query";
+import { getJobs, getTopCompanies, getStats, getLocations } from "@/lib/query";
 import { POSITIVE_TAG_OPTIONS } from "@/lib/scoring";
 import { DEPARTMENT_GROUPS } from "../../../src/normalize/departments";
 import { PROVIDER_NAMES } from "@/lib/providers";
@@ -44,7 +44,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function FeedPage() {
   const [result, companies, stats, locations] = await Promise.all([
     getJobs(),
-    getCompanies(),
+    getTopCompanies(),
     getStats(),
     getLocations(),
   ]);

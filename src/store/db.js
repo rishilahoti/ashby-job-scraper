@@ -223,6 +223,9 @@ async function migrateSchema(p) {
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_team ON jobs (team)`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_location ON jobs (location)`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_location ON jobs (location) WHERE is_active = TRUE`);
+  // The feed's company filter (web/lib/query.ts) matches LOWER(TRIM(company)); without
+  // this, every company page scanned all of jobs (10 s at 660K rows, 2026-11).
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_company_lower ON jobs (LOWER(TRIM(company))) WHERE is_active = TRUE`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_employment_type ON jobs (employment_type)`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_matched_keywords ON jobs USING GIN (matched_keywords)`);
   // web's getJobById / getJobsByIds (job pages, Applied/Ignored batches) look
