@@ -1,5 +1,5 @@
 const { contentHash } = require('../../utils');
-const { sanitizeUrl, sanitizeDescription, normalizeLocation, fetchText, decodeHtmlEntities, jobPostingFromHtml } = require('../shared');
+const { sanitizeUrl, normalizeLocation, decodeHtmlEntities, jobPostingDescription } = require('../shared');
 
 // Y Combinator's own job board (Work at a Startup). The slug is the company's
 // YC directory slug: ycombinator.com/companies/{slug}/jobs.
@@ -21,10 +21,10 @@ function jobsFromPage(html) {
 
 // createdAt is relative ("13 days", "about 1 month"); the exact date is only
 // on the job's own page. Close enough for sorting, and it is stored once:
-// unchanged jobs aren't rewritten.
-const UNIT_DAYS = { minute: 1 / 1440, hour: 1 / 24, day: 1, month: 30, year: 365 };
+// unchanged jobs aren't rewritten. Hours and minutes count as today.
+const UNIT_DAYS = { day: 1, month: 30, year: 365 };
 function postedAt(ago) {
-  const match = /(\d+)\s+(minute|hour|day|month|year)/.exec(ago || '');
+  const match = /(\d+)\s+(day|month|year)/.exec(ago || '');
   const days = match ? Number(match[1]) * UNIT_DAYS[match[2]] : 0;
   return new Date(Date.now() - days * 86400000).toISOString();
 }
@@ -66,8 +66,4 @@ function normalizeJob(raw, company) {
 }
 
 // The list has no descriptions; each job page's JSON-LD does.
-async function fetchDescription(job) {
-  return sanitizeDescription(jobPostingFromHtml(await fetchText(job.jobUrl))?.description) || null;
-}
-
-module.exports = { normalizeJob, fetchDescription, jobsFromPage };
+module.exports = { normalizeJob, fetchDescription: (job) => jobPostingDescription(job.jobUrl), jobsFromPage };

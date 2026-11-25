@@ -98,13 +98,13 @@ const SOURCE_REQUESTS = {
     buildUrl: (slug) => new URL(`https://www.ycombinator.com/companies/${slug}/jobs`),
     headers: HTML_HEADERS,
     parse: (html) => html,
-    extractJobs: (html) => yc.jobsFromPage(html),
+    extractJobs: yc.jobsFromPage,
   },
   wellfound: {
     buildUrl: (slug) => new URL(`https://wellfound.com/company/${slug}/jobs`),
     headers: HTML_HEADERS,
     parse: (html) => html,
-    extractJobs: (html) => wellfound.jobsFromPage(html),
+    extractJobs: wellfound.jobsFromPage,
   },
   smartrecruiters: {
     // Capped at 100 postings (SmartRecruiters' own max `limit`) — fine for the

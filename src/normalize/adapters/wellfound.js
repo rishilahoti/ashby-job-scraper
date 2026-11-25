@@ -1,5 +1,5 @@
 const { contentHash } = require('../../utils');
-const { sanitizeUrl, sanitizeDescription, normalizeLocation, fetchText, jobPostingFromHtml } = require('../shared');
+const { sanitizeUrl, normalizeLocation, jobPostingDescription } = require('../shared');
 
 // Wellfound (formerly AngelList Talent). The slug is the startup's:
 // wellfound.com/company/{slug}/jobs.
@@ -67,8 +67,4 @@ function normalizeJob(raw, company) {
   };
 }
 
-async function fetchDescription(job) {
-  return sanitizeDescription(jobPostingFromHtml(await fetchText(job.jobUrl))?.description) || null;
-}
-
-module.exports = { normalizeJob, fetchDescription, jobsFromPage };
+module.exports = { normalizeJob, fetchDescription: (job) => jobPostingDescription(job.jobUrl), jobsFromPage };

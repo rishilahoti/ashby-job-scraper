@@ -55,12 +55,13 @@ async function fetchText(url) {
   return res.text();
 }
 
-// The schema.org JobPosting a job page embeds for search engines (YC, Wellfound).
-function jobPostingFromHtml(html) {
-  for (const [, json] of html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)) {
+// The description in the schema.org JobPosting a job page embeds for search
+// engines (YC, Wellfound).
+async function jobPostingDescription(url) {
+  for (const [, json] of (await fetchText(url)).matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)) {
     try {
       const data = JSON.parse(json);
-      if (data?.['@type'] === 'JobPosting') return data;
+      if (data?.['@type'] === 'JobPosting') return sanitizeDescription(data.description) || null;
     } catch {
       // Another block that isn't valid JSON: keep looking.
     }
@@ -291,5 +292,5 @@ module.exports = {
   sanitizeUrl,
   normalizeLocation,
   fetchText,
-  jobPostingFromHtml,
+  jobPostingDescription,
 };

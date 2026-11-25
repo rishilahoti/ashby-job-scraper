@@ -208,9 +208,6 @@ async function fetchYcHiringCompanies() {
   return names;
 }
 
-// Sources whose boards come from a list of their own, not Common Crawl.
-const CANDIDATE_LISTS = { yc: fetchYcHiringCompanies };
-
 async function getKnownSlugs(source) {
   const caseSensitive = CASE_SENSITIVE_SOURCES.has(source);
   const norm = (s) => (caseSensitive ? s : s.toLowerCase());
@@ -281,10 +278,9 @@ function readSlugFile(file, source) {
 
 async function discoverCompanies({ source, cdxLimit = 3000, verifyLimit = 300, dryRun = false, fromFile }) {
   const crawled = CDX_DOMAINS[source] ?? (CDX_SUBDOMAIN_DOMAINS[source] && `*.${CDX_SUBDOMAIN_DOMAINS[source]}`);
-  if (fromFile ? !SUPPORTED_SOURCES.includes(source) : !crawled && !CANDIDATE_LISTS[source]) {
-    const supported = fromFile
-      ? SUPPORTED_SOURCES
-      : [...Object.keys(CDX_DOMAINS), ...Object.keys(CDX_SUBDOMAIN_DOMAINS), ...Object.keys(CANDIDATE_LISTS)];
+  // YC's boards come from its own company directory, not Common Crawl.
+  if (fromFile ? !SUPPORTED_SOURCES.includes(source) : !crawled && source !== 'yc') {
+    const supported = fromFile ? SUPPORTED_SOURCES : [...Object.keys(CDX_DOMAINS), ...Object.keys(CDX_SUBDOMAIN_DOMAINS), 'yc'];
     throw new Error(`Unsupported source "${source}" — must be one of: ${supported.join(', ')}`);
   }
 
@@ -293,8 +289,8 @@ async function discoverCompanies({ source, cdxLimit = 3000, verifyLimit = 300, d
   if (fromFile) {
     names = readSlugFile(fromFile, source);
     candidates = [...names.keys()];
-  } else if (CANDIDATE_LISTS[source]) {
-    names = await CANDIDATE_LISTS[source]();
+  } else if (source === 'yc') {
+    names = await fetchYcHiringCompanies();
     candidates = [...names.keys()];
   } else {
     logger.info(`Fetching crawled URLs for ${crawled} from Common Crawl...`);

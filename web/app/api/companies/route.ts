@@ -12,7 +12,7 @@ import { departmentGroup } from "../../../../src/normalize/departments";
 import rules from "../../../../src/config/rules.json";
 import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 import { readJson } from "@/lib/read-json";
-import { matchBoardUrl } from "@/lib/providers";
+import { PROVIDER_NAMES, matchBoardUrl } from "@/lib/providers";
 
 type Source = keyof typeof ADAPTERS;
 const SOURCES = Object.keys(ADAPTERS) as Source[];
@@ -268,8 +268,7 @@ export async function POST(request: NextRequest) {
     if (!parsed) {
       return NextResponse.json(
         {
-          error:
-            "Invalid input. Provide a job board URL (Ashby, Lever, Greenhouse, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, Workday, Keka, Rippling, Personio, Breezy, Y Combinator, or Wellfound) or a slug.",
+          error: `Invalid input. Provide a job board URL (${PROVIDER_NAMES.join(", ")}) or a slug.`,
         },
         { status: 400 }
       );
