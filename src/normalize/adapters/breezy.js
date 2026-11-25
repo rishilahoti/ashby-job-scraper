@@ -32,7 +32,8 @@ function normalizeJob(raw, company) {
     compensationMax: null,
     compensationCurrency: null,
     compensationInterval: null,
-    contentHash: contentHash(raw.name, normalizedLocation.location, String(normalizedLocation.remote), department, employmentType, raw.salary),
+    // No pay in the hash, as in the other adapters.
+    contentHash: contentHash(raw.name, normalizedLocation.location, String(normalizedLocation.remote), department, employmentType),
   };
 }
 

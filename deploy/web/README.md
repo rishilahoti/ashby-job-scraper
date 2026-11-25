@@ -21,6 +21,19 @@ Files on the server (not in git):
   reports healthy and answers `https://jobs.whatrunsindia.com/api/health` (which runs `SELECT 1`) through Cloudflare.
   After a rollback it waits for the previous image the same way and says whether that worked.
 
+Crontab on this server (`crontab -l`), besides the backup line in `deploy/db/backup.sh`:
+
+```
+# New scraper images (build-images.yml pushes :latest); recreates the container only when it changed.
+*/15 * * * * cd ~/ashby-web && docker compose pull -q scraper && docker compose up -d scraper >/dev/null 2>&1
+# Every deploy leaves old images and build cache behind (5.8 GB of cache by 2026-11). Only images no
+# container uses, built over a week ago; a pruned rollback tag is pulled again by deploy.sh's compose up.
+# Docker here is shared with the other project, whose unused images and cache this prunes too.
+0 4 * * 0 docker image prune -af --filter until=168h >/dev/null && docker builder prune -af --filter until=168h >/dev/null
+```
+
+The backup server (the 1 GB Micro) runs no containers; its crontab is `deploy/db/offsite-keep.sh` only.
+
 `deploy.sh` and `docker-compose.yml` are copied to the server by hand when they change: the deploy key
 can only run `deploy.sh`, so it can't update either file (on purpose). Ship the image first when a change
 depends on new app code (like a healthcheck route), then copy the files and run `docker compose up -d`.
