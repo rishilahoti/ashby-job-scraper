@@ -32,7 +32,10 @@ async function addDescription(job, adapter, budget) {
   if (!job.description) job.contentHash += NO_DESCRIPTION;
 }
 
-async function detectChanges(normalizedJobs, company, source, board) {
+async function detectChanges(normalizedJobs, company, source, slug) {
+  // The board's identity, lowercased the same way here and in the +Add route
+  // (SmartRecruiters and Workday slugs keep their case for fetching).
+  const board = slug?.toLowerCase();
   const changes = [];
   const currentActiveJobIds = normalizedJobs.map(j => j.jobId);
   const adapter = ADAPTERS[source];

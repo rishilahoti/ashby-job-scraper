@@ -396,7 +396,7 @@ export async function POST(request: NextRequest) {
                                     THEN jobs.min_years ELSE EXCLUDED.min_years END,
            board             = EXCLUDED.board,
            updated_at        = NOW()`,
-        [JSON.stringify(payload), companyNameForJobs, source, slug]
+        [JSON.stringify(payload), companyNameForJobs, source, slug.toLowerCase()]
       );
     }
 
@@ -410,7 +410,7 @@ export async function POST(request: NextRequest) {
         `UPDATE jobs SET is_active = FALSE, updated_at = NOW()
          WHERE company = $1 AND source = $2 AND (board = $4 OR board IS NULL) AND is_active = TRUE
            AND job_id != ALL($3::text[])`,
-        [companyNameForJobs, source, seenJobIds, slug]
+        [companyNameForJobs, source, seenJobIds, slug.toLowerCase()]
       );
       removed = rowCount ?? 0;
     }
