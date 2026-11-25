@@ -178,6 +178,10 @@ export default function Filters({
         className="h-8 max-w-32.5 px-2 text-sm bg-surface border border-edge rounded-md text-ink-secondary focus:outline-none focus:border-edge-strong cursor-pointer"
       >
         <option value="">All companies</option>
+        {/* The list is the top companies only; a ?company= link to another one still shows it. */}
+        {current.company && !companies.includes(current.company) && (
+          <option value={current.company}>{current.company}</option>
+        )}
         {companies.map((c) => (
           <option key={c} value={c}>{c}</option>
         ))}

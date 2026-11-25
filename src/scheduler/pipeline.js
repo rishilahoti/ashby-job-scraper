@@ -10,10 +10,10 @@ const { printRunSummary, generateReport } = require('../notify');
 const { runDigest, lastDigestAt } = require('../digest');
 
 const CONCURRENCY = 16;
-// Workday answered ~640 HTTP 429s a night at full concurrency (2026-11), and a
-// rate-limited board's jobs never update. Its boards get their own slow lane
-// so the other 15+ sources keep going at full speed beside it.
-const WORKDAY_CONCURRENCY = 3;
+// Workday boards are up to 10 sequential pages of ~1 s each, so they get their
+// own lane beside the other sources. Its old 429s were HTTP/1.1 (utils/http2.js),
+// not rate; 8 at once covers ~5,000 boards in about an hour.
+const WORKDAY_CONCURRENCY = 8;
 // A job unseen this many daily runs is hidden (see deactivateUnseenJobs).
 const UNSEEN_DAYS = 3;
 

@@ -265,6 +265,17 @@ async function cleanupOldInactiveJobs(retentionDays = 30) {
   if (rowCount > 0) {
     logger.info(`Cleaned up ${rowCount} inactive jobs older than ${retentionDays} days`);
   }
+  // Their snapshots too (135K were left behind by 2026-11), and the per-board run log,
+  // which grows by one row per board per run (~18K a day at 18K boards).
+  const { rowCount: snapshots } = await pool.query(
+    `DELETE FROM job_snapshots s
+     WHERE NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company = s.company AND j.job_id = s.job_id)`
+  );
+  const { rowCount: runs } = await pool.query(
+    `DELETE FROM scrape_runs WHERE started_at < NOW() - ($1 || ' days')::INTERVAL`,
+    [retentionDays]
+  );
+  if (snapshots > 0 || runs > 0) logger.info(`Cleaned up ${snapshots} orphaned snapshots and ${runs} old scrape runs`);
   return rowCount;
 }
 

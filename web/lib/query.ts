@@ -327,17 +327,19 @@ export const getCompanies = withStaleFallback(unstable_cache(
         "SELECT DISTINCT company FROM jobs WHERE is_active = TRUE ORDER BY company"
       ),
     ]);
-    const companiesRows = companiesRes.rows;
-    const jobsRows = jobsRes.rows;
+    // A map, not a .find() per job company: at 17K x 18K names (2026-11) that was
+    // ~300M string comparisons per refresh.
+    const dbNameByLower = new Map<string, string>();
+    for (const c of companiesRes.rows) {
+      const k = c.name.trim().toLowerCase();
+      if (!dbNameByLower.has(k)) dbNameByLower.set(k, c.name.trim());
+    }
     const canonicalByLower = new Map<string, string>();
-    for (const r of jobsRows) {
+    for (const r of jobsRes.rows) {
       const raw = r.company.trim();
       const k = raw.toLowerCase();
       if (!k) continue;
-      const fromDb = companiesRows.find(
-        (c: { name: string }) => c.name.trim().toLowerCase() === k
-      );
-      const canonical = fromDb ? fromDb.name.trim() : raw;
+      const canonical = dbNameByLower.get(k) ?? raw;
       if (!canonicalByLower.has(k)) canonicalByLower.set(k, canonical);
     }
     return Array.from(canonicalByLower.values()).sort((a, b) =>
@@ -345,6 +347,21 @@ export const getCompanies = withStaleFallback(unstable_cache(
     );
   },
   ["companies-list"],
+  { revalidate: CACHE_REVALIDATE }
+), []);
+
+// The feed's company dropdown: every company (17K by 2026-11) put ~900 KB of <option>s
+// into each feed page. The ones with the most live jobs, alphabetical; any other
+// company is still one search or ?company= link away.
+export const getTopCompanies = withStaleFallback(unstable_cache(
+  async (): Promise<string[]> => {
+    const { rows } = await query<{ company: string }>(
+      `SELECT MIN(TRIM(company)) AS company FROM jobs WHERE is_active = TRUE
+       GROUP BY LOWER(TRIM(company)) ORDER BY COUNT(*) DESC LIMIT 300`
+    );
+    return rows.map((r) => r.company).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  },
+  ["top-companies"],
   { revalidate: CACHE_REVALIDATE }
 ), []);
 
