@@ -46,7 +46,7 @@ async function scrapeCompany(company) {
 
     const rawData = await fetchJobBoard(company.slug, source);
     const normalizedJobs = normalizeResponse(rawData, company.company, source);
-    const changes = await detectChanges(normalizedJobs, company.company, source);
+    const changes = await detectChanges(normalizedJobs, company.company, source, company.slug);
 
     const inserted = changes.filter(c => c.type === 'JOB_NEW').length;
     const updated  = changes.filter(c => c.type === 'JOB_UPDATED').length;

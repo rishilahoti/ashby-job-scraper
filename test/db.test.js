@@ -289,15 +289,19 @@ dbTest('two boards with one company name keep their own jobs, and unseen jobs ar
     `SELECT job_id FROM jobs WHERE company = 'TwoBoardsCo' AND is_active ORDER BY 1`
   )).rows.map((r) => r.job_id);
 
-  await detectChanges([job('a-1', 'ashby')], 'TwoBoardsCo', 'ashby');
-  await detectChanges([job('g-1', 'greenhouse')], 'TwoBoardsCo', 'greenhouse');
+  await detectChanges([job('a-1', 'ashby')], 'TwoBoardsCo', 'ashby', 'twoboards');
+  await detectChanges([job('g-1', 'greenhouse')], 'TwoBoardsCo', 'greenhouse', 'twoboards');
   // Used to deactivate a-1: the Greenhouse board "didn't list it".
   assert.deepEqual(await active(), ['a-1', 'g-1']);
+  // Same name, same ATS, two boards (a Workday tenant's career sites): each keeps its own.
+  await detectChanges([job('w-1', 'workday')], 'TwoBoardsCo', 'workday', 'twoboards/wd1/careers');
+  await detectChanges([job('w-2', 'workday')], 'TwoBoardsCo', 'workday', 'twoboards/wd1/students');
+  assert.deepEqual(await active(), ['a-1', 'g-1', 'w-1', 'w-2']);
 
   // Both look 4 days unseen; then a-1's board lists it again, unchanged. The batch
   // touch must mark it seen, or the cleanup below would hide it too.
   await pool.query(`UPDATE jobs SET scraped_at = NOW() - INTERVAL '4 days' WHERE company = 'TwoBoardsCo'`);
-  const changes = await detectChanges([job('a-1', 'ashby')], 'TwoBoardsCo', 'ashby');
+  const changes = await detectChanges([job('a-1', 'ashby')], 'TwoBoardsCo', 'ashby', 'twoboards');
   assert.equal(changes.length, 0);
 
   await deactivateUnseenJobs(3);

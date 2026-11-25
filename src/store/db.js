@@ -215,6 +215,8 @@ async function migrateSchema(p) {
   // rules-engine.js minYears: years of experience the job asks for, NULL when it
   // doesn't say. For the feed's experience filter; filled like department_group.
   await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS min_years SMALLINT`);
+  // The board (companies.slug) a job was scraped from; the diff is per board (store/jobs.js).
+  await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS board TEXT`);
 
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_published ON jobs (published_at DESC) WHERE is_active = TRUE`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_score ON jobs (base_score DESC) WHERE is_active = TRUE`);

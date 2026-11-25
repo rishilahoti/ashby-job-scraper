@@ -32,7 +32,10 @@ async function addDescription(job, adapter, budget) {
   if (!job.description) job.contentHash += NO_DESCRIPTION;
 }
 
-async function detectChanges(normalizedJobs, company, source) {
+async function detectChanges(normalizedJobs, company, source, slug) {
+  // The board's identity, lowercased the same way here and in the +Add route
+  // (SmartRecruiters and Workday slugs keep their case for fetching).
+  const board = slug?.toLowerCase();
   const changes = [];
   const currentActiveJobIds = normalizedJobs.map(j => j.jobId);
   const adapter = ADAPTERS[source];
@@ -40,7 +43,7 @@ async function detectChanges(normalizedJobs, company, source) {
 
   // Skip re-sending the (large) description over the wire for jobs whose
   // content hasn't changed — this is what was blowing through Neon's egress cap.
-  const existingHashes = await store.getContentHashesForCompany(company, source);
+  const existingHashes = await store.getContentHashesForCompany(company, source, board);
   const unchanged = [];
 
   // Jobs never tried for a description first, earlier failures after them in a
@@ -55,7 +58,7 @@ async function detectChanges(normalizedJobs, company, source) {
     }
 
     await addDescription(job, adapter, budget);
-    const result = await store.upsertJob(job);
+    const result = await store.upsertJob({ ...job, board });
 
     if (result === 'inserted') {
       changes.push({ type: EVENT_TYPES.JOB_NEW, job });
@@ -73,8 +76,8 @@ async function detectChanges(normalizedJobs, company, source) {
     }
   }
 
-  await store.touchJobs(company, unchanged, new Date().toISOString());
-  const removedJobs = await store.markRemovedJobs(company, currentActiveJobIds, source);
+  await store.touchJobs(company, unchanged, new Date().toISOString(), board);
+  const removedJobs = await store.markRemovedJobs(company, currentActiveJobIds, source, board);
 
   for (const job of removedJobs) {
     changes.push({ type: EVENT_TYPES.JOB_REMOVED, job });
