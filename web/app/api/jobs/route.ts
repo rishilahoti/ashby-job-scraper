@@ -103,16 +103,13 @@ export async function GET(request: NextRequest) {
 			if (departments.length > 0) filters.departments = departments;
 		}
 
-		const team = sp.get('team')?.trim();
-		if (team) filters.team = team.slice(0, 100);
-
 		const locationRaw = sp.get('location');
 		if (locationRaw) {
 			const requestedLocations = parseLocationValues(locationRaw);
-			const locations = await getLocations();
-			const canonicalLocations = requestedLocations.map((location) =>
-				locations.find((candidate) => candidate.toLowerCase() === location.toLowerCase())
-			);
+			// A map, not a .find() per requested location: 34K locations x an
+			// uncapped comma list was a CPU lever for any caller.
+			const byLower = new Map((await getLocations()).map((l) => [l.toLowerCase(), l]));
+			const canonicalLocations = requestedLocations.map((location) => byLower.get(location.toLowerCase()));
 			if (canonicalLocations.some((location) => !location)) {
 				return NextResponse.json(
 					{ error: 'Invalid location filter' },

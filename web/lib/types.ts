@@ -38,7 +38,6 @@ export interface JobFilters {
   minScore?: number;
   employmentType?: string;
   departments?: string[];
-  team?: string;
   locations?: string[];
   tags?: string[];
   // Resume match: jobs with any of these tags, most shared tags first.

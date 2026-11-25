@@ -164,10 +164,6 @@ const FILTER_SPECS: FilterSpec[] = [
     sql: (f, params) => `department_group = ANY(${pushParam(params, f.departments!)}::text[])`,
   },
   {
-    active: (f) => !!f.team,
-    sql: (f, params) => `team ILIKE ${pushParam(params, `%${f.team}%`)}`,
-  },
-  {
     active: (f) => !!f.locations && f.locations.length > 0,
     sql: (f, params) => {
       const locations = f.locations!.map((l) => l.trim().toLowerCase());
@@ -367,10 +363,10 @@ export const getTopCompanies = withStaleFallback(unstable_cache(
 
 export const getStats = withStaleFallback(unstable_cache(
   async (): Promise<{ total: number; companies: number }> => {
+    // GROUP BY hashes the ~18K names; COUNT(DISTINCT) sorted all 518K rows (15 s vs 5 s, 2026-11).
     const { rows } = await query(
-      `SELECT COUNT(*)::int as total,
-              COUNT(DISTINCT LOWER(TRIM(company)))::int as companies
-       FROM jobs WHERE is_active = TRUE`
+      `SELECT COALESCE(SUM(n), 0)::int AS total, COUNT(*)::int AS companies
+       FROM (SELECT COUNT(*) AS n FROM jobs WHERE is_active = TRUE GROUP BY LOWER(TRIM(company))) t`
     );
     return rows[0] as { total: number; companies: number };
   },
@@ -421,5 +417,19 @@ export const getLocations = withStaleFallback(unstable_cache(
     return [...new Set(rows.map((r) => r.location.trim()))];
   },
   ["locations-list-v3"],
+  { revalidate: CACHE_REVALIDATE }
+), []);
+
+// The feed's location dropdown: all 34K locations were 481 KB of the 648 KB feed page
+// (2026-11). The 1000 with the most live jobs cover 72% of them; search matches any location.
+export const getTopLocations = withStaleFallback(unstable_cache(
+  async (): Promise<string[]> => {
+    const { rows } = await query<{ location: string }>(
+      `SELECT MIN(TRIM(location)) AS location FROM jobs WHERE is_active = TRUE AND TRIM(location) <> ''
+       GROUP BY LOWER(TRIM(location)) ORDER BY COUNT(*) DESC LIMIT 1000`
+    );
+    return rows.map((r) => r.location).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  },
+  ["top-locations"],
   { revalidate: CACHE_REVALIDATE }
 ), []);

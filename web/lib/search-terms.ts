@@ -56,9 +56,16 @@ function titleWordBoundarySql(params: SqlParam[], term: string): string {
 // Left alone (still goes straight through websearch_to_tsquery) when the
 // query uses websearch syntax ("phrase", -exclude, OR) — splitting on
 // whitespace would mangle that.
+// = ANY(ARRAY(...)), not IN (SELECT ...): the array becomes one bitmap scan that reads
+// the matching rows in table order; IN probed the primary key once per match, at random
+// (12.7 s vs 4.6 s for "product manager" at 518K active jobs, 2026-11).
+function searchIdsSql(params: SqlParam[], text: string): string {
+  return `id = ANY(ARRAY(SELECT job_search_ids(${tsquerySql(params, text)})))`;
+}
+
 export function buildSearchSql(params: SqlParam[], search: string): string {
   if (search.includes('"') || /(^|\s)(-|OR\b)/.test(search)) {
-    return `id IN (SELECT job_search_ids(${tsquerySql(params, search)}))`;
+    return searchIdsSql(params, search);
   }
 
   const terms = search.split(/\s+/).filter(Boolean);
@@ -68,7 +75,7 @@ export function buildSearchSql(params: SqlParam[], search: string): string {
 
   const ftsTerms = terms.filter((t) => !isSpecialTerm(t));
   if (ftsTerms.length > 0) {
-    clauses.push(`id IN (SELECT job_search_ids(${tsquerySql(params, ftsTerms.join(" "))}))`);
+    clauses.push(searchIdsSql(params, ftsTerms.join(" ")));
   }
 
   return `(${clauses.join(" AND ")})`;

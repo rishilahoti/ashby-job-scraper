@@ -35,7 +35,8 @@ test("buildSearchSql: mixed query ANDs a literal title match with FTS on the res
 test("buildSearchSql: quoted websearch syntax is left untouched", () => {
   const params: (string | number | boolean | string[])[] = [];
   const sql = buildSearchSql(params, '"machine learning"');
-  assert.match(sql, /job_search_ids/);
+  // The array form (one bitmap scan), not IN (one primary-key probe per match).
+  assert.match(sql, /^id = ANY\(ARRAY\(SELECT job_search_ids\(/);
   assert.doesNotMatch(sql, /title ~\*/);
   assert.equal(params.length, 1);
   assert.equal(params[0], '"machine learning"');
