@@ -10,6 +10,24 @@ const { printRunSummary, generateReport } = require('../notify');
 const { runDigest, lastDigestAt } = require('../digest');
 
 const CONCURRENCY = 16;
+// Workday answered ~640 HTTP 429s a night at full concurrency (2026-11), and a
+// rate-limited board's jobs never update. Its boards get their own slow lane
+// so the other 15+ sources keep going at full speed beside it.
+const WORKDAY_CONCURRENCY = 3;
+// A job unseen this many daily runs is hidden (see deactivateUnseenJobs).
+const UNSEEN_DAYS = 3;
+
+// Runs fn over items with `limit` of them in flight at once. Unlike fixed
+// batches, one slow board doesn't hold up the next 15.
+async function runPool(items, limit, fn) {
+  const results = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) results.push(...await fn(items[next++]));
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
 
 async function scrapeCompany(company) {
   const source = company.source || 'ashby';
@@ -19,7 +37,7 @@ async function scrapeCompany(company) {
 
     const rawData = await fetchJobBoard(company.slug, source);
     const normalizedJobs = normalizeResponse(rawData, company.company, source);
-    const changes = await detectChanges(normalizedJobs, company.company);
+    const changes = await detectChanges(normalizedJobs, company.company, source);
 
     const inserted = changes.filter(c => c.type === 'JOB_NEW').length;
     const updated  = changes.filter(c => c.type === 'JOB_UPDATED').length;
@@ -100,14 +118,19 @@ async function runPipeline() {
 
     logger.info(`Processing ${companies.length} companies (concurrency=${CONCURRENCY})`);
 
-    const allChanges = [];
+    // scrapeCompany catches its own errors, so neither lane can reject.
+    const isWorkday = (c) => c.source === 'workday';
+    const lanes = await Promise.all([
+      runPool(companies.filter(c => !isWorkday(c)), CONCURRENCY, scrapeCompany),
+      runPool(companies.filter(isWorkday), WORKDAY_CONCURRENCY, scrapeCompany),
+    ]);
+    const allChanges = lanes.flat();
 
-    for (let i = 0; i < companies.length; i += CONCURRENCY) {
-      const batch = companies.slice(i, i + CONCURRENCY);
-      const results = await Promise.allSettled(batch.map(scrapeCompany));
-      for (const r of results) {
-        if (r.status === 'fulfilled') allChanges.push(...r.value);
-      }
+    // Best effort: hiding stale jobs must not cost the summary or the digest.
+    try {
+      await store.deactivateUnseenJobs(UNSEEN_DAYS);
+    } catch (err) {
+      logger.error(`Deactivating unseen jobs failed: ${err.message}`);
     }
 
     // Best effort, like the re-scoring pass and the digest: this summary loads

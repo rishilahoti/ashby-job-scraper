@@ -147,6 +147,18 @@ async function fetchKeka(slug: string): Promise<FetchResult> {
   return { ok: true, jobs: data.map((job) => ({ ...job, _boardUrl: boardUrl })), companyName: null };
 }
 
+// Personio's feed is XML; each <position> stays a string for the adapter. The scraper's
+// English-feed fallback (src/fetch/client.js) isn't repeated here: the next scrape fills
+// in any blank description, since the text changes the job's hash.
+async function fetchPersonio(slug: string): Promise<FetchResult> {
+  const res = await fetch(`https://${slug}.jobs.personio.de/xml`, { headers: HEADERS, signal: AbortSignal.timeout(15000) });
+  if (!res.ok) return { ok: false, status: res.status };
+  const xml = await res.text();
+  if (!xml.includes("<workzag-jobs")) return { ok: false, status: 404 };
+  const postings = xml.match(/<position>[\s\S]*?<\/position>/g) ?? [];
+  return { ok: true, jobs: postings.map((posting) => ({ posting, slug })), companyName: null };
+}
+
 const SOURCE_CONFIG: Record<
   Source,
   {
@@ -201,6 +213,18 @@ const SOURCE_CONFIG: Record<
     fetch: fetchKeka,
     boardUrl: (slug) => `https://${slug}.keka.com/careers/`,
   },
+  rippling: {
+    fetch: (slug) => fetchJson(`https://api.rippling.com/platform/api/ats/v1/board/${slug}/jobs`, (d) => [d]),
+    boardUrl: (slug) => `https://ats.rippling.com/${slug}/jobs`,
+  },
+  personio: {
+    fetch: fetchPersonio,
+    boardUrl: (slug) => `https://${slug}.jobs.personio.de`,
+  },
+  breezy: {
+    fetch: (slug) => fetchJson(`https://${slug}.breezy.hr/json`, (d) => [d, d?.[0]?.company?.name]),
+    boardUrl: (slug) => `https://${slug}.breezy.hr`,
+  },
 };
 
 // Unauthenticated and, per job board, does up to WORKDAY_MAX_PAGES fetches
@@ -224,7 +248,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Invalid input. Provide a job board URL (Ashby, Lever, Greenhouse, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, Workday, or Keka) or a slug.",
+            "Invalid input. Provide a job board URL (Ashby, Lever, Greenhouse, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, Workday, Keka, Rippling, Personio, or Breezy) or a slug.",
         },
         { status: 400 }
       );
@@ -280,7 +304,11 @@ export async function POST(request: NextRequest) {
     const adapter = ADAPTERS[source];
     for (const raw of "filterRaw" in adapter ? adapter.filterRaw(result.jobs) : result.jobs) {
       const job = adapter.normalizeJob(raw, companyNameForJobs) as NormalizedJob | null;
-      if (job) byId.set(job.jobId, job);
+      if (!job) continue;
+      // Rippling and Breezy list jobs without descriptions; the scraper fetches them per
+      // job (src/diff/index.js). This suffix, the same one it uses, makes it try these.
+      if (!job.description && "fetchDescription" in adapter) job.contentHash += ":nodesc";
+      byId.set(job.jobId, job);
     }
     const seenJobIds = [...byId.keys()];
     const total = seenJobIds.length;

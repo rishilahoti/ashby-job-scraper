@@ -2,6 +2,7 @@
 
 The server (Oracle Always Free ARM, shared with another project) runs these containers from `docker-compose.yml`
 in `~/ashby-web`: `web` (the Next.js standalone image from `web/Dockerfile`), `db` (the jobs Postgres),
+`scraper` (the job-board scraper, `Dockerfile` at the repo root; settings in `scraper.env`, see the compose file),
 `cloudflared` (the tunnel connector) and `umami`/`umami-db` (analytics). No ports are published; Cloudflare
 reaches `web:3000` and `db:5432` through the tunnel.
 

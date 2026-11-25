@@ -1,6 +1,7 @@
 const { logger, delay } = require('../utils');
 const { fetchJobBoard } = require('../fetch');
-const { loadRegistry, isValidSlug } = require('../sources');
+const fs = require('fs');
+const { loadRegistry, isValidSlug, SUPPORTED_SOURCES } = require('../sources');
 const store = require('../store');
 
 // Domains here share one hosted job-board domain with a path-based company slug
@@ -14,6 +15,7 @@ const CDX_DOMAINS = {
   greenhouse: 'job-boards.greenhouse.io',
   workable: 'apply.workable.com',
   smartrecruiters: 'jobs.smartrecruiters.com',
+  rippling: 'ats.rippling.com',
 };
 
 // These give each company its own subdomain (acme.recruitee.com) instead of a
@@ -26,6 +28,8 @@ const CDX_SUBDOMAIN_DOMAINS = {
   pinpoint: 'pinpointhq.com',
   workday: 'myworkdayjobs.com',
   keka: 'keka.com',
+  personio: 'jobs.personio.de',
+  breezy: 'breezy.hr',
 };
 
 // Bounds the requests per run if one of those indexes ever balloons.
@@ -90,7 +94,10 @@ function slugFromCrawledUrl(source, rawUrl) {
   let slug;
   const subdomainDomain = CDX_SUBDOMAIN_DOMAINS[source];
   if (!subdomainDomain) {
-    slug = url.pathname.split('/').filter(Boolean)[0];
+    const segments = url.pathname.split('/').filter(Boolean);
+    // Some Rippling board URLs start with a locale (/en-GB/acme/jobs) or /embed.
+    if (source === 'rippling' && /^([a-z]{2}-[a-z]{2}|embed)$/i.test(segments[0] ?? '')) segments.shift();
+    slug = segments[0];
   } else {
     if (!url.hostname.endsWith(`.${subdomainDomain}`)) return null;
     const labels = url.hostname.slice(0, -subdomainDomain.length - 1).split('.');
@@ -187,7 +194,7 @@ function companyName(slug, source) {
 // open jobs, records it — either printed (--dry-run) or upserted into the
 // companies table, which getEnabledCompaniesWithDb() already picks up on the
 // next scrape run without any registry.json edit.
-async function verifyAndAdd(slugs, source, { dryRun }) {
+async function verifyAndAdd(slugs, source, { dryRun, names = new Map() }) {
   let added = 0;
   let checked = 0;
 
@@ -207,7 +214,7 @@ async function verifyAndAdd(slugs, source, { dryRun }) {
       if (dryRun) {
         logger.info(`[dry-run] would add "${slug}" (${source}, ${jobCount} jobs)`);
       } else {
-        await store.upsertCompany(companyName(slug, source), slug, source);
+        await store.upsertCompany(names.get(slug) || companyName(slug, source), slug, source);
         logger.info(`Added "${slug}" (${source}, ${jobCount} jobs)`);
       }
       added++;
@@ -219,15 +226,34 @@ async function verifyAndAdd(slugs, source, { dryRun }) {
   return { checked, added };
 }
 
-async function discoverCompanies({ source, cdxLimit = 3000, verifyLimit = 300, dryRun = false }) {
+// A board list someone else published: one board per line, "slug" or
+// "slug<TAB>Company Name". Workday slugs are tenant/wdHost/site.
+function readSlugFile(file, source) {
+  const names = new Map();
+  for (const line of fs.readFileSync(file, 'utf-8').split(/\r?\n/)) {
+    const [rawSlug, name] = line.split('\t').map((s) => s.trim());
+    const slug = CASE_SENSITIVE_SOURCES.has(source) ? rawSlug : rawSlug.toLowerCase();
+    if (isValidSlug(slug, source)) names.set(slug, name || '');
+  }
+  return names;
+}
+
+async function discoverCompanies({ source, cdxLimit = 3000, verifyLimit = 300, dryRun = false, fromFile }) {
   const crawled = CDX_DOMAINS[source] ?? (CDX_SUBDOMAIN_DOMAINS[source] && `*.${CDX_SUBDOMAIN_DOMAINS[source]}`);
-  if (!crawled) {
-    const supported = [...Object.keys(CDX_DOMAINS), ...Object.keys(CDX_SUBDOMAIN_DOMAINS)];
+  if (fromFile ? !SUPPORTED_SOURCES.includes(source) : !crawled) {
+    const supported = fromFile ? SUPPORTED_SOURCES : [...Object.keys(CDX_DOMAINS), ...Object.keys(CDX_SUBDOMAIN_DOMAINS)];
     throw new Error(`Unsupported source "${source}" — must be one of: ${supported.join(', ')}`);
   }
 
-  logger.info(`Fetching crawled URLs for ${crawled} from Common Crawl...`);
-  const candidates = await fetchCandidateSlugs(source, cdxLimit);
+  let candidates;
+  let names;
+  if (fromFile) {
+    names = readSlugFile(fromFile, source);
+    candidates = [...names.keys()];
+  } else {
+    logger.info(`Fetching crawled URLs for ${crawled} from Common Crawl...`);
+    candidates = await fetchCandidateSlugs(source, cdxLimit);
+  }
   logger.info(`${candidates.length} unique candidate slugs found`);
 
   await store.initDb();
@@ -236,10 +262,10 @@ async function discoverCompanies({ source, cdxLimit = 3000, verifyLimit = 300, d
   logger.info(`${unknown.length} are not already tracked — verifying up to ${verifyLimit} of them live`);
 
   const toVerify = unknown.slice(0, verifyLimit);
-  const { checked, added } = await verifyAndAdd(toVerify, source, { dryRun });
+  const { checked, added } = await verifyAndAdd(toVerify, source, { dryRun, names });
 
   logger.info(`Checked ${checked} candidates — ${added} confirmed active and ${dryRun ? 'would be added' : 'added'}`);
   return { candidates: candidates.length, unknown: unknown.length, checked, added };
 }
 
-module.exports = { discoverCompanies, slugFromCrawledUrl };
+module.exports = { discoverCompanies, slugFromCrawledUrl, readSlugFile };

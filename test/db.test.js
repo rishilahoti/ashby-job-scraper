@@ -269,3 +269,38 @@ dbTest('digest jobs: only fresh postings on boards tracked before the window', a
 test.after(async () => {
   await closeDb();
 });
+
+dbTest('two boards with one company name keep their own jobs, and unseen jobs are hidden', async () => {
+  await initDb();
+  const pool = getPool();
+  const { detectChanges } = require('../src/diff');
+  const { deactivateUnseenJobs } = require('../src/store/jobs');
+  await pool.query(`DELETE FROM jobs WHERE company = 'TwoBoardsCo'`);
+
+  const job = (jobId, source) => ({
+    jobId, company: 'TwoBoardsCo', source, title: 'Engineer',
+    location: 'Remote', team: null, department: null, employmentType: null,
+    remote: true, description: 'd', applyUrl: 'https://x', jobUrl: 'https://x',
+    publishedAt: new Date().toISOString(), scrapedAt: new Date().toISOString(),
+    compensationSummary: null, compensationMin: null, compensationMax: null,
+    compensationCurrency: null, compensationInterval: null, contentHash: `hash-${jobId}`,
+  });
+  const active = async () => (await pool.query(
+    `SELECT job_id FROM jobs WHERE company = 'TwoBoardsCo' AND is_active ORDER BY 1`
+  )).rows.map((r) => r.job_id);
+
+  await detectChanges([job('a-1', 'ashby')], 'TwoBoardsCo', 'ashby');
+  await detectChanges([job('g-1', 'greenhouse')], 'TwoBoardsCo', 'greenhouse');
+  // Used to deactivate a-1: the Greenhouse board "didn't list it".
+  assert.deepEqual(await active(), ['a-1', 'g-1']);
+
+  // Unchanged jobs are touched in one batch, which keeps them active and seen.
+  const changes = await detectChanges([job('a-1', 'ashby')], 'TwoBoardsCo', 'ashby');
+  assert.equal(changes.length, 0);
+
+  await pool.query(`UPDATE jobs SET scraped_at = NOW() - INTERVAL '4 days' WHERE company = 'TwoBoardsCo' AND job_id = 'g-1'`);
+  await deactivateUnseenJobs(3);
+  assert.deepEqual(await active(), ['a-1']);
+
+  await pool.query(`DELETE FROM jobs WHERE company = 'TwoBoardsCo'`);
+});

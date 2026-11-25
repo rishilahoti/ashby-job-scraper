@@ -12,6 +12,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const SOURCE_NAMES = {
   ashby: 'Ashby', greenhouse: 'Greenhouse', lever: 'Lever', workable: 'Workable', recruitee: 'Recruitee',
   teamtailor: 'Teamtailor', pinpoint: 'Pinpoint', smartrecruiters: 'SmartRecruiters', workday: 'Workday', keka: 'Keka',
+  rippling: 'Rippling', personio: 'Personio', breezy: 'Breezy',
 };
 
 // CamelCase so screen readers say each word. Post 1 is for builders; the job

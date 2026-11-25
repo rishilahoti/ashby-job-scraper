@@ -16,7 +16,7 @@ permissions:
 jobs:
     discover:
         runs-on: ubuntu-latest
-        timeout-minutes: 45
+        timeout-minutes: 75
         environment: Production
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,7 +44,7 @@ jobs:
             # grows it gradually; raise this once the VM has room.
             - name: Discover companies
               run: |
-                  for s in ashby greenhouse workable smartrecruiters recruitee teamtailor pinpoint "workday --verify-limit 25" keka; do
+                  for s in ashby greenhouse workable smartrecruiters recruitee teamtailor pinpoint "workday --verify-limit 25" keka rippling personio breezy; do
                       node index.js discover --source $s || echo "::warning::discover --source $s failed"
                   done
               env:

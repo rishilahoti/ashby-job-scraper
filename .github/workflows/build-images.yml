@@ -12,7 +12,6 @@ on:
             - '!md/**'
             - '!**.md'
             - '!deploy/**'
-            - '!docker-compose.yml'
             - '!.claude/**'
             - '!.github/workflows/**'
             - '.github/workflows/build-images.yml'
@@ -23,7 +22,8 @@ env:
 
 jobs:
     build:
-        runs-on: ubuntu-latest
+        # The scraper runs on the arm64 Oracle server, next to the database (deploy/web/).
+        runs-on: ubuntu-24.04-arm
         permissions:
             contents: read
             packages: write
@@ -40,15 +40,15 @@ jobs:
                   password: ${{ secrets.GITHUB_TOKEN }}
 
             # Build and load locally first (no push yet) so the Trivy scan below can
-            # gate the actual push — a failed scan must never reach a tag Watchtower
-            # polls and auto-deploys from.
+            # gate the actual push — a failed scan must never reach the :latest tag
+            # the server's update cron pulls and runs.
             - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
               with:
                   context: .
                   file: ./Dockerfile
                   push: false
                   load: true
-                  platforms: linux/amd64
+                  platforms: linux/arm64
                   tags: |
                       ${{ env.REGISTRY }}/${{ github.repository }}-scraper:latest
                       ${{ env.REGISTRY }}/${{ github.repository }}-scraper:${{ github.sha }}

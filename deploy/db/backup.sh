@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Nightly pg_dump of the jobs DB, keeps the newest 7 here and on the scraper server. Runs from
+# Nightly pg_dump of the jobs DB, keeps the newest 3 here (the disk is shared with the DB) and 8 days
+# on the other server (offsite-keep.sh). Runs from
 # cron on the web server, where the DB lives (deploy/web/docker-compose.yml):
 #   0 2 * * * ~/db-backups/backup.sh >> ~/db-backups/backup.log 2>&1
 # Copied there by hand (like deploy/web/deploy.sh). Dumps through the db container, so no
@@ -35,7 +36,7 @@ out="jobs-$(date -u +%F).dump"
 docker compose -f ~/ashby-web/docker-compose.yml exec -T db \
   sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$tmp"
 mv "$tmp" "$out"
-ls -1t jobs-*.dump | tail -n +8 | xargs -r rm --
+ls -1t jobs-*.dump | tail -n +4 | xargs -r rm --
 # Off the box: losing this server's disk would otherwise take the DB and its dumps together.
 rsync -a "$out" backup-copy:
 echo "$(date -u +%FT%TZ) ok $out $(du -h "$out" | cut -f1)"

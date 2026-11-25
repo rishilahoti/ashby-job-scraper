@@ -48,6 +48,31 @@ services:
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
+  # Scrapes every job board on CRON_SCHEDULE, next to the database instead of through the tunnel from the
+  # 1 GB server it used to run on. scraper.env (mode 600, not in git) holds DATABASE_URL (@db:5432, as in
+  # web.env), CRON_SCHEDULE, EMAIL_*, DIGEST_EMAIL_TO, GROQ_API_KEY and LINKEDIN_ACCESS_TOKEN. New images: the
+  # crontab line in README.md pulls :latest and recreates only this container when it changed.
+  scraper:
+    image: ghcr.io/rishilahoti/ashby-job-scraper-scraper:latest
+    restart: unless-stopped
+    env_file: scraper.env
+    # Needs the internet (job boards) and the database.
+    networks: [default, jobs-db]
+    depends_on:
+      db:
+        condition: service_healthy
+    # One core and 2 GB at most, so a scrape can't slow the site or the other project. Big boards are
+    # 30-50 MB of JSON each, and 16 are fetched at once.
+    mem_limit: 2g
+    cpus: 1.0
+    pids_limit: 256
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      NODE_OPTIONS: --max-old-space-size=1536
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
   # The jobs database. No published port: web reaches it as db:5432 here, and the scraper, GitHub builds
   # and discover.yml come in through the tunnel (db.whatrunsindia.com -> tcp://db:5432, Access service
   # token only). The tunnel carries it encrypted, so no ssl. db.env holds POSTGRES_USER/PASSWORD/DB.
