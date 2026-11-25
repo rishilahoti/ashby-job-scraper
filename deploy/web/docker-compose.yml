@@ -50,8 +50,9 @@ services:
       options: { max-size: "10m", max-file: "3" }
   # Scrapes every job board on CRON_SCHEDULE, next to the database instead of through the tunnel from the
   # 1 GB server it used to run on. scraper.env (mode 600, not in git) holds DATABASE_URL (@db:5432, as in
-  # web.env), CRON_SCHEDULE, EMAIL_*, DIGEST_EMAIL_TO, GROQ_API_KEY and LINKEDIN_ACCESS_TOKEN. New images: the
-  # crontab line in README.md pulls :latest and recreates only this container when it changed.
+  # web.env), CRON_SCHEDULE, EMAIL_*, DIGEST_EMAIL_TO, GROQ_API_KEY, LINKEDIN_ACCESS_TOKEN,
+  # LINKEDIN_PAGE_ACCESS_TOKEN and LINKEDIN_PAGE_ID. New images: the crontab line in README.md pulls
+  # :latest and recreates only this container when it changed.
   scraper:
     image: ghcr.io/rishilahoti/ashby-job-scraper-scraper:latest
     restart: unless-stopped

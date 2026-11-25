@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const rules = require('../src/config/rules.json');
 const { computeStoredScore } = require('../src/intelligence/rules-engine');
 const { classifyNiche, NICHE_LABELS } = require('../src/digest/niche');
-const { buildDigest, pickTopJobs, copyFacts } = require('../src/digest/content');
+const { buildDigest, buildWeeklyPost, pickTopJobs, copyFacts } = require('../src/digest/content');
 const { checkCopy } = require('../src/digest/writer');
 const { postSlots, littleText } = require('../src/linkedin');
 
@@ -207,11 +207,43 @@ test('post 1: a busy day\'s shipped list gives way so the post fits LinkedIn', (
 });
 
 test('buildDigest: the email says when each post goes out', () => {
-  const postAt = postSlots(3, new Date('2026-10-04T00:10:00Z')); // a Sunday
-  const { text, posts } = buildDigest({ ...baseData(), postAt });
-  assert.match(text, /These post themselves on LinkedIn at 09:00, 15:00 and 21:00 IST\./);
+  const postAt = postSlots(3, new Date('2026-10-04T00:10:00Z'));
+  const weekly = { kind: 'recap', text: 'The week in jobs.', postAt: postAt[0] };
+  const { text, posts } = buildDigest({ ...baseData(), postAt, weekly });
+  assert.match(text, /These post themselves on the Ashby Jobs LinkedIn page at 09:00, 15:00 and 21:00 IST\./);
   assert.match(text, /== Post 3: today's jobs \(hook B\) · posts itself at 21:00 IST/);
+  assert.match(text, /== Your profile: week in review · posts itself at 09:00 IST .*\n-+\nThe week in jobs\.\n/);
+  // Only the Page's posts are queued from `posts`; the weekly one goes on its own.
   assert.equal(posts.length, 3);
+});
+
+const weekData = (overrides = {}) => baseData({ week: true, date: new Date('2026-10-03T00:10:00Z'), ...overrides });
+
+test('weekly recap: 7-day numbers, week number, points at the Page', () => {
+  const post = buildWeeklyPost(weekData(), 'recap');
+  assert.ok(post.startsWith('1,234 new jobs this week, straight from company career pages.\n\nWeek 32 of building Ashby Jobs in public. Last 7 days:\n→ 1,234 new jobs\n'));
+  assert.match(post, /Shipped:\n→ Daily digest email\n/);
+  assert.match(post, /\nNew jobs every day on the Ashby Jobs page: https:\/\/www\.linkedin\.com\/company\/ashby-jobs\n\n#BuildInPublic/);
+  assert.ok(!/24 hours|yesterday|What broke/.test(post));
+  const busy = buildWeeklyPost(weekData({ shipped: Array.from({ length: 30 }, (_, i) => ({ number: i, title: `PR ${i} ${'x'.repeat(120)}`, url: 'u' })) }), 'recap');
+  assert.ok(littleText(busy).length <= 3000);
+});
+
+test('weekly jobs: the week\'s best jobs with links, a Page line, null without software jobs', () => {
+  const post = buildWeeklyPost(weekData(), 'jobs');
+  assert.ok(post.startsWith('The 10 best software jobs posted this week, ranked by score 👇\n\n1. [40] 🎨 Frontend Engineer at Co0 (Berlin)\nLink: '));
+  assert.match(post, /\n1,234 new jobs landed this week, straight from company career pages\.\nNew jobs every day on the Ashby Jobs page: .*\n\n#Hiring/);
+  assert.equal(buildWeeklyPost({ ...weekData(), copy: goodCopy() }, 'jobs').split('\n')[0], goodCopy().jobHooks[0]);
+  assert.equal(buildWeeklyPost(weekData({ candidates: [job(1, 'Account Executive', 30)] }), 'jobs'), null);
+});
+
+test('checkCopy: a weekly draft can\'t use daily words', () => {
+  const facts = copyFacts(weekData());
+  assert.equal(facts.window, 'last 7 days');
+  const weekly = { ...goodCopy(), hook: '1,234 new jobs this week, from 1,061 companies.', jobHooks: ['These 10 roles opened this week.', goodCopy().jobHooks[1]] };
+  assert.equal(checkCopy(weekly, facts), null);
+  assert.match(checkCopy({ ...weekly, hook: '1,234 new jobs since yesterday.' }, facts), /daily wording/);
+  assert.match(checkCopy({ ...weekly, closer: 'They all opened overnight.' }, facts), /daily wording/);
 });
 
 test('buildDigest: no new software jobs means no jobs posts, and says so', () => {

@@ -3,11 +3,12 @@ const path = require('path');
 const nodemailer = require('nodemailer');
 const config = require('../config');
 const { logger, timeLimit } = require('../utils');
-const { buildDigest, copyFacts } = require('./content');
+const { buildDigest, buildWeeklyPost, copyFacts } = require('./content');
 const { writeCopy } = require('./writer');
 const linkedin = require('../linkedin');
 
 const REPO = 'rishilahoti/ashby-job-scraper';
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 // What shipped, for the build-in-public post. Public repo, so no token needed;
 // dependabot bumps aren't news. Best effort: the digest goes out without it.
@@ -99,7 +100,7 @@ async function collectDigestData(pool, { since }) {
     pool.query('SELECT COUNT(*)::int AS count FROM users').then((r) => r.rows[0].count, () => null),
     fetchShipped(since),
     // Posts that failed or were skipped since the last digest (src/linkedin).
-    pool.query('SELECT post_at, error FROM linkedin_posts WHERE error IS NOT NULL AND post_at >= $1 ORDER BY post_at', [since])
+    pool.query('SELECT target, post_at, error FROM linkedin_posts WHERE error IS NOT NULL AND post_at >= $1 ORDER BY post_at', [since])
       .then((r) => r.rows, () => []),
   ]);
 
@@ -147,6 +148,25 @@ async function lastDigestAt(pool) {
   return rows[0] ? new Date(rows[0].value) : null;
 }
 
+// Weekends: one post on the user's profile about the last 7 days, Saturday's
+// a recap and Sunday's the week's best jobs. Built even when the profile
+// can't post, so the email has it to copy. Null on weekdays or when Sunday
+// has no jobs; best effort, the daily digest goes out without it.
+async function weeklyPost(pool, until) {
+  if (!linkedin.isWeekend(until)) return null;
+  try {
+    const kind = until.getUTCDay() === 6 ? 'recap' : 'jobs';
+    const data = { ...(await collectDigestData(pool, { since: new Date(until - WEEK_MS) })), date: until, week: true };
+    const { copy } = await writeCopy(copyFacts(data));
+    const text = buildWeeklyPost({ ...data, copy }, kind);
+    const postAt = linkedin.enabled('profile') ? linkedin.postSlots(1, until)[0] || null : null;
+    return text && { kind, text, postAt };
+  } catch (err) {
+    logger.error(`Weekly LinkedIn post failed: ${err.message}`);
+    return null;
+  }
+}
+
 // Each digest covers everything since the previous one was sent: nothing
 // shows up twice, and jobs a restart run found during the day aren't missed.
 // Without a previous send, it covers the last 23 hours.
@@ -155,11 +175,13 @@ async function runDigest(pool, { since, dryRun = false } = {}) {
   if (!since) since = (await lastDigestAt(pool)) || new Date(until - 23 * 60 * 60 * 1000);
   const data = await collectDigestData(pool, { since });
   const { copy, note } = await writeCopy(copyFacts(data));
-  // Weekends: the update, then the jobs post twice; a day without new software
-  // jobs uses only the first slot, and a late digest only the slots still ahead.
-  const slots = linkedin.enabled() ? linkedin.postSlots(3) : [];
-  const late = linkedin.enabled() && !slots.length ? ' LinkedIn: nothing posts itself today (weekends only, at times still ahead).' : '';
-  let email = buildDigest({ ...data, copy, copyNote: note + late, postAt: slots.length ? slots : null });
+  // The Page, every day: the update, then the jobs post twice; a day without
+  // new software jobs uses only the first slot, and a late digest only the
+  // slots still ahead.
+  const slots = linkedin.enabled('page') ? linkedin.postSlots(3, until) : [];
+  const late = linkedin.enabled('page') && !slots.length ? ' LinkedIn: nothing posts itself on the page today (its times have passed).' : '';
+  let weekly = await weeklyPost(pool, until);
+  let email = buildDigest({ ...data, copy, copyNote: note + late, postAt: slots.length ? slots : null, weekly });
 
   if (dryRun) {
     fs.mkdirSync(config.notify.reportsDir, { recursive: true });
@@ -179,16 +201,30 @@ async function runDigest(pool, { since, dryRun = false } = {}) {
   const to = process.env.DIGEST_EMAIL_TO || 'rishilahoti99@gmail.com';
   // Queued before the email goes out, so the email says what actually
   // happened. Best effort: when nothing is queued, it has the posts to copy.
+  let problem = null;
   if (slots.length) {
-    let problem = null;
     try {
-      if (await linkedin.schedulePosts(pool, email.posts, slots)) logger.info(`Queued ${Math.min(email.posts.length, slots.length)} LinkedIn posts`);
-      else problem = 'an earlier digest already queued today\'s posts';
+      if (await linkedin.schedulePosts(pool, email.posts, slots, 'page')) logger.info(`Queued ${Math.min(email.posts.length, slots.length)} LinkedIn page posts`);
+      else problem = 'an earlier digest already queued today\'s page posts';
     } catch (err) {
-      problem = `queueing them failed (${err.message})`;
-      logger.error(`Queueing LinkedIn posts failed: ${err.message}`);
+      problem = `queueing the page posts failed (${err.message})`;
+      logger.error(`Queueing LinkedIn page posts failed: ${err.message}`);
     }
-    if (problem) email = buildDigest({ ...data, copy, copyNote: `${note} LinkedIn: ${problem}, so nothing posts itself.`, postAt: null });
+  }
+  let weeklyQueued = true;
+  if (weekly?.postAt) {
+    try {
+      weeklyQueued = await linkedin.schedulePosts(pool, [weekly.text], [weekly.postAt], 'profile');
+      if (weeklyQueued) logger.info('Queued the weekly LinkedIn profile post');
+    } catch (err) {
+      weeklyQueued = false;
+      logger.error(`Queueing the weekly LinkedIn post failed: ${err.message}`);
+    }
+    if (!weeklyQueued) weekly = { ...weekly, postAt: null };
+  }
+  if (problem || !weeklyQueued) {
+    const copyNote = problem ? `${note} LinkedIn: ${problem}, so they don't post themselves.` : note + late;
+    email = buildDigest({ ...data, copy, copyNote, postAt: problem || !slots.length ? null : slots, weekly });
   }
   await transport.sendMail({ from: `Ashby Jobs <${from}>`, to, subject: email.subject, text: email.text, html: email.html });
   logger.info(`Daily digest sent to ${to}`);
