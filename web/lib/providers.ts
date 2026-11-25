@@ -42,7 +42,7 @@ export const URL_PATTERNS: Record<Source, RegExp> = {
   // "tenant/wdHost/site" slug, unlike every other source's single group.
   workday: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.(wd\d+)\.myworkdayjobs\.com\/(?:[a-zA-Z]{2}-[a-zA-Z]{2}\/)?([a-zA-Z0-9_-]+)/,
   keka: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.keka\.com/,
-  rippling: /(?:https?:\/\/)?ats\.rippling\.com\/(?:[a-zA-Z]{2}-[a-zA-Z]{2}\/)?([a-zA-Z0-9_-]+)/,
+  rippling: /(?:https?:\/\/)?ats\.rippling\.com\/(?:(?:[a-zA-Z]{2}-[a-zA-Z]{2}|embed)\/)?([a-zA-Z0-9_-]+)/,
   personio: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.jobs\.personio\.(?:de|com)/,
   breezy: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.breezy\.hr/,
 };

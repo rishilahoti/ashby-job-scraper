@@ -296,7 +296,13 @@ async function fetchPersonioJobBoard(slug, source) {
   if (jobs.some(({ posting }) => /<jobDescriptions>\s*<\/jobDescriptions>/.test(posting))) {
     const url = buildUrl(slug);
     url.searchParams.set('language', 'en');
-    jobs.push(...await fetchOnce(url, {}, slug, source, extractJobs, parse));
+    // Only descriptions depend on it: the board's jobs are already listed, and
+    // failing here would leave them unseen (and hidden after 3 days).
+    try {
+      jobs.push(...await fetchOnce(url, {}, slug, source, extractJobs, parse));
+    } catch (err) {
+      logger.warn(`English feed failed for ${slug} (${source}), keeping the default one: ${err.message}`);
+    }
   }
   logger.info(`Fetched ${jobs.length} postings from ${slug} (${source})`);
   return { jobs };

@@ -370,7 +370,9 @@ export async function POST(request: NextRequest) {
            department        = EXCLUDED.department,
            employment_type   = EXCLUDED.employment_type,
            remote            = EXCLUDED.remote,
-           description       = EXCLUDED.description,
+           -- Rippling and Breezy lists carry no description: keep the one the scraper
+           -- fetched, with the hash and the description-based fields that go with it.
+           description       = COALESCE(EXCLUDED.description, jobs.description),
            apply_url         = EXCLUDED.apply_url,
            job_url           = EXCLUDED.job_url,
            published_at      = EXCLUDED.published_at,
@@ -380,12 +382,16 @@ export async function POST(request: NextRequest) {
            compensation_max      = EXCLUDED.compensation_max,
            compensation_currency = EXCLUDED.compensation_currency,
            compensation_interval = EXCLUDED.compensation_interval,
-           content_hash      = EXCLUDED.content_hash,
+           content_hash      = CASE WHEN EXCLUDED.description IS NULL AND jobs.description IS NOT NULL
+                                    THEN jobs.content_hash ELSE EXCLUDED.content_hash END,
            is_active         = TRUE,
-           base_score        = EXCLUDED.base_score,
-           matched_keywords  = EXCLUDED.matched_keywords,
+           base_score        = CASE WHEN EXCLUDED.description IS NULL AND jobs.description IS NOT NULL
+                                    THEN jobs.base_score ELSE EXCLUDED.base_score END,
+           matched_keywords  = CASE WHEN EXCLUDED.description IS NULL AND jobs.description IS NOT NULL
+                                    THEN jobs.matched_keywords ELSE EXCLUDED.matched_keywords END,
            department_group  = EXCLUDED.department_group,
-           min_years         = EXCLUDED.min_years,
+           min_years         = CASE WHEN EXCLUDED.description IS NULL AND jobs.description IS NOT NULL
+                                    THEN jobs.min_years ELSE EXCLUDED.min_years END,
            updated_at        = NOW()`,
         [JSON.stringify(payload), companyNameForJobs, source]
       );

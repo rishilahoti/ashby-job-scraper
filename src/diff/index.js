@@ -43,7 +43,12 @@ async function detectChanges(normalizedJobs, company, source) {
   const existingHashes = await store.getContentHashesForCompany(company, source);
   const unchanged = [];
 
-  for (const job of normalizedJobs) {
+  // Jobs never tried for a description first, earlier failures after them in a
+  // random order: the same failing jobs must not take the whole budget each run.
+  const retryKey = new Map(normalizedJobs.map(j => [j.jobId, existingHashes.get(j.jobId)?.endsWith(NO_DESCRIPTION) ? 1 + Math.random() : 0]));
+  const ordered = [...normalizedJobs].sort((a, b) => retryKey.get(a.jobId) - retryKey.get(b.jobId));
+
+  for (const job of ordered) {
     if (existingHashes.get(job.jobId) === job.contentHash) {
       unchanged.push(job.jobId);
       continue;

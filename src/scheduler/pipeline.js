@@ -18,12 +18,21 @@ const WORKDAY_CONCURRENCY = 3;
 const UNSEEN_DAYS = 3;
 
 // Runs fn over items with `limit` of them in flight at once. Unlike fixed
-// batches, one slow board doesn't hold up the next 15.
+// batches, one slow board doesn't hold up the next 15. A rejected item is
+// logged and skipped, so the pool only returns (and runPipeline only releases
+// its lock) once every worker is done.
 async function runPool(items, limit, fn) {
   const results = [];
   let next = 0;
   const worker = async () => {
-    while (next < items.length) results.push(...await fn(items[next++]));
+    while (next < items.length) {
+      const item = items[next++];
+      try {
+        results.push(...await fn(item));
+      } catch (err) {
+        logger.error(`Pipeline error for ${item.company}: ${err.message}`);
+      }
+    }
   };
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
   return results;
@@ -118,7 +127,6 @@ async function runPipeline() {
 
     logger.info(`Processing ${companies.length} companies (concurrency=${CONCURRENCY})`);
 
-    // scrapeCompany catches its own errors, so neither lane can reject.
     const isWorkday = (c) => c.source === 'workday';
     const lanes = await Promise.all([
       runPool(companies.filter(c => !isWorkday(c)), CONCURRENCY, scrapeCompany),

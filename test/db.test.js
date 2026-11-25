@@ -294,11 +294,12 @@ dbTest('two boards with one company name keep their own jobs, and unseen jobs ar
   // Used to deactivate a-1: the Greenhouse board "didn't list it".
   assert.deepEqual(await active(), ['a-1', 'g-1']);
 
-  // Unchanged jobs are touched in one batch, which keeps them active and seen.
+  // Both look 4 days unseen; then a-1's board lists it again, unchanged. The batch
+  // touch must mark it seen, or the cleanup below would hide it too.
+  await pool.query(`UPDATE jobs SET scraped_at = NOW() - INTERVAL '4 days' WHERE company = 'TwoBoardsCo'`);
   const changes = await detectChanges([job('a-1', 'ashby')], 'TwoBoardsCo', 'ashby');
   assert.equal(changes.length, 0);
 
-  await pool.query(`UPDATE jobs SET scraped_at = NOW() - INTERVAL '4 days' WHERE company = 'TwoBoardsCo' AND job_id = 'g-1'`);
   await deactivateUnseenJobs(3);
   assert.deepEqual(await active(), ['a-1']);
 
