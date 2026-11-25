@@ -28,6 +28,7 @@ Hooks:
 
 Rules:
 - Plain text only: no markdown, hashtags, links, URLs or questions.
+- Every number covers FACTS.window. For "last 7 days" say "this week", never yesterday, overnight, today or last night.
 - Only use numbers that appear in FACTS, exactly as given. Don't compute new numbers, percentages or rankings, and don't claim anything FACTS doesn't say.
 - broke: name the companies and say their job boards stopped loading. No promises, apologies, "on it" or "stay tuned".
 - No hype words: thrilled, excited, game-changer, revolutionary, unlock, delve, leverage, journey, seamless. No rocket emoji.`;
@@ -66,6 +67,8 @@ function checkCopy(copy, facts) {
   if (facts.broke.boards && !facts.broke.companies.every((c) => broke.includes(c))) return 'broke line leaves out a company';
   // A company name alone ("JustBrokeCo is hiring") isn't the failure.
   if (facts.broke.boards && !/stopped loading/i.test(broke)) return 'broke line doesn\'t say the boards stopped loading';
+  // A weekly post that says "overnight" would put a week's numbers on one night.
+  if (facts.window === 'last 7 days' && lines.some((l) => /\b(yesterday|overnight|today|tonight|last night|24 hours)\b/i.test(l))) return 'daily wording in a weekly post';
   const allowed = new Set(numbersIn(JSON.stringify(facts)));
   for (const line of lines) {
     if (line.length > 160 || line.includes('\n')) return `too long: "${line.slice(0, 60)}…"`;

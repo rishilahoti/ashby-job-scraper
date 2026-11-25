@@ -173,7 +173,7 @@ async function migrateSchema(p) {
 
   // LinkedIn posts the digest queued (src/linkedin): published when post_at
   // comes, then marked with posted_at or the error. (day, position) is how
-  // schedulePosts claims a UTC day: one set of posts per day.
+  // schedulePosts claims a UTC day: one set of posts per day (and target, below).
   await p.query(`
     CREATE TABLE IF NOT EXISTS linkedin_posts (
       id SERIAL PRIMARY KEY,
@@ -188,6 +188,11 @@ async function migrateSchema(p) {
       UNIQUE (day, position)
     )
   `);
+
+  // Two targets since the Page got the daily posts: each claims its own day.
+  await p.query(`ALTER TABLE linkedin_posts ADD COLUMN IF NOT EXISTS target TEXT NOT NULL DEFAULT 'profile'`);
+  await p.query(`ALTER TABLE linkedin_posts DROP CONSTRAINT IF EXISTS linkedin_posts_day_position_key`);
+  await p.query(`CREATE UNIQUE INDEX IF NOT EXISTS linkedin_posts_day_target_position ON linkedin_posts (day, target, position)`);
 
   // --- one-time migrations for existing deployments ---
 

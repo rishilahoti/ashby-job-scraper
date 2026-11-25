@@ -1,7 +1,13 @@
-// Publishes the digest's LinkedIn posts on the user's profile, 6 hours apart.
-// Off until LINKEDIN_ACCESS_TOKEN is set: a 60-day token from LinkedIn's
-// token generator for an app with "Share on LinkedIn" and "Sign In with
-// LinkedIn using OpenID Connect" (scopes openid, profile, w_member_social).
+// Publishes the digest's LinkedIn posts to two places:
+// - page: the Ashby Jobs company Page, every day, 3 posts 6 hours apart. On
+//   once LINKEDIN_PAGE_ACCESS_TOKEN (from a Community Management app, scope
+//   w_organization_social; WhatRunsIndia's page token works, the user admins
+//   both Pages) and LINKEDIN_PAGE_ID are set.
+// - profile: the user's own profile, one weekly summary on Saturdays and
+//   Sundays (weekdays belong to WhatRunsIndia there). On once
+//   LINKEDIN_ACCESS_TOKEN is set: a 60-day token from LinkedIn's token
+//   generator for an app with "Share on LinkedIn" and "Sign In with LinkedIn
+//   using OpenID Connect" (scopes openid, profile, w_member_social).
 const { logger, timeLimit } = require('../utils');
 
 // ponytail: LinkedIn retires each API version about a year after release.
@@ -14,16 +20,24 @@ const GAP_MS = 6 * 60 * 60 * 1000;
 // minutes before the next one.
 const MAX_LATE_MS = 60 * 60 * 1000;
 
-const enabled = () => Boolean(process.env.LINKEDIN_ACCESS_TOKEN);
+const TOKENS = { page: 'LINKEDIN_PAGE_ACCESS_TOKEN', profile: 'LINKEDIN_ACCESS_TOKEN' };
+
+// One target, or with none, whether anything posts at all.
+function enabled(target) {
+  if (target === 'page') return Boolean(process.env.LINKEDIN_PAGE_ACCESS_TOKEN && process.env.LINKEDIN_PAGE_ID);
+  if (target === 'profile') return Boolean(process.env.LINKEDIN_ACCESS_TOKEN);
+  return enabled('page') || enabled('profile');
+}
+
+// Saturday or Sunday (UTC, which is also the IST day from 05:30 IST on).
+const isWeekend = (now = new Date()) => [0, 6].includes(now.getUTCDay());
 
 // Today's fixed slots still ahead of `now`, at most `count`. A late digest
 // keeps the times and drops the posts that missed theirs, last ones first
-// (the second jobs post is a repeat). Saturdays and Sundays only: weekdays
-// belong to WhatRunsIndia on the same profile.
+// (the second jobs post is a repeat).
 function postSlots(count, now = new Date()) {
   const first = new Date(now);
   first.setUTCHours(FIRST_SLOT_UTC[0], FIRST_SLOT_UTC[1], 0, 0);
-  if (![0, 6].includes(first.getUTCDay())) return [];
   return Array.from({ length: count }, (_, i) => new Date(first.getTime() + i * GAP_MS)).filter((slot) => slot >= now);
 }
 
@@ -34,20 +48,20 @@ function littleText(text) {
   return text.replace(/[\\|{}@[\]()<>#*_~]/g, '\\$&').replace(/(^|\s)\\#(?=[A-Za-z])/g, '$1#');
 }
 
-// One set of posts per UTC day, so a second digest (a manual send) can't
-// double-post. All or nothing: the set goes in as one transaction, and the
-// (day, position) key makes a concurrent digest wait, then find the day taken.
-// Queues one post per slot; false when the day's posts are already queued.
-async function schedulePosts(pool, texts, slots) {
+// One set of posts per UTC day and target, so a second digest (a manual send)
+// can't double-post. All or nothing: the set goes in as one transaction, and
+// the (day, target, position) key makes a concurrent digest wait, then find
+// the day taken. Queues one post per slot; false when they're already queued.
+async function schedulePosts(pool, texts, slots, target) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     for (const [i, text] of texts.slice(0, slots.length).entries()) {
       const { rowCount } = await client.query(
-        `INSERT INTO linkedin_posts (day, position, text, post_at)
-         VALUES ((NOW() AT TIME ZONE 'UTC')::date, $1, $2, $3)
-         ON CONFLICT (day, position) DO NOTHING`,
-        [i, text, slots[i]]
+        `INSERT INTO linkedin_posts (day, target, position, text, post_at)
+         VALUES ((NOW() AT TIME ZONE 'UTC')::date, $1, $2, $3, $4)
+         ON CONFLICT (day, target, position) DO NOTHING`,
+        [target, i, text, slots[i]]
       );
       if (!rowCount) {
         await client.query('ROLLBACK');
@@ -64,11 +78,11 @@ async function schedulePosts(pool, texts, slots) {
   }
 }
 
-async function request(path, body) {
+async function request(path, body, token) {
   const res = await timeLimit(fetch(`https://api.linkedin.com${path}`, {
     method: body ? 'POST' : 'GET',
     headers: {
-      Authorization: `Bearer ${process.env.LINKEDIN_ACCESS_TOKEN}`,
+      Authorization: `Bearer ${token}`,
       ...(path.startsWith('/rest/') ? { 'LinkedIn-Version': API_VERSION, 'X-Restli-Protocol-Version': '2.0.0' } : {}),
       ...(body ? { 'Content-Type': 'application/json' } : {}),
     },
@@ -79,16 +93,20 @@ async function request(path, body) {
   return res;
 }
 
-async function publish(text) {
-  const me = await timeLimit((await request('/v2/userinfo')).json(), 30000);
+async function publish(text, target) {
+  const token = process.env[TOKENS[target]];
+  if (!token) throw new Error(`${TOKENS[target]} isn't set`);
+  const author = target === 'page'
+    ? `urn:li:organization:${process.env.LINKEDIN_PAGE_ID}`
+    : `urn:li:person:${(await timeLimit((await request('/v2/userinfo', null, token)).json(), 30000)).sub}`;
   const res = await request('/rest/posts', {
-    author: `urn:li:person:${me.sub}`,
+    author,
     commentary: littleText(text),
     visibility: 'PUBLIC',
     distribution: { feedDistribution: 'MAIN_FEED', targetEntities: [], thirdPartyDistributionChannels: [] },
     lifecycleState: 'PUBLISHED',
     isReshareDisabledByAuthor: false,
-  });
+  }, token);
   return res.headers.get('x-restli-id');
 }
 
@@ -103,7 +121,7 @@ async function postDue(pool) {
      WHERE id = (SELECT id FROM linkedin_posts
                  WHERE posted_at IS NULL AND error IS NULL AND post_at <= NOW()
                  ORDER BY post_at LIMIT 1)
-     RETURNING id, text, post_at`
+     RETURNING id, target, text, post_at`
   );
   const post = rows[0];
   if (!post) return;
@@ -113,14 +131,14 @@ async function postDue(pool) {
   }
   let urn;
   try {
-    urn = await publish(post.text);
+    urn = await publish(post.text, post.target);
   } catch (err) {
     await pool.query('UPDATE linkedin_posts SET error = $2 WHERE id = $1', [post.id, err.message]);
     logger.error(`LinkedIn post ${post.id} failed: ${err.message}`);
     return;
   }
   await pool.query('UPDATE linkedin_posts SET posted_at = NOW(), post_urn = $2, error = NULL WHERE id = $1', [post.id, urn]);
-  logger.info(`Posted to LinkedIn: ${urn}`);
+  logger.info(`Posted to LinkedIn (${post.target}): ${urn}`);
 }
 
-module.exports = { enabled, postSlots, littleText, schedulePosts, postDue };
+module.exports = { TOKENS, enabled, isWeekend, postSlots, littleText, schedulePosts, postDue };

@@ -15,7 +15,7 @@ Files on the server (not in git):
   `docker compose up -d --force-recreate web`. `DATABASE_URL` is `postgres://<user>:<password>@db:5432/<db>`.
 - `scraper.env` (mode 600, create it before the first `docker compose up -d`; compose refuses to start without it):
   `DATABASE_URL` (the same `@db:5432` value as `web.env`), `CRON_SCHEDULE` (`0 21 * * *`), `DIGEST_EMAIL_TO`,
-  `EMAIL_SERVER_HOST/PORT/USER/PASSWORD`, `EMAIL_FROM`, `GROQ_API_KEY`, `LINKEDIN_ACCESS_TOKEN`. The last five are
+  `EMAIL_SERVER_HOST/PORT/USER/PASSWORD`, `EMAIL_FROM`, `GROQ_API_KEY`, `LINKEDIN_ACCESS_TOKEN`, `LINKEDIN_PAGE_ACCESS_TOKEN` + `LINKEDIN_PAGE_ID`. The last six are
   optional: the digest email, Groq-written LinkedIn copy and LinkedIn posting each stay off while theirs are unset.
 - `db.env` (mode 600): `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, the same values the scraper
   server's `.env` uses.

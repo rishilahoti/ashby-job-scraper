@@ -5,6 +5,8 @@ const { classifyNiche, NICHE_LABELS } = require('./niche');
 const { littleText } = require('../linkedin');
 
 const SITE_URL = (process.env.SITE_URL || 'https://jobs.whatrunsindia.com').replace(/\/+$/, '');
+// The Ashby Jobs company Page, where the daily posts go (src/linkedin).
+const PAGE_URL = 'https://www.linkedin.com/company/ashby-jobs';
 // First commit and Vercel project: day 1 of the build-in-public counter.
 const LAUNCH_DATE = Date.UTC(2026, 1, 28);
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -36,9 +38,12 @@ function jobList(jobs) {
   });
 }
 
+// The weekend posts (buildWeeklyPost) cover 7 days, the daily ones 24 hours.
+const period = (data) => (data.week ? 'this week' : 'in the last 24 hours');
+
 // Everything in a jobs post below its hook.
 function jobsBody(data, jobs) {
-  return [...jobList(jobs), `${fmt(data.run.new)} new jobs landed in the last 24 hours, straight from company career pages.`, '', jobTags(jobs)].join('\n');
+  return [...jobList(jobs), `${fmt(data.run.new)} new jobs landed ${period(data)}, straight from company career pages.`, '', jobTags(jobs)].join('\n');
 }
 
 // LinkedIn rejects posts over 3,000 characters, counted here after escaping.
@@ -149,16 +154,50 @@ function buildPost1(data, day) {
     lines.push(failures.length ? '→ Nothing new. Every board that worked yesterday still works ✅' : '→ Nothing. Every job board loaded ✅');
   }
   lines.push('', ...(copy ? [copy.closer] : []), `Free, no sign-up: ${SITE_URL}`, '', BUILD_TAGS);
-  // Up to 30 merged PRs can make the post too long for LinkedIn: the shipped
-  // list gives way first, from the bottom.
+  return withShipped(lines.slice(0, shippedAt), shippedLines, lines.slice(shippedAt));
+}
+
+// Up to 30 merged PRs can make a post too long for LinkedIn: the shipped
+// list gives way first, from the bottom.
+function withShipped(before, shippedLines, after) {
   for (let n = shippedLines.length; ; n--) {
     const more = shippedLines.length - n;
     const shippedPart = shippedLines.length
       ? ['', 'Shipped:', ...shippedLines.slice(0, n).map((s) => `→ ${s}`), ...(more ? [`→ …and ${more} more`] : [])]
       : [];
-    const post = [...lines.slice(0, shippedAt), ...shippedPart, ...lines.slice(shippedAt)].join('\n');
+    const post = [...before, ...shippedPart, ...after].join('\n');
     if (!n || littleText(post).length <= MAX_POST) return post;
   }
+}
+
+// The weekend post on the user's profile, from 7 days of data (data.week):
+// Saturday ('recap') sums up the week, Sunday ('jobs') lists its best jobs.
+// Both point at the Page, where the daily posts now go. Null when Sunday has
+// no software jobs to list.
+function buildWeeklyPost(data, kind) {
+  const { run, newCompanies, totals, users, shipped, copy } = data;
+  const follow = `New jobs every day on the Ashby Jobs page: ${PAGE_URL}`;
+  if (kind === 'jobs') {
+    const picked = topJobs(data);
+    if (!picked.length) return null;
+    const hook = copy?.jobHooks[0] || `The ${picked.length} best software jobs posted this week, ranked by score 👇`;
+    const post = `${hook}\n\n${jobsBody(data, picked)}`;
+    // The follow line goes above the tags, if it still fits.
+    const withFollow = post.replace(/\n\n(#[^\n]*)$/, `\n${follow}\n\n$1`);
+    return littleText(withFollow).length <= MAX_POST ? withFollow : post;
+  }
+  const lines = copy ? [copy.hook, ...(copy.hookLine2 ? [copy.hookLine2] : [])] : [`${fmt(run.new)} new jobs this week, straight from company career pages.`];
+  lines.push('', `Week ${Math.ceil(dayNumber(data.date) / 7)} of building Ashby Jobs in public. Last 7 days:`, `→ ${fmt(run.new)} new jobs`);
+  if (newCompanies.length) {
+    const noun = newCompanies.length === 1 ? 'company' : 'companies';
+    lines.push(`→ ${fmt(newCompanies.length)} new ${noun} (${listNames(newCompanies.map((c) => c.name))})`);
+  }
+  if (run.removed) lines.push(`→ ${fmt(run.removed)} jobs closed or filled`);
+  lines.push('', `Now tracking ${fmt(totals.jobs)} live jobs from ${fmt(totals.companies)} companies across ${platforms(totals.sources)}.`);
+  if (users) lines.push(`${fmt(users)} job seekers have signed up so far.`);
+  const shippedLines = copy ? copy.shipped.filter(Boolean) : shipped.map((p) => p.title);
+  const after = ['', ...(copy ? [copy.closer] : []), `Free, no sign-up: ${SITE_URL}`, follow, '', BUILD_TAGS];
+  return withShipped(lines, shippedLines, after);
 }
 
 // Posts 2 and 3 are the same list under different hooks, rotating through the
@@ -213,11 +252,14 @@ function buildDigest(data) {
   // A late digest gets fewer slots than posts (postSlots).
   const when = (i) => (data.postAt ? (data.postAt[i] ? ` · posts itself at ${ist(data.postAt[i])} IST` : ' · not posted automatically') : '');
   const intro = data.postAt
-    ? `these post themselves on LinkedIn at ${joinAnd(data.postAt.slice(0, 1 + jobPosts.length).map(ist))} IST`
-    : 'posts below are ready to copy into LinkedIn';
+    ? `these post themselves on the Ashby Jobs LinkedIn page at ${joinAnd(data.postAt.slice(0, 1 + jobPosts.length).map(ist))} IST`
+    : 'posts below are ready to copy into the Ashby Jobs LinkedIn page';
+  const { weekly } = data;
   const posts = [
     [`Post 1: platform update${when(0)}`, post1],
     ...jobPosts.map((p, i) => [`Post ${i + 2}: today's jobs (hook ${'AB'[i]})${when(i + 1)}`, p]),
+    ...(weekly ? [[`Your profile: ${weekly.kind === 'recap' ? 'week in review' : 'best jobs of the week'}${weekly.postAt
+      ? ` · posts itself at ${ist(weekly.postAt)} IST` : ' · not posted automatically'}`, weekly.text]] : []),
   ];
   const noJobsNote = picked.length ? '' : 'No new software jobs in this window, so skip the jobs posts today.';
   const jobLines = picked.map((j, i) => `${i + 1}. [${j.score}] ${NICHE_LABELS[j.niche].name} · ${j.title} at ${j.company}${where(j) ? ` · ${where(j)}` : ''} · ${jobUrl(j)}`);
@@ -231,9 +273,10 @@ function buildDigest(data) {
       ? [`${stale.length} boards failing for 2+ days (a 404 usually means the company moved job platforms; remove or re-add them): ${listNames(stale.map((f) => f.company), 40)}`]
       : []),
     // LinkedIn tokens last 60 days; a 401 means it's time for a new one.
-    ...(data.linkedinErrors || []).map((e) => `LinkedIn post due ${ist(new Date(e.post_at))} IST: ${e.error}${/HTTP 401/.test(e.error)
-      ? ' (the token expired: make a new one at https://www.linkedin.com/developers/tools/oauth/token-generator and set LINKEDIN_ACCESS_TOKEN in the VM\'s .env)'
-      : ''}`),
+    ...(data.linkedinErrors || []).map((e) => `LinkedIn ${e.target} post due ${ist(new Date(e.post_at))} IST: ${e.error}${!/HTTP 401/.test(e.error) ? ''
+      : e.target === 'page'
+        ? ' (the token expired: it\'s WhatRunsIndia\'s Community Management token; make a new one and set LINKEDIN_PAGE_ACCESS_TOKEN in both apps\' .env)'
+        : ' (the token expired: make a new one at https://www.linkedin.com/developers/tools/oauth/token-generator and set LINKEDIN_ACCESS_TOKEN in the VM\'s scraper.env)'}`),
   ];
 
   const textSection = (title, lines) => (lines.length ? [`== ${title} ==`, ...lines, ''] : []);
@@ -278,7 +321,7 @@ function copyFacts(data) {
   const { fresh } = splitFailures(data);
   const { run, newCompanies, totals, users, shipped } = data;
   return {
-    window: 'last 24 hours',
+    window: data.week ? 'last 7 days' : 'last 24 hours',
     newJobs: run.new,
     closedJobs: run.removed,
     moreJobsClosedThanOpened: run.removed > run.new,
@@ -299,4 +342,4 @@ function copyFacts(data) {
   };
 }
 
-module.exports = { buildDigest, pickTopJobs, copyFacts };
+module.exports = { buildDigest, buildWeeklyPost, pickTopJobs, copyFacts };
