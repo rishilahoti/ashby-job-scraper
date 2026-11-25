@@ -31,7 +31,7 @@ program
     const { startScheduler, runPipeline } = require('./src/scheduler');
     logger.info('Running initial scrape before starting scheduler...');
     try {
-      // Runs on every container restart (each Watchtower redeploy), so it
+      // Runs on every container restart (each new image the update cron pulls), so it
       // only sends the digest when none went out today (see sendDailyDigest).
       await runPipeline();
     } catch (err) {
@@ -103,7 +103,7 @@ program
   .command('add <slug>')
   .description('Add a company to the source registry')
   .option('-n, --name <name>', 'Company display name')
-  .option('-s, --source <source>', 'ATS source: ashby, lever, greenhouse, workable, recruitee, teamtailor, pinpoint, smartrecruiters, or workday', 'ashby')
+  .option('-s, --source <source>', 'ATS source: ashby, lever, greenhouse, workable, recruitee, teamtailor, pinpoint, smartrecruiters, workday, keka, rippling, personio, or breezy', 'ashby')
   .action((slug, options) => {
     const { addCompany } = require('./src/sources');
     const success = addCompany(slug, options.name, options.source);
@@ -117,7 +117,8 @@ program
 program
   .command('discover')
   .description('Crawl Common Crawl for new company boards, verify against the live API, and add them')
-  .requiredOption('-s, --source <source>', 'ashby, greenhouse, workable, smartrecruiters, recruitee, teamtailor, pinpoint, workday, or keka (Lever blocks Common Crawl\'s bot, so it isn\'t supported here)')
+  .requiredOption('-s, --source <source>', 'ashby, greenhouse, workable, smartrecruiters, recruitee, teamtailor, pinpoint, workday, keka, rippling, personio, or breezy (Lever blocks Common Crawl\'s bot, so it needs --from)')
+  .option('--from <file>', 'read candidate boards from a file (one "slug" or "slug<TAB>name" per line) instead of Common Crawl')
   .option('--cdx-limit <n>', 'max Common Crawl URLs to scan (path-based sources; subdomain sources read every page)', (v) => parseInt(v, 10), 3000)
   .option('--verify-limit <n>', 'max new candidates to verify against the live API', (v) => parseInt(v, 10), 300)
   .option('--dry-run', 'print what would be added without writing to the database')
@@ -129,6 +130,7 @@ program
         cdxLimit: options.cdxLimit,
         verifyLimit: options.verifyLimit,
         dryRun: !!options.dryRun,
+        fromFile: options.from,
       });
     } catch (err) {
       logger.error(`Discovery failed: ${err.message}`);

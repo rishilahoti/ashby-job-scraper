@@ -1,4 +1,5 @@
 {
+  "git": { "deploymentEnabled": false },
   "installCommand": "npm ci --prefix .. && npm install --legacy-peer-deps",
   "ignoreCommand": "[ -n \"$VERCEL_GIT_PREVIOUS_SHA\" ] && git diff --quiet \"$VERCEL_GIT_PREVIOUS_SHA\" HEAD -- . ':(exclude)vercel.json' ../src/config/rules.json ../src/intelligence ../src/normalize ../src/utils || exit 1"
 }

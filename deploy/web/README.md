@@ -2,6 +2,7 @@
 
 The server (Oracle Always Free ARM, shared with another project) runs these containers from `docker-compose.yml`
 in `~/ashby-web`: `web` (the Next.js standalone image from `web/Dockerfile`), `db` (the jobs Postgres),
+`scraper` (the job-board scraper, `Dockerfile` at the repo root; settings in `scraper.env`, see the compose file),
 `cloudflared` (the tunnel connector) and `umami`/`umami-db` (analytics). No ports are published; Cloudflare
 reaches `web:3000` and `db:5432` through the tunnel.
 
@@ -12,6 +13,10 @@ Files on the server (not in git):
 - `web.env` (mode 600): the app's settings: `DATABASE_URL`, `DB_POOL_MAX`, `AUTH_SECRET`, `AUTH_URL`,
   `AUTH_TRUST_HOST`, `AUTH_GOOGLE_ID/SECRET`, `AUTH_GITHUB_ID/SECRET`, `EMAIL_*`. Changing it needs
   `docker compose up -d --force-recreate web`. `DATABASE_URL` is `postgres://<user>:<password>@db:5432/<db>`.
+- `scraper.env` (mode 600, create it before the first `docker compose up -d`; compose refuses to start without it):
+  `DATABASE_URL` (the same `@db:5432` value as `web.env`), `CRON_SCHEDULE` (`0 21 * * *`), `DIGEST_EMAIL_TO`,
+  `EMAIL_SERVER_HOST/PORT/USER/PASSWORD`, `EMAIL_FROM`, `GROQ_API_KEY`, `LINKEDIN_ACCESS_TOKEN`. The last five are
+  optional: the digest email, Groq-written LinkedIn copy and LinkedIn posting each stay off while theirs are unset.
 - `db.env` (mode 600): `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, the same values the scraper
   server's `.env` uses.
 - `deploy.sh`: copied from this folder. It is the only command the GitHub Actions deploy key may run
@@ -19,6 +24,20 @@ Files on the server (not in git):
   `.env`, keeps only the new and previous image tags, and rolls back unless the new image is the one running,
   reports healthy and answers `https://jobs.whatrunsindia.com/api/health` (which runs `SELECT 1`) through Cloudflare.
   After a rollback it waits for the previous image the same way and says whether that worked.
+
+Crontab on this server (`crontab -l`), besides the backup line in `deploy/db/backup.sh`:
+
+```
+# New scraper images (build-images.yml pushes :latest); recreates the container only when it changed,
+# then drops the untagged image it replaced.
+*/15 * * * * cd ~/ashby-web && docker compose pull -q scraper && docker compose up -d scraper >/dev/null 2>&1 && docker image prune -f >/dev/null
+# Every deploy leaves old images and build cache behind (5.8 GB of cache by 2026-11). Only images no
+# container uses, built over a week ago; a pruned rollback tag is pulled again by deploy.sh's compose up.
+# Docker here is shared with the other project, whose unused images and cache this prunes too.
+0 4 * * 0 docker image prune -af --filter until=168h >/dev/null && docker builder prune -af --filter until=168h >/dev/null
+```
+
+The backup server (the 1 GB Micro) runs no containers; its crontab is `deploy/db/offsite-keep.sh` only.
 
 `deploy.sh` and `docker-compose.yml` are copied to the server by hand when they change: the deploy key
 can only run `deploy.sh`, so it can't update either file (on purpose). Ship the image first when a change

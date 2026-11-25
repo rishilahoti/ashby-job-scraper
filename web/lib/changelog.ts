@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "rippling",
+    date: "2026-11-25",
+    title: "Rippling, Personio and Breezy jobs, and closed jobs leave sooner",
+    description:
+      "We now read Rippling, Personio and Breezy job boards too (13 in all), with full descriptions, and you can add their companies from +Add. Thousands more companies on Greenhouse, Lever and Ashby are joining the feed. A job we can't see on its company's board for three days is taken off the site, so fewer listings lead to a closed posting.",
+  },
+  {
     id: "privacy-and-ads",
     date: "2026-10-30",
     title: "A privacy policy, and ads on job pages",

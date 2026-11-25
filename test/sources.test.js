@@ -15,6 +15,9 @@ test('all implemented ATS providers can be registered', () => {
     'smartrecruiters',
     'workday',
     'keka',
+    'rippling',
+    'personio',
+    'breezy',
   ]);
 });
 

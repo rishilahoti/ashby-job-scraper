@@ -25,6 +25,9 @@ const SOURCE_META: Record<Source, { label: string; domain: string; placeholder: 
   smartrecruiters: { label: "SmartRecruiters", domain: "jobs.smartrecruiters.com", placeholder: "https://jobs.smartrecruiters.com/Company  or  Company (case-sensitive)" },
   workday: { label: "Workday", domain: "myworkdayjobs.com", placeholder: "https://company.wd5.myworkdayjobs.com/en-US/Site" },
   keka: { label: "Keka", domain: "keka.com", placeholder: "https://company.keka.com/careers  or  company-slug" },
+  rippling: { label: "Rippling", domain: "ats.rippling.com", placeholder: "https://ats.rippling.com/company/jobs  or  company-slug" },
+  personio: { label: "Personio", domain: "jobs.personio.de", placeholder: "https://company.jobs.personio.de  or  company-slug" },
+  breezy: { label: "Breezy", domain: "breezy.hr", placeholder: "https://company.breezy.hr  or  company-slug" },
 };
 
 export default function AddCompanyForm() {

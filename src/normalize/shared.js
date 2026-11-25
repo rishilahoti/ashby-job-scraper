@@ -47,6 +47,14 @@ function sanitizeUrl(url) {
   }
 }
 
+// One job's own page or API record, for the adapters whose board list has no
+// descriptions (their fetchDescription, called by the diff for new jobs only).
+async function fetchText(url) {
+  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.text();
+}
+
 const COUNTRY_ALIASES = new Map([
   ['us', 'United States'],
   ['usa', 'United States'],
@@ -269,4 +277,5 @@ module.exports = {
   normalizeSalaryInterval,
   sanitizeUrl,
   normalizeLocation,
+  fetchText,
 };

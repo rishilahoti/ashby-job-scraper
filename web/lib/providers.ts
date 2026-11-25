@@ -12,6 +12,9 @@ export const PROVIDERS = [
   { value: "smartrecruiters", label: "SmartRecruiters" },
   { value: "workday", label: "Workday" },
   { value: "keka", label: "Keka" },
+  { value: "rippling", label: "Rippling" },
+  { value: "personio", label: "Personio" },
+  { value: "breezy", label: "Breezy" },
 ] as const;
 
 export const PROVIDER_NAMES = PROVIDERS.map((p) => p.label);
@@ -39,6 +42,9 @@ export const URL_PATTERNS: Record<Source, RegExp> = {
   // "tenant/wdHost/site" slug, unlike every other source's single group.
   workday: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.(wd\d+)\.myworkdayjobs\.com\/(?:[a-zA-Z]{2}-[a-zA-Z]{2}\/)?([a-zA-Z0-9_-]+)/,
   keka: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.keka\.com/,
+  rippling: /(?:https?:\/\/)?ats\.rippling\.com\/(?:(?:[a-zA-Z]{2}-[a-zA-Z]{2}|embed)\/)?([a-zA-Z0-9_-]+)/,
+  personio: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.jobs\.personio\.(?:de|com)/,
+  breezy: /(?:https?:\/\/)?([a-zA-Z0-9_-]+)\.breezy\.hr/,
 };
 
 export function matchBoardUrl(input: string): { source: Source; slug: string } | null {

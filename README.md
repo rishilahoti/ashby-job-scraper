@@ -44,11 +44,12 @@ A production-grade system that scrapes public job listings across **Ashby, Lever
 
 ## Deployment
 
-The frontend and the database share one server; the scraper runs on another:
+The frontend, the database and the scraper share one server:
 
 - **Frontend** — https://jobs.whatrunsindia.com. A Next.js standalone container on an Oracle ARM server, reached through a Cloudflare Tunnel (no open ports); Cloudflare provides DNS, edge caching and the firewall. `.github/workflows/deploy-web.yml` builds the arm64 image (`web/Dockerfile`) on every push to `main`, scans it, pushes it to GHCR, and ssh-es to the server with a key that can only run `deploy/web/deploy.sh` (pull, restart, roll back if the new image isn't healthy). Server layout, the compose file and the settings it expects are in `deploy/web/`. The old Vercel address only redirects (308) to the new one.
 - **Database** — Postgres 17 runs on the same Oracle ARM server as the frontend (`db` in `deploy/web/docker-compose.yml`), with no published port. The web app reaches it on the compose network; everything else comes in through the Cloudflare Tunnel at `db.whatrunsindia.com`, which only lets through the Access service token `jobs-db` (`cloudflared access tcp` on the client side). Nightly backups: `deploy/db/backup.sh`.
-- **Scraper** — `docker-compose.yml` at repo root (a separate server) runs `scraper` (runs `node index.js start`, which scrapes immediately on boot then follows `CRON_SCHEDULE`, default daily), `db` (a `cloudflared access tcp` forwarder to the database, so the scraper still connects to `db:5432`), and `watchtower` (polls GHCR every 5 min, auto-pulls + recreates `scraper` on new pushes to `main` — no manual SSH/pull needed). The scraper image is built and pushed to GHCR by `.github/workflows/build-images.yml` on every push to `main`.
+- **Scraper** — `scraper` in `deploy/web/docker-compose.yml` (capped at one core and 2 GB) runs `node index.js start`, which scrapes immediately on boot then follows `CRON_SCHEDULE` (21:00 UTC daily, so the digest is ready long before the 09:00 IST LinkedIn post). `.github/workflows/build-images.yml` builds the arm64 image and pushes it to GHCR on every push to `main`; this server crontab line picks it up within 15 minutes, recreating the container only when the image changed:
+  `*/15 * * * * cd ~/ashby-web && docker compose pull -q scraper && docker compose up -d scraper >/dev/null 2>&1 && docker image prune -f >/dev/null`
 - **One-time data backfills** (e.g. the location canonicalization migration) don't run automatically on startup — they can scan the whole `jobs` table, which shouldn't happen silently on every scraper restart. Run them once per database with `docker compose exec scraper node index.js migrate`.
 
 SSL note: the tunnel encrypts database traffic, so the database runs without SSL. `src/store/db.js` and `web/lib/db.ts` still turn SSL on (without CA verification) when a connection string includes `sslmode=require`.
@@ -148,7 +149,6 @@ Intelligence rules (keyword weights, preferred locations, etc.) are in `src/conf
 ```
 ├── index.js                CLI entry point (run, start, report, add, discover)
 ├── Dockerfile               Scraper image (built by build-images.yml → GHCR)
-├── docker-compose.yml       db (Postgres 17 + SSL) + scraper containers
 ├── .github/workflows/
 │   ├── build-images.yml    Builds + pushes the scraper image to GHCR (on push to main)
 │   └── discover.yml        Scheduled Ashby/Greenhouse discovery (daily)

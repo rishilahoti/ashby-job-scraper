@@ -1,5 +1,6 @@
 const store = require('../store');
 const { logger } = require('../utils');
+const { ADAPTERS } = require('../normalize');
 
 const EVENT_TYPES = {
   JOB_NEW: 'JOB_NEW',
@@ -7,20 +8,53 @@ const EVENT_TYPES = {
   JOB_REMOVED: 'JOB_REMOVED',
 };
 
-async function detectChanges(normalizedJobs, company) {
+// Boards whose list has no descriptions (Rippling, Breezy) cost one request per
+// job for one. Only new or changed jobs need it, and at most this many per board
+// per run, so a 2,000-job board's first scrape is spread over a few days instead
+// of stalling the run. ponytail: sequential within a board; parallelize if the
+// first scrape of big boards ever matters.
+const MAX_DETAIL_FETCHES_PER_BOARD = 150;
+
+// Marks a job stored without its description, so its hash never matches and
+// the next run tries again.
+const NO_DESCRIPTION = ':nodesc';
+
+async function addDescription(job, adapter, budget) {
+  if (job.description || !adapter?.fetchDescription) return;
+  if (budget.left > 0) {
+    budget.left--;
+    try {
+      job.description = await adapter.fetchDescription(job);
+    } catch (err) {
+      logger.debug(`No description for ${job.jobUrl}: ${err.message}`);
+    }
+  }
+  if (!job.description) job.contentHash += NO_DESCRIPTION;
+}
+
+async function detectChanges(normalizedJobs, company, source) {
   const changes = [];
   const currentActiveJobIds = normalizedJobs.map(j => j.jobId);
+  const adapter = ADAPTERS[source];
+  const budget = { left: MAX_DETAIL_FETCHES_PER_BOARD };
 
   // Skip re-sending the (large) description over the wire for jobs whose
   // content hasn't changed — this is what was blowing through Neon's egress cap.
-  const existingHashes = await store.getContentHashesForCompany(company);
+  const existingHashes = await store.getContentHashesForCompany(company, source);
+  const unchanged = [];
 
-  for (const job of normalizedJobs) {
+  // Jobs never tried for a description first, earlier failures after them in a
+  // random order: the same failing jobs must not take the whole budget each run.
+  const retryKey = new Map(normalizedJobs.map(j => [j.jobId, existingHashes.get(j.jobId)?.endsWith(NO_DESCRIPTION) ? 1 + Math.random() : 0]));
+  const ordered = [...normalizedJobs].sort((a, b) => retryKey.get(a.jobId) - retryKey.get(b.jobId));
+
+  for (const job of ordered) {
     if (existingHashes.get(job.jobId) === job.contentHash) {
-      await store.touchJob(company, job.jobId, job.scrapedAt);
+      unchanged.push(job.jobId);
       continue;
     }
 
+    await addDescription(job, adapter, budget);
     const result = await store.upsertJob(job);
 
     if (result === 'inserted') {
@@ -39,7 +73,8 @@ async function detectChanges(normalizedJobs, company) {
     }
   }
 
-  const removedJobs = await store.markRemovedJobs(company, currentActiveJobIds);
+  await store.touchJobs(company, unchanged, new Date().toISOString());
+  const removedJobs = await store.markRemovedJobs(company, currentActiveJobIds, source);
 
   for (const job of removedJobs) {
     changes.push({ type: EVENT_TYPES.JOB_REMOVED, job });

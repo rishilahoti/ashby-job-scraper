@@ -8,22 +8,26 @@ const { departmentGroup, DEPARTMENT_RULES_VERSION } = require('../normalize/depa
 const MAX_SNAPSHOTS_PER_JOB = 2;
 
 // Cheap lookup used to skip re-sending unchanged descriptions over the wire.
-async function getContentHashesForCompany(company) {
+// Scoped by source too: two boards can share a company name (Acme on Ashby
+// and on Greenhouse), and each scrape would otherwise deactivate the other's jobs.
+async function getContentHashesForCompany(company, source) {
   const pool = getPool();
   const { rows } = await pool.query(
-    'SELECT job_id, content_hash FROM jobs WHERE company = $1 AND is_active = TRUE',
-    [company]
+    'SELECT job_id, content_hash FROM jobs WHERE company = $1 AND source = $2 AND is_active = TRUE',
+    [company, source]
   );
   return new Map(rows.map(r => [r.job_id, r.content_hash]));
 }
 
-// Bumps scraped_at/is_active without re-sending the (large) description column.
-async function touchJob(company, jobId, scrapedAt) {
+// Bumps scraped_at/is_active without re-sending the (large) description
+// column: one query per board instead of one per job.
+async function touchJobs(company, jobIds, scrapedAt) {
+  if (jobIds.length === 0) return;
   const pool = getPool();
   await pool.query(
     `UPDATE jobs SET scraped_at = $1, is_active = TRUE, updated_at = NOW()
-     WHERE company = $2 AND job_id = $3`,
-    [scrapedAt, company, jobId]
+     WHERE company = $2 AND job_id = ANY($3::text[])`,
+    [scrapedAt, company, jobIds]
   );
 }
 
@@ -97,18 +101,19 @@ async function upsertJob(job) {
 
 // Deactivates the company's active jobs missing from this scrape and returns
 // them shaped like normalized jobs, for the JOB_REMOVED events.
-async function markRemovedJobs(company, activeJobIds) {
+async function markRemovedJobs(company, activeJobIds, source) {
   const pool = getPool();
   const { rows } = await pool.query(
     `UPDATE jobs
        SET is_active = FALSE, updated_at = NOW()
      WHERE company = $1
+       AND source = $3
        AND is_active = TRUE
        AND NOT (job_id = ANY($2::text[]))
      RETURNING job_id AS "jobId", company, title, location, team, department,
                employment_type AS "employmentType", remote,
                apply_url AS "applyUrl", job_url AS "jobUrl"`,
-    [company, activeJobIds]
+    [company, activeJobIds, source]
   );
 
   if (rows.length > 0) logger.debug(`Marked ${rows.length} jobs as removed for ${company}`);
@@ -263,9 +268,26 @@ async function cleanupOldInactiveJobs(retentionDays = 30) {
   return rowCount;
 }
 
+// A board whose fetch keeps failing (HTTP 404 once the company leaves the ATS,
+// 429s, timeouts) never reaches markRemovedJobs, so its jobs stayed listed
+// forever. Every successful scrape bumps scraped_at, so a job unseen for this
+// many days is one we can no longer vouch for. It comes back on the next
+// successful scrape that lists it.
+async function deactivateUnseenJobs(days = 3) {
+  const pool = getPool();
+  const { rowCount } = await pool.query(
+    `UPDATE jobs SET is_active = FALSE, updated_at = NOW()
+     WHERE is_active = TRUE AND scraped_at < NOW() - ($1 || ' days')::INTERVAL`,
+    [days]
+  );
+  if (rowCount > 0) logger.info(`Deactivated ${rowCount} jobs not seen for ${days} days`);
+  return rowCount;
+}
+
 module.exports = {
   getContentHashesForCompany,
-  touchJob,
+  touchJobs,
+  deactivateUnseenJobs,
   upsertJob,
   markRemovedJobs,
   saveSnapshot,

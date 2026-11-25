@@ -1,7 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { slugFromCrawledUrl } = require('../src/discovery');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { slugFromCrawledUrl, readSlugFile } = require('../src/discovery');
 const { isValidSlug } = require('../src/sources');
 
 test('subdomain sources take the company from the hostname', () => {
@@ -51,4 +54,25 @@ test('path-based sources still take the first path segment', () => {
 test('garbage URLs yield no slug', () => {
   assert.equal(slugFromCrawledUrl('ashby', 'not a url'), null);
   assert.equal(slugFromCrawledUrl('ashby', 'https://jobs.ashbyhq.com/acme%22%3E'), null);
+});
+
+test('Rippling board URLs drop a locale or /embed prefix', () => {
+  assert.equal(slugFromCrawledUrl('rippling', 'https://ats.rippling.com/arine/jobs'), 'arine');
+  assert.equal(slugFromCrawledUrl('rippling', 'https://ats.rippling.com/en-GB/acme-co/jobs/abc'), 'acme-co');
+  assert.equal(slugFromCrawledUrl('rippling', 'https://ats.rippling.com/embed/acme/jobs'), 'acme');
+});
+
+test('readSlugFile keeps valid slugs with their optional names', () => {
+  const file = path.join(os.tmpdir(), `slugs-${process.pid}.txt`);
+  fs.writeFileSync(file, 'Stripe\tStripe Inc\r\nbad slug!\n\nlinear\n');
+  assert.deepEqual([...readSlugFile(file, 'greenhouse')], [['stripe', 'Stripe Inc'], ['linear', '']]);
+  fs.writeFileSync(file, 'acme/wd5/Careers\tAcme\n');
+  assert.deepEqual([...readSlugFile(file, 'workday')], [['acme/wd5/careers', 'Acme']]);
+  fs.unlinkSync(file);
+});
+
+test('Personio and Breezy boards come from their subdomains', () => {
+  assert.equal(slugFromCrawledUrl('personio', 'https://1nce.jobs.personio.de/job/2509340'), '1nce');
+  assert.equal(slugFromCrawledUrl('breezy', 'https://nexthire.breezy.hr/p/abc'), 'nexthire');
+  assert.equal(slugFromCrawledUrl('breezy', 'https://www.breezy.hr/pricing'), null);
 });

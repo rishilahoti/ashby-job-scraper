@@ -8,6 +8,7 @@ const pinpoint = require('../src/normalize/adapters/pinpoint');
 const smartrecruiters = require('../src/normalize/adapters/smartrecruiters');
 const workday = require('../src/normalize/adapters/workday');
 const keka = require('../src/normalize/adapters/keka');
+const rippling = require('../src/normalize/adapters/rippling');
 const rules = require('../src/config/rules.json');
 const { computeStoredScore } = require('../src/intelligence/rules-engine');
 
@@ -250,4 +251,87 @@ test('keka.normalizeJob handles a posting with no location or job type', () => {
 
 test('keka.filterRaw drops postings without an id or title', () => {
   assert.equal(keka.filterRaw([KEKA_JOB, { id: 1 }, { title: 'No id' }, null]).length, 1);
+});
+
+// Shape of api.rippling.com/platform/api/ats/v1/board/{slug}/jobs, one row per location.
+const RIPPLING_ROW = {
+  uuid: '96601a74-e7b6-469d-8c69-6fdfd1c83bc0',
+  name: 'Account Executive',
+  department: { id: 'Sales', label: 'Sales' },
+  url: 'https://ats.rippling.com/rippling/jobs/96601a74-e7b6-469d-8c69-6fdfd1c83bc0',
+  workLocation: { label: 'Remote (India)', id: 'Remote (India)' },
+};
+
+test('rippling.normalizeJob maps a board row', () => {
+  const job = rippling.normalizeJob(RIPPLING_ROW, 'Rippling');
+  assert.equal(job.jobId, RIPPLING_ROW.uuid);
+  assert.equal(job.source, 'rippling');
+  assert.equal(job.title, 'Account Executive');
+  assert.equal(job.department, 'Sales');
+  assert.equal(job.remote, true);
+  assert.equal(job.jobUrl, RIPPLING_ROW.url);
+  assert.equal(rippling.normalizeJob({ name: 'No id' }, 'Acme'), null);
+});
+
+test('rippling.filterRaw keeps one row per job', () => {
+  const other = { ...RIPPLING_ROW, workLocation: { label: 'New York, NY' } };
+  assert.deepEqual(rippling.filterRaw([RIPPLING_ROW, other, { name: 'no uuid' }]), [RIPPLING_ROW]);
+});
+
+const personio = require('../src/normalize/adapters/personio');
+const breezy = require('../src/normalize/adapters/breezy');
+
+// Trimmed from 1nce.jobs.personio.de/xml: own fields both sides of <jobDescriptions>.
+const personioPosting = (descriptions) => ({
+  slug: '1nce',
+  posting: `<position>
+    <id>2509340</id>
+    <office>Remote Norway</office>
+    <department>Sales &amp; Marketing</department>
+    <name>Account Manager - Nordics (all)</name>
+    <jobDescriptions>${descriptions}</jobDescriptions>
+    <employmentType>permanent</employmentType>
+    <schedule>full-time</schedule>
+    <createdAt>2026-01-27T14:46:54+00:00</createdAt>
+</position>`,
+});
+const PERSONIO_SECTION = '<jobDescription><name>Your team</name><value><![CDATA[<p>IoT &amp; more</p>]]></value></jobDescription>';
+
+test('personio.normalizeJob reads the XML posting', () => {
+  const job = personio.normalizeJob(personioPosting(PERSONIO_SECTION), '1NCE');
+  assert.equal(job.jobId, '2509340');
+  assert.equal(job.title, 'Account Manager - Nordics (all)');
+  assert.equal(job.department, 'Sales & Marketing');
+  assert.equal(job.employmentType, 'permanent, full-time');
+  assert.equal(job.remote, true);
+  assert.equal(job.publishedAt, '2026-01-27T14:46:54.000Z');
+  assert.equal(job.jobUrl, 'https://1nce.jobs.personio.de/job/2509340');
+  assert.match(job.description, /^Your team\nIoT &amp; more/);
+  assert.equal(personio.normalizeJob({ posting: '<position></position>', slug: 'x' }, 'X'), null);
+});
+
+test('personio.filterRaw keeps the copy of a posting that has a description', () => {
+  const blank = personioPosting('');
+  const full = personioPosting(PERSONIO_SECTION);
+  assert.deepEqual(personio.filterRaw([blank, full]), [full]);
+  assert.deepEqual(personio.filterRaw([full, blank]), [full]);
+});
+
+test('breezy.normalizeJob maps a /json position', () => {
+  const job = breezy.normalizeJob({
+    id: '853ab5036db4',
+    name: 'Data Science Analytics',
+    url: 'https://nexthire.breezy.hr/p/853ab5036db4-data-science',
+    published_date: '2026-09-09T05:07:43.918Z',
+    type: { id: 'fullTime', name: 'Full-Time' },
+    location: { city: 'Mumbai', is_remote: false, name: 'Mumbai, IN' },
+    department: null,
+    salary: '',
+  }, 'Nexthire');
+  assert.equal(job.jobId, '853ab5036db4');
+  assert.equal(job.source, 'breezy');
+  assert.equal(job.employmentType, 'Full-Time');
+  assert.equal(job.description, null);
+  assert.equal(job.publishedAt, '2026-09-09T05:07:43.918Z');
+  assert.equal(breezy.normalizeJob({ name: 'No id' }, 'Acme'), null);
 });

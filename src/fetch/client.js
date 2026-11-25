@@ -68,6 +68,26 @@ const SOURCE_REQUESTS = {
     buildUrl: (slug) => new URL(`https://${slug}.pinpointhq.com/postings.json`),
     extractJobs: (data) => (Array.isArray(data?.data) ? data.data : null),
   },
+  // The XML feed carries full descriptions; Personio's JSON (search.json) doesn't.
+  // Postings stay XML strings here and the adapter reads their fields.
+  personio: {
+    // Default language first: ?language=en blanks every posting with no English
+    // version (fetchPersonioJobBoard adds the English feed only when needed).
+    buildUrl: (slug) => new URL(`https://${slug}.jobs.personio.de/xml`),
+    parse: (text) => text,
+    extractJobs: (xml, slug) => (typeof xml === 'string' && xml.includes('<workzag-jobs')
+      ? (xml.match(/<position>[\s\S]*?<\/position>/g) ?? []).map((posting) => ({ posting, slug }))
+      : null),
+  },
+  breezy: {
+    buildUrl: (slug) => new URL(`https://${slug}.breezy.hr/json`),
+    extractJobs: (data) => (Array.isArray(data) ? data : null),
+  },
+  rippling: {
+    // One request returns the whole board, unpaged (its /api/v2 list pages by 20).
+    buildUrl: (slug) => new URL(`https://api.rippling.com/platform/api/ats/v1/board/${slug}/jobs`),
+    extractJobs: (data) => (Array.isArray(data) ? data : null),
+  },
   smartrecruiters: {
     // Capped at 100 postings (SmartRecruiters' own max `limit`) — fine for the
     // vast majority of boards; only a handful of very large multi-location
@@ -118,7 +138,7 @@ function stripBase64(state, chunk) {
 // response.json() buffers the whole body, so one huge board can take the
 // process down. Count the kept bytes while streaming and give up past the cap.
 // Not retryable: the board will be just as big a second later.
-async function readJsonCapped(response, slug, source) {
+async function readJsonCapped(response, slug, source, parse = JSON.parse) {
   const { maxBodyBytes } = config.fetch;
   const chunks = [];
   const state = { matched: 0, skipping: false };
@@ -135,12 +155,12 @@ async function readJsonCapped(response, slug, source) {
       chunks.push(chunk);
     }
   }
-  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  return parse(Buffer.concat(chunks).toString('utf8'));
 }
 
 // One request/response cycle with the existing retry+backoff policy. Shared by
 // the single-page sources and Workday's paginated loop below.
-async function fetchOnce(url, options, slug, source, extractJobs) {
+async function fetchOnce(url, options, slug, source, extractJobs, parse = JSON.parse) {
   let lastError;
 
   for (let attempt = 1; attempt <= config.fetch.maxRetries; attempt++) {
@@ -161,8 +181,8 @@ async function fetchOnce(url, options, slug, source, extractJobs) {
         );
       }
 
-      const data = await timeLimit(readJsonCapped(response, slug, source), timeoutMs);
-      const jobs = extractJobs(data);
+      const data = await timeLimit(readJsonCapped(response, slug, source, parse), timeoutMs);
+      const jobs = extractJobs(data, slug);
       if (jobs === null) {
         throw new FetchError(
           `Invalid response structure for ${slug} (${source})`,
@@ -188,7 +208,8 @@ async function fetchOnce(url, options, slug, source, extractJobs) {
       if (attempt < config.fetch.maxRetries) {
         const backoff = config.fetch.retryBaseMs * Math.pow(2, attempt - 1);
         const jitter = Math.random() * backoff * 0.5;
-        const waitMs = backoff + jitter;
+        // A 429 retried 1-2 s later is just another 429: give rate limits 15 s, then 30 s.
+        const waitMs = fetchErr.statusCode === 429 ? 15000 * attempt + jitter : backoff + jitter;
         logger.warn(`Retrying ${slug} (${source}) in ${Math.round(waitMs)}ms (attempt ${attempt}/${config.fetch.maxRetries})`);
         await delay(waitMs);
       }
@@ -266,8 +287,30 @@ async function fetchKekaJobBoard(slug, source) {
   return { jobs: jobs.map((job) => ({ ...job, _boardUrl: boardUrl })) };
 }
 
+// Personio's feed is in the company's default language, and a posting written
+// only in another language comes back blank. When some are, the English feed
+// is read too and the adapter's filterRaw keeps whichever copy has text.
+async function fetchPersonioJobBoard(slug, source) {
+  const { buildUrl, extractJobs, parse } = SOURCE_REQUESTS.personio;
+  const jobs = await fetchOnce(buildUrl(slug), {}, slug, source, extractJobs, parse);
+  if (jobs.some(({ posting }) => /<jobDescriptions>\s*<\/jobDescriptions>/.test(posting))) {
+    const url = buildUrl(slug);
+    url.searchParams.set('language', 'en');
+    // Only descriptions depend on it: the board's jobs are already listed, and
+    // failing here would leave them unseen (and hidden after 3 days).
+    try {
+      jobs.push(...await fetchOnce(url, {}, slug, source, extractJobs, parse));
+    } catch (err) {
+      logger.warn(`English feed failed for ${slug} (${source}), keeping the default one: ${err.message}`);
+    }
+  }
+  logger.info(`Fetched ${jobs.length} postings from ${slug} (${source})`);
+  return { jobs };
+}
+
 async function fetchJobBoard(slug, source = 'ashby') {
   if (source === 'workday') return fetchWorkdayJobBoard(slug, source);
+  if (source === 'personio') return fetchPersonioJobBoard(slug, source);
   if (source === 'keka') return fetchKekaJobBoard(slug, source);
 
   const sourceConfig = SOURCE_REQUESTS[source];
@@ -276,7 +319,7 @@ async function fetchJobBoard(slug, source = 'ashby') {
   }
 
   const url = sourceConfig.buildUrl(slug);
-  const jobs = await fetchOnce(url, {}, slug, source, sourceConfig.extractJobs);
+  const jobs = await fetchOnce(url, {}, slug, source, sourceConfig.extractJobs, sourceConfig.parse);
   logger.info(`Fetched ${jobs.length} jobs from ${slug} (${source})`);
   return { jobs };
 }
