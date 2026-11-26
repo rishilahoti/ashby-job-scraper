@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "location-old-city-names",
+    date: "2026-11-26",
+    title: "Find Bengaluru by typing Bangalore",
+    description:
+      "Jobs list a city under its current name, so Bangalore jobs show up as Bengaluru and Gurgaon jobs as Gurugram. Typing the old name in the location filter now finds them.",
+  },
+  {
     id: "yc-wellfound",
     date: "2026-11-26",
     title: "Y Combinator and Wellfound startup jobs",
