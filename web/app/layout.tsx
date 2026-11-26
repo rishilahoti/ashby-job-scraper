@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     title: "Ashby Jobs — Browse Ashby, Greenhouse, Lever & More Job Listings",
     description:
       `Browse job listings from top tech startups across ${providerList}. Find remote engineering, product, and design roles. Updated daily.`,
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ashby Jobs — Every AshbyHQ Job in One Feed" }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ashby Jobs — every tech job from Ashby, Greenhouse, Lever & more in one search" }],
   },
   twitter: {
     card: "summary_large_image",

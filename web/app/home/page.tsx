@@ -31,7 +31,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       url: `${siteUrl}/home`,
-      images: [{ url: `${siteUrl}/og.png`, width: 1200, height: 630, alt: "Ashby Jobs — Every AshbyHQ Job in One Feed" }],
+      images: [{ url: `${siteUrl}/og.png`, width: 1200, height: 630, alt: "Ashby Jobs — every tech job from Ashby, Greenhouse, Lever & more in one search" }],
     },
     twitter: {
       card: "summary_large_image",
@@ -275,7 +275,7 @@ export default async function HomePage() {
                 {
                   step: "02",
                   title: "We scrape daily",
-                  desc: "An automated cron job hits Ashby's, Lever's, and Greenhouse's public posting APIs for every company and stores all job data in our database.",
+                  desc: `An automated cron job reads the public job board of every company on all ${PROVIDER_NAMES.length} sources and stores the jobs in our database.`,
                 },
                 {
                   step: "03",
@@ -307,7 +307,7 @@ export default async function HomePage() {
                 Built for job seekers
               </h2>
               <p className="text-[17px] text-[#475569]">
-                Everything you need to track AshbyHQ postings in one place.
+                Everything you need to track tech job postings in one place.
               </p>
             </div>
 
@@ -316,7 +316,7 @@ export default async function HomePage() {
                 {
                   d: "M21 21l-4.35-4.35M17 11A6 6 0 111 11a6 6 0 0116 0z",
                   title: "Full-text search",
-                  desc: "Search job titles and companies across every listing simultaneously.",
+                  desc: "Search titles, companies, locations and descriptions across every listing at once.",
                 },
                 {
                   d: "M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064",
@@ -335,8 +335,8 @@ export default async function HomePage() {
                 },
                 {
                   d: "M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z",
-                  title: "Department & team filters",
-                  desc: "Narrow to Engineering, Product, Design, Sales or any specific team name.",
+                  title: "Department & location filters",
+                  desc: "Narrow to Engineering, Data & AI, Product, Design, Sales and more, in the places you want.",
                 },
                 {
                   d: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
@@ -422,19 +422,7 @@ export default async function HomePage() {
               Ashby<span className="text-[#6B5FE8]">Tracker</span>
             </span>
             <span className="text-xs text-[#64748B]">
-              Not affiliated with Ashby Inc., Lever Inc., or Greenhouse Software, Inc. · Job data from{" "}
-              <a href="https://api.ashbyhq.com/posting-api" className="text-[#64748B] underline" target="_blank" rel="noopener noreferrer">
-                AshbyHQ
-              </a>
-              ,{" "}
-              <a href="https://www.lever.co" className="text-[#64748B] underline" target="_blank" rel="noopener noreferrer">
-                Lever
-              </a>
-              , &amp;{" "}
-              <a href="https://www.greenhouse.io" className="text-[#64748B] underline" target="_blank" rel="noopener noreferrer">
-                Greenhouse
-              </a>{" "}
-              public APIs ·{" "}
+              Not affiliated with any of the job boards it reads · Job data from the public job boards of {providerList} ·{" "}
               <a href="/privacy" className="text-[#64748B] underline">
                 Privacy
               </a>
