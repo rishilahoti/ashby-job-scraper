@@ -31,13 +31,13 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       url: `${siteUrl}/home`,
-      images: [{ url: `${siteUrl}/og.png?v=2`, width: 1200, height: 630, alt: "What Runs India Jobs: 823,345+ tech jobs, one search" }],
+      images: [{ url: `${siteUrl}/og.png`, width: 1200, height: 630, alt: "Ashby Jobs — Every AshbyHQ Job in One Feed" }],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
-      images: [`${siteUrl}/og.png?v=2`],
+      images: [`${siteUrl}/og.png`],
     },
     alternates: { canonical: `${siteUrl}/home` },
   };

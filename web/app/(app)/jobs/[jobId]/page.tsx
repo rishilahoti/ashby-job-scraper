@@ -60,7 +60,7 @@ export async function generateMetadata({
       description,
       url,
       publishedTime: job.publishedAt || undefined,
-      images: [{ url: "/og.png?v=2", width: 1200, height: 630 }],
+      images: [{ url: "/og.png", width: 1200, height: 630 }],
     },
     twitter: { card: "summary", title, description },
     alternates: { canonical: url },
