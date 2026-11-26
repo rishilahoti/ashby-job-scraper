@@ -25,9 +25,9 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: "/open-source",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "ats-jobs, an open-source job listings library" }],
+    images: [{ url: "/og.png?v=2", width: 1200, height: 630, alt: "ats-jobs, an open-source job listings library" }],
   },
-  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: ["/og.png"] },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: ["/og.png?v=2"] },
 };
 
 const PROVIDERS = [
