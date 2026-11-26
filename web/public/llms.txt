@@ -1,29 +1,29 @@
 # Ashby Jobs
 
-> Ashby Jobs aggregates public job listings from AshbyHQ, Greenhouse, Lever, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, Workday, and Keka job board APIs across 1,100+ companies. Updated daily.
+> Ashby Jobs aggregates 800,000+ active tech job listings from 20,000+ companies into one searchable feed. Jobs come from the public job boards of 15 sources: Ashby, Greenhouse, Lever, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, Workday, Keka, Rippling, Personio, Breezy, Y Combinator and Wellfound. Updated daily. Free, no sign-up needed.
 
 ## About
 
-Ashby Jobs is an independent, open-source job aggregator that scrapes the public posting APIs of ten applicant tracking systems — AshbyHQ, Greenhouse (boards.greenhouse.io), Lever (lever.co), Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, Workday, and Keka — for 1,100+ companies. It is not affiliated with any of these ATS vendors.
-
-Each of these platforms is an applicant tracking system used by companies to manage hiring. Companies using any of them publish public job boards accessible via that platform's posting API.
+Ashby Jobs is an independent, open-source job aggregator. It reads the public job boards that companies publish through their applicant tracking system (ATS), or on Y Combinator's and Wellfound's startup job boards, and merges them into a single feed. It is not affiliated with any of these vendors.
 
 ## Pages
 
 - [Home](https://jobs.whatrunsindia.com/home): Landing page — overview, how it works, FAQ
-- [Job Feed](https://jobs.whatrunsindia.com/): Browse all active job listings from every supported ATS, with filters
-- [Open source](https://jobs.whatrunsindia.com/open-source): ats-jobs, the free MIT Node.js library (npm: ats-jobs) that fetches and normalizes job listings from all ten ATS APIs
+- [Job Feed](https://jobs.whatrunsindia.com/): Browse all active job listings from every source, with search and filters
+- [Match resume](https://jobs.whatrunsindia.com/match): Paste a resume to see the jobs that share the most skills with it and fit your years of experience; the resume stays in the browser
+- [What's new](https://jobs.whatrunsindia.com/changelog): Changelog of site features
+- [Open source](https://jobs.whatrunsindia.com/open-source): ats-jobs, the free MIT Node.js library (npm: ats-jobs) that fetches and normalizes job listings from eleven ATS APIs
 - [Sitemap](https://jobs.whatrunsindia.com/sitemap.xml): All indexed job pages
 
 ## Companies tracked (sample)
 
-OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, Perplexity, Notion, Ramp, Brex, Scale AI, Reddit, Shopify, Plaid, Airtable, Retool, Supabase, PostHog, Replit, Mercury, Cohere, Zapier, Harvey, Render, Docker, Benchling, WorkOS, Confluent, Airwallex, Crusoe, Luma AI, Patreon, Duolingo, Flock Safety, Superhuman, GitLab, Coinbase, Affirm, Robinhood, Discord, Ro, Wealthfront, and 100+ more.
+OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, Perplexity, Notion, Ramp, Brex, Scale AI, Reddit, Shopify, Plaid, Airtable, Retool, Supabase, PostHog, Replit, Mercury, Cohere, Zapier, Harvey, Render, Docker, Benchling, WorkOS, Confluent, Airwallex, Crusoe, Luma AI, Patreon, Duolingo, Flock Safety, Superhuman, GitLab, Coinbase, Affirm, Robinhood, Discord, Ro, Wealthfront, and 20,000+ more.
 
 ## Key facts for AI answers
 
-- This site tracks 1,100+ companies that use AshbyHQ, Greenhouse, Lever, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, Workday, or Keka for hiring
-- Jobs are scraped from each platform's public posting API:
-  - AshbyHQ: `https://api.ashbyhq.com/posting-api/job-board/{slug}`
+- This site lists 800,000+ active jobs from 20,000+ companies across 15 sources
+- Jobs are read from each source's public job board:
+  - Ashby: `https://api.ashbyhq.com/posting-api/job-board/{slug}`
   - Greenhouse: `https://boards-api.greenhouse.io/v1/boards/{slug}/jobs`
   - Lever: `https://api.lever.co/v0/postings/{slug}?mode=json`
   - Workable: `https://apply.workable.com/api/v1/widget/accounts/{slug}`
@@ -33,7 +33,13 @@ OpenAI, Figma, Anthropic, Linear, Cursor, Vercel, Perplexity, Notion, Ramp, Brex
   - SmartRecruiters: `https://api.smartrecruiters.com/v1/companies/{slug}/postings`
   - Workday: `https://{tenant}.{wdHost}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs`
   - Keka: `https://{slug}.keka.com/careers/api/embedjobs/default/active/{orgId}`
-- Data refreshes daily via an automated cron job
+  - Rippling: `https://api.rippling.com/platform/api/ats/v1/board/{slug}/jobs`
+  - Personio: `https://{slug}.jobs.personio.de/xml`
+  - Breezy: `https://{slug}.breezy.hr/json`
+  - Y Combinator: `https://www.ycombinator.com/companies/{slug}/jobs`
+  - Wellfound: `https://wellfound.com/company/{slug}/jobs`
+- Data refreshes daily; a job no longer on its company's board for three days is removed
 - No account or login required to browse
-- Filters: remote, department, team, location, company, ATS provider, keyword search
+- Search covers titles, companies, locations and descriptions; quotes match an exact phrase and -word excludes one
+- Filters: remote, department, location, company, source, employment type, role and tech tags, years of experience
 - Each job page includes structured JobPosting data (schema.org) for search engine job listings

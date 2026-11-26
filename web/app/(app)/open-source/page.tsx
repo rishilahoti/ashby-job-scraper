@@ -9,7 +9,7 @@ const REPO_URL = "https://github.com/rishilahoti/ats-jobs";
 
 const TITLE = "ats-jobs: Node.js library for Greenhouse, Lever, Ashby & Workday job listings";
 const DESCRIPTION =
-  "ats-jobs is a free, MIT-licensed Node.js library that fetches public job listings from Ashby, Lever, Greenhouse, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, Workday and Keka and returns them in one JSON shape. No API keys.";
+  "ats-jobs is a free, MIT-licensed Node.js library that fetches public job listings from Ashby, Lever, Greenhouse, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, Workday, Keka and Rippling and returns them in one JSON shape. No API keys.";
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -63,7 +63,7 @@ const FAQ = [
   },
   {
     q: "Which applicant tracking systems does ats-jobs support?",
-    a: "Ashby, Lever, Greenhouse, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, Workday and Keka.",
+    a: "Ashby, Lever, Greenhouse, Workable, Recruitee, Teamtailor, Pinpoint, SmartRecruiters, Workday, Keka and Rippling.",
   },
   {
     q: "Can I normalize job data I already fetched?",
@@ -119,7 +119,7 @@ export default function OpenSourcePage() {
         ats-jobs: fetch job listings from Greenhouse, Lever, Ashby, Workday and more
       </h1>
       <p className="text-sm text-ink-secondary mb-6">
-        ats-jobs is a free Node.js library that fetches public job listings from ten applicant
+        ats-jobs is a free Node.js library that fetches public job listings from eleven applicant
         tracking systems and returns them in one consistent JSON shape, with no API keys and no
         setup. It is the scraping code behind this site, MIT licensed.
       </p>
