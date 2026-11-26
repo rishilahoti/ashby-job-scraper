@@ -31,14 +31,14 @@ export const metadata: Metadata = {
     title: "Ashby Jobs — Browse Ashby, Greenhouse, Lever & More Job Listings",
     description:
       `Browse job listings from top tech startups across ${providerList}. Find remote engineering, product, and design roles. Updated daily.`,
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Ashby Jobs — Every AshbyHQ Job in One Feed" }],
+    images: [{ url: "/og.png?v=2", width: 1200, height: 630, alt: "What Runs India Jobs: 823,345+ tech jobs, one search" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Ashby Jobs — Browse Ashby, Greenhouse, Lever & More Job Listings",
     description:
       `Browse job listings from top tech startups across ${providerList}. Updated daily.`,
-    images: ["/og.png"],
+    images: ["/og.png?v=2"],
   },
   robots: {
     index: true,
