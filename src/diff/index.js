@@ -53,7 +53,7 @@ async function detectChanges(normalizedJobs, company, source, slug) {
 
   for (const job of ordered) {
     if (existingHashes.get(job.jobId) === job.contentHash) {
-      unchanged.push(job.jobId);
+      unchanged.push(job);
       continue;
     }
 

@@ -17,6 +17,7 @@ function normalizeJob(raw, company) {
     source: 'rippling',
     title: raw.name || 'Untitled',
     location: normalizedLocation.location,
+    locationRaw: normalizedLocation.raw,
     team: null,
     department,
     employmentType: null,

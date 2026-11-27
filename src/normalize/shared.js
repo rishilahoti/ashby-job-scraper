@@ -239,18 +239,18 @@ function resolveCity(value, countryPart) {
 
 function normalizeLocation(rawLocation, remoteHint = false) {
   const raw = String(rawLocation || '').trim();
-  if (!raw) return { location: 'Unknown', remote: Boolean(remoteHint) };
+  if (!raw) return { location: 'Unknown', remote: Boolean(remoteHint), raw };
 
   const remote = Boolean(remoteHint) || /\b(remote|hybrid|work from home|work-from-home|wfh)\b/i.test(raw);
   const cleaned = cleanLocationText(raw);
-  if (!cleaned) return { location: 'Unknown', remote };
+  if (!cleaned) return { location: 'Unknown', remote, raw };
 
   const parts = cleaned.split(',').map(part => part.trim()).filter(Boolean);
   const countryPart = parts.find(part => {
     return isKnownCountry(part);
   }) || [...parts].reverse().find(part => /^[A-Za-z]{2,3}$/.test(part));
   if (parts.length === 1 && isKnownCountry(parts[0])) {
-    return { location: canonicalCountry(parts[0]), remote };
+    return { location: canonicalCountry(parts[0]), remote, raw };
   }
 
   const countryIndex = countryPart ? parts.indexOf(countryPart) : -1;
@@ -265,6 +265,8 @@ function normalizeLocation(rawLocation, remoteHint = false) {
   return {
     location: resolveCity(cityPart || countryPart || cleaned, countryPart),
     remote,
+    // The text as given, for places.js (the place filter's labels).
+    raw,
   };
 }
 

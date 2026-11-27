@@ -31,6 +31,8 @@ function normalizeJob(raw, company) {
     source: 'lever',
     title: raw.text || 'Untitled',
     location: normalizedLocation.location,
+    // Every location for the place filter, the first one shown.
+    locationRaw: categories.allLocations?.length ? categories.allLocations.join('; ') : normalizedLocation.raw,
     team: categories.team || null,
     department: categories.department || null,
     employmentType: categories.commitment || null,

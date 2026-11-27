@@ -173,3 +173,7 @@ Intelligence rules (keyword weights, preferred locations, etc.) are in `src/conf
 ├── reports/                Generated Markdown reports
 └── md/INTERVIEW_GUIDE.md   End-to-end project walkthrough
 ```
+
+## Data
+
+Place names for the location filter come from [GeoNames](https://www.geonames.org) (CC BY 4.0), built into `src/normalize/places-data.json.gz` by `scripts/build-places-data.js`.

@@ -41,6 +41,7 @@ function normalizeJob(raw, company) {
     source: 'pinpoint',
     title: raw.title || 'Untitled',
     location: normalizedLocation.location,
+    locationRaw: normalizedLocation.raw,
     team: null,
     department,
     employmentType: raw.employment_type_text || raw.employment_type || null,

@@ -8,6 +8,15 @@ const { normalizeLocation } = require('../shared');
 // `_boardUrl` is injected by the fetch layer (not part of Workday's own response) —
 // it's the only way to turn `externalPath` into an absolute URL, since Workday embeds
 // no host/tenant info in each job.
+// Some boards send no locationsText, and a multi-location job's is "3 Locations".
+// The job's path still names its main location: /job/Kansas-City-MO/Clerk_JR1.
+function placeText(raw) {
+  const text = (raw.locationsText || '').trim();
+  if (text && !/^\d+ Locations?$/i.test(text)) return text;
+  const parts = (raw.externalPath || '').split('/').filter(Boolean);
+  return [parts.length === 3 ? parts[1].replace(/-/g, ' ') : '', text].filter(Boolean).join('; ');
+}
+
 function normalizeJob(raw, company) {
   // externalPath ("/job/Santa-Clara/Engineer_JR123") has slashes, but jobId
   // must pass /jobs/[jobId] and /api/jobs/batch's ^[a-zA-Z0-9_-]{1,64}$ check.
@@ -26,6 +35,7 @@ function normalizeJob(raw, company) {
     source: 'workday',
     title: raw.title || 'Untitled',
     location: normalizedLocation.location,
+    locationRaw: placeText(raw),
     team: null,
     department: null,
     employmentType: null,

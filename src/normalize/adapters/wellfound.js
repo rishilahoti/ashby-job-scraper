@@ -34,7 +34,7 @@ const EMPLOYMENT_TYPES = { full_time: 'Full-time', part_time: 'Part-time', contr
 function normalizeJob(raw, company) {
   if (!raw.id) return null;
 
-  // ponytail: first location only, like the other adapters.
+  // The shown location is the first one; the place filter gets them all.
   const normalizedLocation = normalizeLocation(raw.locationNames?.[0], raw.remote === true);
   const department = raw.primaryRoleTitle || null;
   const employmentType = EMPLOYMENT_TYPES[raw.jobType] || null;
@@ -47,6 +47,7 @@ function normalizeJob(raw, company) {
     source: 'wellfound',
     title: raw.title || 'Untitled',
     location: normalizedLocation.location,
+    locationRaw: (raw.locationNames || []).join('; '),
     team: null,
     department,
     employmentType,

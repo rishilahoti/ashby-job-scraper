@@ -22,40 +22,47 @@ test('normalizeSalaryInterval maps known intervals, null for unknown', () => {
   assert.equal(shared.normalizeSalaryInterval(null), null);
 });
 
+// normalizeLocation also returns the text it was given (raw), for places.js.
+const loc = (value) => {
+  const { raw, ...rest } = shared.normalizeLocation(value);
+  assert.equal(raw, String(value || '').trim());
+  return rest;
+};
+
 test('normalizeLocation canonicalizes country and remote variants', () => {
   for (const value of ['Brazil - Remote', 'Brazil (Remote)', 'Brazil, Remote', 'Brazil/Remote']) {
-    assert.deepEqual(shared.normalizeLocation(value), {
+    assert.deepEqual(loc(value), {
       location: 'Brazil',
       remote: true,
     });
   }
 
-  assert.deepEqual(shared.normalizeLocation('Remote - US'), {
+  assert.deepEqual(loc('Remote - US'), {
     location: 'United States',
     remote: true,
   });
-  assert.deepEqual(shared.normalizeLocation('Sao Paulo, Brazil'), {
+  assert.deepEqual(loc('Sao Paulo, Brazil'), {
     location: 'Sao Paulo',
     remote: false,
   });
-  assert.deepEqual(shared.normalizeLocation('USA, IL, Chicago'), {
+  assert.deepEqual(loc('USA, IL, Chicago'), {
     location: 'Chicago',
     remote: false,
   });
   for (const value of ['Bangalore Office', 'Bangalore', 'Bengaluru', 'Bengauru']) {
-    assert.deepEqual(shared.normalizeLocation(value), {
+    assert.deepEqual(loc(value), {
       location: 'Bengaluru',
       remote: false,
     });
   }
-  assert.deepEqual(shared.normalizeLocation('Bangalore Urban'), {
+  assert.deepEqual(loc('Bangalore Urban'), {
     location: 'Bengaluru',
     remote: false,
   });
 });
 
 test('normalizeLocation does not fuzzy-merge unrelated multi-word cities', () => {
-  assert.deepEqual(shared.normalizeLocation('New York, NY, United States'), {
+  assert.deepEqual(loc('New York, NY, United States'), {
     location: 'New York',
     remote: false,
   });

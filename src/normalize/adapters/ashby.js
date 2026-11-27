@@ -48,6 +48,8 @@ function normalizeJob(raw, company) {
     source: 'ashby',
     title: raw.title || 'Untitled',
     location: normalizedLocation.location,
+    // Every location for the place filter, the first one shown.
+    locationRaw: [raw.location, ...(raw.secondaryLocations || []).map((l) => l.location)].filter(Boolean).join('; '),
     team: raw.team || null,
     department: raw.department || null,
     employmentType: raw.employmentType || null,

@@ -222,6 +222,12 @@ async function migrateSchema(p) {
   await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS min_years SMALLINT`);
   // The board (companies.slug) a job was scraped from; the diff is per board (store/jobs.js).
   await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS board TEXT`);
+  // The feed's location filter (web/lib/query.ts): the location text as the board
+  // wrote it, and the places normalize/places.js reads in it ("Bengaluru (India)",
+  // "Karnataka (India)", "India"). Written on every scrape, unchanged jobs too.
+  await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS location_raw TEXT`);
+  await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS places TEXT[]`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_places ON jobs USING GIN (places) WHERE is_active = TRUE`);
 
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_published ON jobs (published_at DESC) WHERE is_active = TRUE`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_score ON jobs (base_score DESC) WHERE is_active = TRUE`);

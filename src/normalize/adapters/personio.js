@@ -42,6 +42,7 @@ function normalizeJob(raw, company) {
     source: 'personio',
     title,
     location: normalizedLocation.location,
+    locationRaw: normalizedLocation.raw,
     team: null,
     department,
     employmentType,
