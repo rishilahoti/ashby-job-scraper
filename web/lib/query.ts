@@ -165,10 +165,9 @@ const FILTER_SPECS: FilterSpec[] = [
   },
   {
     active: (f) => !!f.locations && f.locations.length > 0,
-    sql: (f, params) => {
-      const locations = f.locations!.map((l) => l.trim().toLowerCase());
-      return `LOWER(TRIM(location)) = ANY(${pushParam(params, locations)}::text[])`;
-    },
+    // Place labels the scraper stored (src/normalize/places.js), already checked by
+    // /api/jobs: "India" matches every job in an Indian city. GIN: idx_jobs_active_places.
+    sql: (f, params) => `places && ${pushParam(params, f.locations!)}::text[]`,
   },
   {
     active: (f) => !!f.search,
@@ -400,36 +399,22 @@ export const getUserCount = withStaleFallback(unstable_cache(
   { revalidate: CACHE_REVALIDATE }
 ), 0);
 
+// Every place a live job is in ("Bengaluru (India)", "Karnataka (India)", "India"),
+// the ones with the most jobs first. What /api/jobs accepts as ?location=.
 export const getLocations = withStaleFallback(unstable_cache(
   async (): Promise<string[]> => {
-    // TRIM inside DISTINCT, not after: "Cincinnati" and "Cincinnati " (or a
-    // tab, etc.) were different rows to SQL's untrimmed DISTINCT, so trimming
-    // only in JS let both through as "duplicate" list entries — duplicate
-    // React keys in the location dropdown. Postgres's TRIM() only strips
-    // plain ASCII spaces though (JS's .trim() also strips e.g. NBSP), so the
-    // Set below is the actual guarantee against duplicates; the SQL TRIM
-    // just shrinks what DISTINCT has to compare.
-    const { rows } = await query<{ location: string }>(
-      `SELECT DISTINCT TRIM(location) AS location FROM jobs
-       WHERE is_active = TRUE AND location IS NOT NULL AND TRIM(location) != ''
-       ORDER BY TRIM(location)`
+    const { rows } = await query<{ place: string }>(
+      `SELECT place FROM jobs, unnest(places) AS place WHERE is_active = TRUE
+       GROUP BY place ORDER BY COUNT(*) DESC`
     );
-    return [...new Set(rows.map((r) => r.location.trim()))];
+    return rows.map((r) => r.place);
   },
-  ["locations-list-v3"],
+  ["places-list"],
   { revalidate: CACHE_REVALIDATE }
 ), []);
 
-// The feed's location dropdown: all 34K locations were 481 KB of the 648 KB feed page
-// (2026-11). The 1000 with the most live jobs cover 72% of them; search matches any location.
-export const getTopLocations = withStaleFallback(unstable_cache(
-  async (): Promise<string[]> => {
-    const { rows } = await query<{ location: string }>(
-      `SELECT MIN(TRIM(location)) AS location FROM jobs WHERE is_active = TRUE AND TRIM(location) <> ''
-       GROUP BY LOWER(TRIM(location)) ORDER BY COUNT(*) DESC LIMIT 1000`
-    );
-    return rows.map((r) => r.location).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  },
-  ["top-locations"],
-  { revalidate: CACHE_REVALIDATE }
-), []);
+// The feed's location dropdown: the 1000 places with the most live jobs, so the
+// page stays small; a ?location= link to any other place still works.
+export async function getTopLocations(): Promise<string[]> {
+  return (await getLocations()).slice(0, 1000).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}

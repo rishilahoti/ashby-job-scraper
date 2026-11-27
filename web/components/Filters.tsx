@@ -9,7 +9,8 @@ import { EXPERIENCE_OPTIONS } from "@/lib/scoring";
 import { useCloseOnOutside } from "@/lib/useCloseOnOutside";
 import { CITY_ALTERNATE_NAMES } from "../../src/normalize/city-alternate-names";
 
-// "Bangalore" finds Bengaluru: the scraper stores the current name only.
+// "Bangalore" finds Bengaluru (India): place labels use the current name only.
+// Keyed by the city part of the label, lowercased.
 const ALTERNATE_NAMES = new Map<string, string>();
 for (const [alt, city] of CITY_ALTERNATE_NAMES) {
   const key = city.toLowerCase();
@@ -216,7 +217,7 @@ export default function Filters({
         label="All locations"
         // The list is the top locations only; a ?location= link to another one still shows it.
         options={[...current.locations.filter((l) => !locations.includes(l)), ...locations].map(
-          (location) => ({ value: location, label: location, keywords: ALTERNATE_NAMES.get(location.toLowerCase()) })
+          (location) => ({ value: location, label: location, keywords: ALTERNATE_NAMES.get(location.toLowerCase().replace(/ \(.*\)$/, "")) })
         )}
         selected={current.locations}
         onChange={(next) => setParam("location", next.join(","))}
