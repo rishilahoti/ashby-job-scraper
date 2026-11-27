@@ -18,6 +18,7 @@ function normalizeJob(raw, company) {
     source: 'greenhouse',
     title: raw.title || 'Untitled',
     location: normalizedLocation.location,
+    locationRaw: normalizedLocation.raw,
     team: null,
     department: null,
     // Greenhouse's public job board API doesn't expose employment type or department.

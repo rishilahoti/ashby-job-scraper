@@ -3,6 +3,9 @@ const { logger } = require('../utils');
 const { getEnabledCompaniesWithDb, getDueCompanies } = require('../sources');
 const { fetchJobBoard, FetchError } = require('../fetch');
 const { normalizeResponse } = require('../normalize');
+// Not in normalize/index.js: the web app's +Add route imports that, and places.js
+// loads a 140 MB gazetteer. +Added jobs get their places on the next scrape.
+const { tagPlaces } = require('../normalize/places');
 const store = require('../store');
 const { detectChanges } = require('../diff');
 const intelligence = require('../intelligence');
@@ -46,6 +49,7 @@ async function scrapeCompany(company) {
 
     const rawData = await fetchJobBoard(company.slug, source);
     const normalizedJobs = normalizeResponse(rawData, company.company, source);
+    tagPlaces(normalizedJobs);
     const changes = await detectChanges(normalizedJobs, company.company, source, company.slug);
 
     const inserted = changes.filter(c => c.type === 'JOB_NEW').length;

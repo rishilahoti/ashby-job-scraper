@@ -23,14 +23,19 @@ async function getContentHashesForCompany(company, source, board) {
 }
 
 // Bumps scraped_at/is_active without re-sending the (large) description
-// column: one query per board instead of one per job.
-async function touchJobs(company, jobIds, scrapedAt, board) {
-  if (jobIds.length === 0) return;
+// column: one query per board instead of one per job. The location text and
+// places are rewritten too, so a places.js change re-tags every job on the next
+// scrape (and the first scrape after the columns were added filled them).
+async function touchJobs(company, jobs, scrapedAt, board) {
+  if (jobs.length === 0) return;
   const pool = getPool();
+  const rows = jobs.map((job) => ({ job_id: job.jobId, location_raw: job.locationRaw ?? null, places: job.places ?? null }));
   await pool.query(
-    `UPDATE jobs SET scraped_at = $1, is_active = TRUE, updated_at = NOW(), board = $4
-     WHERE company = $2 AND job_id = ANY($3::text[])`,
-    [scrapedAt, company, jobIds, board]
+    `UPDATE jobs j SET scraped_at = $1, is_active = TRUE, updated_at = NOW(), board = $4,
+       location_raw = t.location_raw, places = t.places
+     FROM jsonb_to_recordset($3::jsonb) AS t(job_id TEXT, location_raw TEXT, places TEXT[])
+     WHERE j.company = $2 AND j.job_id = t.job_id`,
+    [scrapedAt, company, JSON.stringify(rows), board]
   );
 }
 
@@ -47,13 +52,15 @@ async function upsertJob(job) {
         employment_type, remote, description,
         apply_url, job_url, published_at, scraped_at,
         compensation_summary, compensation_min, compensation_max, compensation_currency, compensation_interval,
-        content_hash, is_active, base_score, matched_keywords, department_group, min_years, board
+        content_hash, is_active, base_score, matched_keywords, department_group, min_years, board,
+        location_raw, places
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10,
         $11, $12, $13, $14,
         $15, $16, $17, $18, $19,
-        $20, TRUE, $21, $22, $23, $24, $25
+        $20, TRUE, $21, $22, $23, $24, $25,
+        $26, $27
       )
       ON CONFLICT (company, job_id) DO UPDATE SET
         source            = EXCLUDED.source,
@@ -83,6 +90,8 @@ async function upsertJob(job) {
         department_group  = EXCLUDED.department_group,
         min_years         = EXCLUDED.min_years,
         board             = EXCLUDED.board,
+        location_raw      = EXCLUDED.location_raw,
+        places            = EXCLUDED.places,
         updated_at        = NOW()
       RETURNING
         (xmax = 0)                                               AS was_inserted,
@@ -94,6 +103,7 @@ async function upsertJob(job) {
       job.compensationSummary, job.compensationMin ?? null, job.compensationMax ?? null, job.compensationCurrency ?? null,
       job.compensationInterval ?? null, job.contentHash, baseScore, matchedKeywords,
       departmentGroup(job.department, job.team, job.title), minYears, job.board ?? null,
+      job.locationRaw ?? null, job.places ?? null,
     ]
   );
 

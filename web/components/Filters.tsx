@@ -7,6 +7,14 @@ import { PROVIDERS } from "@/lib/providers";
 import { parseLocationValues } from "@/lib/location-filter";
 import { EXPERIENCE_OPTIONS } from "@/lib/scoring";
 import { useCloseOnOutside } from "@/lib/useCloseOnOutside";
+import { CITY_ALTERNATE_NAMES } from "../../src/normalize/city-alternate-names";
+
+// "Bangalore" finds Bengaluru: the scraper stores the current name only.
+const ALTERNATE_NAMES = new Map<string, string>();
+for (const [alt, city] of CITY_ALTERNATE_NAMES) {
+  const key = city.toLowerCase();
+  ALTERNATE_NAMES.set(key, `${ALTERNATE_NAMES.get(key) ?? ""} ${alt}`);
+}
 
 function ChecklistDropdown({
   label,
@@ -15,7 +23,7 @@ function ChecklistDropdown({
   onChange,
 }: {
   label: string;
-  options: readonly { value: string; label: string }[];
+  options: readonly { value: string; label: string; keywords?: string }[];
   selected: string[];
   onChange: (next: string[]) => void;
 }) {
@@ -32,8 +40,8 @@ function ChecklistDropdown({
   const selectedSet = new Set(selected);
   const searchTerm = search.trim().toLowerCase();
   const visibleOptions = options
-    .filter(({ label: optionLabel }) =>
-      !searchTerm || optionLabel.toLowerCase().includes(searchTerm)
+    .filter(({ label: optionLabel, keywords = "" }) =>
+      !searchTerm || `${optionLabel} ${keywords}`.toLowerCase().includes(searchTerm)
     )
     .sort((a, b) => {
       const selectedOrder = Number(selectedSet.has(b.value)) - Number(selectedSet.has(a.value));
@@ -208,7 +216,7 @@ export default function Filters({
         label="All locations"
         // The list is the top locations only; a ?location= link to another one still shows it.
         options={[...current.locations.filter((l) => !locations.includes(l)), ...locations].map(
-          (location) => ({ value: location, label: location })
+          (location) => ({ value: location, label: location, keywords: ALTERNATE_NAMES.get(location.toLowerCase()) })
         )}
         selected={current.locations}
         onChange={(next) => setParam("location", next.join(","))}

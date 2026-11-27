@@ -30,6 +30,7 @@ function normalizeJob(raw, company) {
     source: 'teamtailor',
     title: raw.title || 'Untitled',
     location: normalizedLocation.location,
+    locationRaw: normalizedLocation.raw,
     team: null,
     department: null,
     employmentType: jp.employmentType || null,

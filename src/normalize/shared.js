@@ -1,5 +1,6 @@
 const sanitizeHtml = require('sanitize-html');
 const cities = require('cities.json');
+const { CITY_ALTERNATE_NAMES } = require('./city-alternate-names');
 
 function sanitizeDescription(html) {
   if (!html) return '';
@@ -128,24 +129,6 @@ function locationKey(value) {
 
 const citiesByCountryAndKey = new Map();
 const citiesByCountry = new Map();
-// Cities whose pre-rename English name still dominates real job postings even
-// though cities.json only carries the current official name — the fuzzy
-// matcher below can't catch these (edit distance 3-4, well past its typo
-// threshold of 2), and correcting a genuine rename isn't a typo fix anyway.
-// Not every renamed city needs an entry: Mumbai, Chennai, Kolkata, Beijing,
-// Ho Chi Minh City, Yangon, Pune, and Gurugram's colonial/pre-rename names
-// (Bombay, Madras, Calcutta, Peking, Saigon, Rangoon, Poona) have fallen out
-// of professional use, so job postings already say the modern name and match
-// cities.json directly. Add an entry here only once a specific old name is
-// confirmed to still show up in real listings — verified against cities.json
-// (`node -e "require('cities.json').some(c=>c.name==='X')"`) before adding.
-const CITY_ALTERNATE_NAMES = new Map([
-  ['bangalore', 'Bengaluru'],
-  ['bengaluru', 'Bengaluru'],
-  ['bengauru', 'Bengaluru'],
-  ['gurgaon', 'Gurugram'],
-  ['gurugram', 'Gurugram'],
-]);
 for (const city of cities) {
   const key = locationKey(city.name);
   if (!key) continue;
@@ -256,18 +239,18 @@ function resolveCity(value, countryPart) {
 
 function normalizeLocation(rawLocation, remoteHint = false) {
   const raw = String(rawLocation || '').trim();
-  if (!raw) return { location: 'Unknown', remote: Boolean(remoteHint) };
+  if (!raw) return { location: 'Unknown', remote: Boolean(remoteHint), raw };
 
   const remote = Boolean(remoteHint) || /\b(remote|hybrid|work from home|work-from-home|wfh)\b/i.test(raw);
   const cleaned = cleanLocationText(raw);
-  if (!cleaned) return { location: 'Unknown', remote };
+  if (!cleaned) return { location: 'Unknown', remote, raw };
 
   const parts = cleaned.split(',').map(part => part.trim()).filter(Boolean);
   const countryPart = parts.find(part => {
     return isKnownCountry(part);
   }) || [...parts].reverse().find(part => /^[A-Za-z]{2,3}$/.test(part));
   if (parts.length === 1 && isKnownCountry(parts[0])) {
-    return { location: canonicalCountry(parts[0]), remote };
+    return { location: canonicalCountry(parts[0]), remote, raw };
   }
 
   const countryIndex = countryPart ? parts.indexOf(countryPart) : -1;
@@ -282,6 +265,8 @@ function normalizeLocation(rawLocation, remoteHint = false) {
   return {
     location: resolveCity(cityPart || countryPart || cleaned, countryPart),
     remote,
+    // The text as given, for places.js (the place filter's labels).
+    raw,
   };
 }
 
