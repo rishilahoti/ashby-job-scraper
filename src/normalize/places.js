@@ -79,6 +79,9 @@ data.cities.forEach(([name, ascii, cc, a1, pop, pplx, alts], i) => {
   add(key(name), c);
   if (ascii) add(key(ascii), c);
   if (small) return;
+  // A state named like its big city takes the city's spelling, so the two share
+  // one label ("Zürich (Switzerland)", not also "Zurich (Switzerland)").
+  if (pop >= 100000 && key(regions.get(c.region)) === key(name)) regions.set(c.region, name);
   if (stripped(name) !== key(ascii || name) && stripped(name).length >= 4) add(stripped(name), c);
   for (const alt of alts ? alts.split('|') : []) {
     add(key(alt), { ...c, primary: 0 });
@@ -235,6 +238,16 @@ function parsePlaces(raw, hint = null) {
     if (c && live[i].weak && chosen.some((o, j) => j !== i && o) &&
       !chosen.some((o, j) => j !== i && o && o.region === c.region)) chosen[i] = null;
   });
+  // At a board in one country, a town elsewhere needs its own evidence: GeoNames
+  // has no English counties, so "Burton, Staffordshire" and "Romford, Essex" at a
+  // UK company found Burton, Michigan and Essex, Maryland. Cities of 100K+ stay (a UK
+  // company's New York job).
+  if (hint) {
+    chosen.forEach((c, i) => {
+      if (c?.type !== 'city' || c.country === hint || c.pop >= 100000 || spelled.has(c.country)) return;
+      if (!chosen.some((o, j) => j !== i && o && o.country === c.country)) chosen[i] = null;
+    });
+  }
 
   const out = [];
   const push = (label) => { if (!out.includes(label)) out.push(label); };

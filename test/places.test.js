@@ -62,6 +62,20 @@ test('the board hint settles bare names and codes', () => {
   assert.deepEqual(parsePlaces('Anne Arundel County', 'US'), []);
 });
 
+test('at a board in one country, a town elsewhere needs its own evidence', () => {
+  assert.deepEqual(parsePlaces('Burton, Staffordshire', 'GB'), []);
+  assert.ok(!parsePlaces('Romford, Essex', 'GB').includes('United States'));
+  assert.ok(parsePlaces('Romford, Essex', 'GB').includes('Romford (United Kingdom)'));
+  assert.ok(parsePlaces('New York', 'GB').includes('New York City (United States)'));
+  assert.ok(parsePlaces('Austin, TX', 'GB').includes('Austin (United States)'));
+});
+
+test('a state named like its city shares its label', () => {
+  const places = parsePlaces('Zürich');
+  assert.ok(places.includes('Zürich (Switzerland)'));
+  assert.ok(!places.includes('Zurich (Switzerland)'));
+});
+
 test('boardCountry needs 60% of placed jobs', () => {
   assert.equal(boardCountry([['India'], ['Bengaluru (India)', 'India'], ['Germany'], []]), 'IN');
   assert.equal(boardCountry([['India'], ['Germany']]), null);
