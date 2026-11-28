@@ -1,5 +1,5 @@
 const config = require('../config');
-const { logger } = require('../utils');
+const { logger, delay } = require('../utils');
 const { getEnabledCompaniesWithDb, getDueCompanies } = require('../sources');
 const { fetchJobBoard, FetchError } = require('../fetch');
 const { normalizeResponse } = require('../normalize');
@@ -100,7 +100,20 @@ async function runPipeline() {
   const startTime = Date.now();
   logger.info('Pipeline run started');
 
-  await store.initDb();
+  // initDb gives up after 30 s waiting for a lock (so the site's reads never
+  // queue behind it), but that cost the whole night's scrape on 2026-11-27:
+  // the next try was the next day's run. It is idempotent, so wait and retry.
+  const INIT_TRIES = 5;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await store.initDb();
+      break;
+    } catch (err) {
+      if (err.code !== '55P03' || attempt === INIT_TRIES) throw err; // 55P03: lock_timeout
+      logger.warn(`Schema setup timed out waiting for a lock (try ${attempt}/${INIT_TRIES}), retrying in 2 min`);
+      await delay(120000);
+    }
+  }
 
   const pool = store.getPool();
 
