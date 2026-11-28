@@ -227,7 +227,11 @@ async function migrateSchema(p) {
   // "Karnataka (India)", "India"). Written on every scrape, unchanged jobs too.
   await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS location_raw TEXT`);
   await p.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS places TEXT[]`);
-  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_places ON jobs USING GIN (places) WHERE is_active = TRUE`);
+  // fastupdate off: every job's first touch adds its places, and with GIN's
+  // pending list the unlucky update that flushed it ran past the 30 s statement
+  // timeout (19 boards' touches failed on the 2026-11-28 backfill). Prod was
+  // switched by hand (ALTER INDEX ... SET (fastupdate = off)); this is for new DBs.
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_places ON jobs USING GIN (places) WITH (fastupdate = off) WHERE is_active = TRUE`);
 
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_published ON jobs (published_at DESC) WHERE is_active = TRUE`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_jobs_active_score ON jobs (base_score DESC) WHERE is_active = TRUE`);
