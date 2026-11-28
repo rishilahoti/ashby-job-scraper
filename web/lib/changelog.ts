@@ -9,6 +9,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    id: "location-places",
+    date: "2026-11-27",
+    title: "The location filter finds every job in a place",
+    description:
+      "Pick a country or state and you get every job in its cities: India now shows about 14 times as many jobs, Germany about 20 times. We read each job's location as its company wrote it, all of them when it lists several, so \"Whitefield, Bangalore\", \"KA Bangalore\" and \"Bangalore, India\" are all Bengaluru, and München is Munich. Typing an old city name like Bangalore or Gurgaon still finds it.",
+  },
+  {
     id: "location-old-city-names",
     date: "2026-11-26",
     title: "Find Bengaluru by typing Bangalore",

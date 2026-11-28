@@ -105,20 +105,22 @@ export async function GET(request: NextRequest) {
 
 		const locationRaw = sp.get('location');
 		if (locationRaw) {
-			const requestedLocations = parseLocationValues(locationRaw);
-			// A map, not a .find() per requested location: 34K locations x an
-			// uncapped comma list was a CPU lever for any caller.
-			const byLower = new Map((await getLocations()).map((l) => [l.toLowerCase(), l]));
-			const canonicalLocations = requestedLocations.map((location) => byLower.get(location.toLowerCase()));
-			if (canonicalLocations.some((location) => !location)) {
-				return NextResponse.json(
-					{ error: 'Invalid location filter' },
-					{ status: 400 }
-				);
+			// A map, not a .find() per requested location: thousands of places x an
+			// uncapped comma list was a CPU lever for any caller. Old links name a
+			// bare city ("Bengaluru"): it means that city's busiest place label
+			// ("Bengaluru (India)"; the list is busiest first). Unknown names are
+			// dropped, like departments.
+			const byLower = new Map<string, string>();
+			for (const place of await getLocations()) {
+				const lower = place.toLowerCase();
+				if (!byLower.has(lower)) byLower.set(lower, place);
+				const city = lower.replace(/ \(.*\)$/, '');
+				if (city !== lower && !byLower.has(city)) byLower.set(city, place);
 			}
-			filters.locations = canonicalLocations.filter(
-				(location): location is string => Boolean(location)
-			);
+			const locations = parseLocationValues(locationRaw)
+				.map((location) => byLower.get(location.toLowerCase()))
+				.filter((location): location is string => Boolean(location));
+			if (locations.length > 0) filters.locations = [...new Set(locations)];
 		}
 
 		const tags = parseTags(sp.get('tags'));
